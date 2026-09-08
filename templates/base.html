@@ -1,0 +1,108 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if .Title}}{{.Title}} — {{end}}{{.Ride.Name}}</title>
+<meta name="description" content="{{.Ride.Name}}: a one-way drive, live from the road.">
+{{if .SiteURL}}<link rel="canonical" href="{{.Canonical}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{.Ride.Name}}">
+<meta property="og:title" content="{{if .Title}}{{.Title}} — {{end}}{{.Ride.Name}}">
+<meta property="og:description" content="{{.Ride.Name}}: a one-way drive, live from the road.">
+<meta property="og:url" content="{{.Canonical}}">
+<meta property="og:image" content="{{.SiteURL}}/static/img/creature.svg?v={{.V}}">
+{{end}}<link rel="icon" href="/static/img/creature.svg?v={{.V}}">
+<!-- Stylesheets BEFORE scripts: a deferred script executes while a
+     stylesheet declared after it is still pending, and #map would then
+     have zero height when Leaflet measures it -> fitBounds lands on maxZoom. -->
+<link rel="stylesheet" href="/static/vendor/leaflet.css?v={{.V}}">
+<link rel="stylesheet" href="/static/css/app.css?v={{.V}}">
+<script defer src="/static/vendor/leaflet.js?v={{.V}}"></script>
+</head>
+<body data-leg="{{.PageLeg}}">
+<header class="masthead">
+  <div class="mast-inner">
+    <a class="mast-brand" href="/">
+      <img class="mast-creature" src="/static/img/creature.svg?v={{.V}}" width="64" height="64"
+           alt="{{.CreatureAlt}}">
+      <span class="mast-words">
+        <span class="mast-title">{{.Ride.Name}}</span>
+        <span class="mast-tag"><b>{{.CreatureName}}</b>{{trimPrefix .CreatureTag .CreatureName}}</span>
+      </span>
+    </a>
+    <nav class="mast-nav">
+      <span class="mast-links">
+        <a href="/">Ride</a>
+        <a href="/photos">Photos</a>
+        <a href="/route.geojson">GeoJSON</a>
+        {{if .Authed}}
+          <a href="/admin/post" class="post-link">Post</a>
+          <a href="/admin/lodging">Lodging</a>
+          <form method="post" action="/admin/logout" class="inline"><button class="linkish">Sign out</button></form>
+        {{else}}
+          <a href="/admin/login">Sign in</a>
+        {{end}}
+      </span>
+      <a class="clode-badge" href="https://github.com/clodemode"
+         title="CLODE — github.com/clodemode">
+        <span class="cb-kicker">Built with</span>
+        <span class="cb-name">CLODE</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main>
+{{end}}
+
+{{define "foot"}}
+</main>
+<footer>
+  <p>Route coordinates are planning-grade — town centroids, about a kilometre.
+     Times are shown in the zone where they happened.</p>
+  <p class="small"><a href="https://github.com/clodemode">Source</a>
+     &middot; Built with <a href="https://github.com/clodemode">CLODE</a></p>
+</footer>
+</body>
+</html>
+{{end}}
+
+{{define "post_card"}}
+<article class="post kind-{{.Kind}}" id="post-{{.ID}}">
+  {{with .Photo}}
+  <a class="post-photo" href="/media/{{.Path}}">
+    <img src="/media/{{.ThumbPath}}" alt="" loading="lazy">
+  </a>
+  {{end}}
+  <div class="post-body">
+    <p class="post-meta">
+      <span class="pill pill-{{.Kind}}">{{.Kind}}</span>
+      <time>{{local .OccurredAt .TZ}}</time>
+      &middot; <a href="/legs/{{.LegSlug}}">Leg {{.LegOrd}}</a>
+      {{if .CheckpointName}}&middot; {{.CheckpointName}}{{end}}
+      {{if .HideLocation}}&middot; <span class="muted">location hidden</span>{{end}}
+    </p>
+    {{if .Title}}<h3>{{.Title}}</h3>{{end}}
+    {{if .Body}}<p class="post-text">{{.Body}}</p>{{end}}
+    {{if .Authed}}
+    {{/* Signed-in only. This line carries raw coordinates and never renders
+         to an anonymous visitor — the {{if .Authed}} is the whole gate. */}}
+    <p class="post-pin muted small">{{.PinLine}}</p>
+    <p class="post-edit"><a class="tiny" href="/admin/post/{{.ID}}/edit">Edit kind, leg, checkpoint, time&hellip;</a></p>
+    <form method="post" action="/admin/post/{{.ID}}/pin" class="post-repin">
+      <input type="hidden" name="fuzz_choice" value="1">
+      <label>re-pin
+        <select name="pin_source">
+          <option value="">leave the source</option>
+          {{if .RepinEXIF}}<option value="exif">the photo&rsquo;s GPS</option>{{end}}
+          {{with .RepinCheckpoint}}<option value="checkpoint">{{.}}</option>{{end}}
+          <option value="none">no pin</option>
+        </select></label>
+      <label class="check"><input type="checkbox" name="fuzz_location" value="1"{{if .PinFuzzed}} checked{{end}}> fuzz</label>
+      <button class="tiny">Apply</button>
+    </form>
+    {{end}}
+  </div>
+</article>
+{{end}}

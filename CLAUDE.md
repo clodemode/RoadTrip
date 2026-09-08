@@ -1,0 +1,68 @@
+<!-- CLODE-COLD-START-GATE v3 — GENERATED from ABOUT/CLODE/GATE/cold_start_gate.py; edit the source and run `python3 ABOUT/CLODE/GATE/cold_start_gate.py bake`, never this block; the SessionStart hook injects this same ritual at turn 0 -->
+> ### ⛔ COLD START — orient before your first Edit, grep, or subagent
+>
+> This is a **CLODE platform thread.** Inline work and a bare `Agent(subagent_type=…)` carry **none** of the contract — no LORE guidance, no DOMINO-equipped MCP tools, no HEY_LEAN presence — and are **invisible to sibling threads**, so they collide silently. Do these two **first**:
+>
+> 1. **`agent_start(session=…, scope=…, cwd=…, branch=…, stale_seconds=900, app_scope='roadtrip', lair=…, tag=…)`**
+>    **ONE call** — registers presence on HEY_LEAN, snapshots live siblings, and returns the scoped briefing. Compose **every** briefing dimension you know (AND semantics; a bare `lair=` ranks 20 slots against 800+ rows — composed, against dozens). In this repo that means **`app_scope='roadtrip'`** plus the `lair=` you are working in. Ruled 2026-08-11: precision over capacity, cap stays 20.
+>    Read **all three sections**. A sibling on your surface → freeze a HEY_LEAN baseline before touching it. Each section carries its own `status`: a briefing error does **not** mean the beacon went unwritten.
+>    *Fallback, equally contract-satisfying, if `agent_start` is unavailable or a section errors:* `agent_register(...)` → `agent_active(stale_seconds=900)` → `ido_briefing(app_scope='roadtrip', lair=…)`.
+> 2. **Dispatch the work as a CODI** — not inline, not a bare subagent. A dispatched CODI opens its own beacon with `agent_codi_start(...)` (RULED 2026-09-03: the band is in the NAME — `agent_start`/`agent_codi_start`, `agent_heartbeat`/`agent_codi_heartbeat`, `agent_stop`/`agent_codi_stop`). Out-of-scope finds → **`lairs_lore_add(lore_type='todo')`**, *never* a `spawn_task`/chip. Every dispatch prompt — and your own thread-end — must carry the completion line: *On completion call ``codi_ledger_record(codi_slug=…, status=…, lore_refs=<every slug you consulted or obeyed, INCLUDING rows seen only as a one-line `dont` in a briefing>)``, or pass `no_lore_consulted=True` if genuinely none.*
+>
+> About to call Edit/Write/Task before doing 1–2? **Stop and orient.**
+<!-- /CLODE-COLD-START-GATE -->
+
+# CLAUDE.md — RoadTrip
+
+A live surface for one road trip. **Go static binary + SQLite**, deployed to **Fly** as `roadtrip-clodemode`, live at **https://roadtrip.opeongo.net**. Provided by Austin Voice Data LLC.
+
+[README.md](README.md) is the authority — it is a long-form design record, not a summary, and every configuration table below is stated there in full. [AGENTS.md](AGENTS.md) carries the agent contract. This file is only the short list of things that bite.
+
+---
+
+## Critical rules (bite immediately)
+
+1. **There is no `manage.py` and no container in the ABOUT fleet.** roadtrip is not a Django TARGET_APP and has no compose service here. Build and test at the repo root:
+   ```bash
+   go build ./... && go vet ./... && go test -race -count=1 ./...
+   ```
+2. **`app_scope` is `roadtrip`** (ruled 2026-09-08). LORE homes in `roadtrip/LORE/<character>/<slug>.yaml`. Rows still reading `app_scope='bloodride'` are pre-ruling history.
+3. **Nothing private goes in the repo or the seed.** `$DATA_DIR/private.json` on the volume holds addresses and notes, keyed by checkpoint ord, rendered only to the signed-in trip-keeper. `git check-ignore` it before you commit anything near it.
+4. **Never render a coordinate that did not come out of the store.** Fuzzed checkpoints are snapped to 0.05° on the way out; a direct read bypasses the only place that protection exists.
+5. **Timezones are per-event, never per-ride.** Store UTC plus the IANA zone. A ride-wide zone misprints every stamp after the first state line.
+6. **`Deploy` is `workflow_dispatch` only, and `plan` is the default.** Never add a push trigger — the site is live under someone's thumb from a car.
+7. **The repo is PUBLIC** (`clodemode/RoadTrip`, CamelCaps = public under `naming-clodemode-repo-case-signals-visibility`). Do not treat it as publishable without an explicit ruling.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `main.go`, `store.go`, `handlers.go`, `auth.go`, `photo.go`, `private.go` | the whole app — Go sources at the repo root, no code subdirectory |
+| `seed/*.geojson` | RWGPS-import shape: one `LineString` per leg; `Point` features `kind=checkpoint` (each with its own `tz`) and `kind=candidate` |
+| `templates/`, `static/` | server-rendered pages and assets |
+| `data/` | local volume stand-in — **gitignored**, holds `roadtrip.sqlite3`, `media/`, `private.json` |
+| `LORE/` | YAML LORE, canonical; `lore_yaml_load` materializes it into DB_INTENT |
+| `.github/workflows/` | `ci.yml` (push/PR), `deploy.yml` (dispatch only), `data.yml` (by hand, writes `private.json` only) |
+
+## Running locally
+
+```bash
+docker build -t roadtrip .
+docker run -p 8080:8080 -e COOKIE_SECURE=0 -v "$PWD/data:/data" roadtrip
+```
+
+First boot seeds from `seed/*.geojson`; after that the volume is the source of truth and a redeploy never clobbers rows edited through the UI. With no `ADMIN_PASSWORD_HASH` the site is read-only. Generate one with `docker run --rm roadtrip -hash 'your-password'`.
+
+The full environment table (`SITE_URL`, `SITE_VISIBILITY`, `PIN_PRECISION`, `RIDE_SLUG`, `PUSH_TOKEN`, `DATA_DIR`, `GOMEMLIMIT`, …) is in [README.md](README.md#configuration) — read it there rather than restating it.
+
+## Verifying a change
+
+Deterministic first, browser second:
+
+1. `go test -race -count=1 ./...` — the fixtures seed a throwaway SQLite from the embedded geojson. No service, no container, no network.
+2. Against a live instance, `GET /admin/posts.json` is the census — **every** post with its photo identity, signed-in only. `/route.geojson` is open data and drops unpinned posts, so it cannot stand in for it.
+3. `/healthz` answers on any host, even while `SITE_VISIBILITY=private` closes the rest of the site.
+
+## SessionStart hook
+
+`.claude/settings.json` wires `.claude/hooks/session-start.sh`, which warms the Go module and build caches — for the web sandbox only (it exits immediately unless `CLAUDE_CODE_REMOTE=true`). This is roadtrip's own hook and is **not** owned by the CLODE cold-start gate generator; the gate registers only this file and `AGENTS.md`.

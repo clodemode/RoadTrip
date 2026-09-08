@@ -1,0 +1,18 @@
+entries:
+- slug: todo-roadtrip-ride-host-dns-to-fly-and-retire-memewears-ride-rsync
+  title: 'roadtrip: point the ride host at Fly (custom domain + cert on roadtrip-clodemode) and retire the ride rsync to memewears; Ruth Drive static publish stays'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: packaging
+  character_slug: scout
+  tags:
+  - roadtrip
+  - atx-sjc
+  - fly
+  - dns
+  - memewears
+  status: shipped
+  description: 'spec-bloodride-atx-sjc-2026-09-live-ride-surface-go-or-django rules that either way DNS for the ride host moves to Fly and the ride rsync to memewears retires. Option A shipped 2026-09-01 as roadtrip-clodemode (https://roadtrip-clodemode.fly.dev, dfw, suspend, 256mb, IPs: shared v4 66.241.125.13 + dedicated v6). The Fly app currently answers only on the .fly.dev host. Kris decides the host (blood.opeongo.net or a new name); then flyctl certs add <host> -a roadtrip-clodemode, CNAME/AAAA at the registrar, and the May-pipeline rsync of ride output to memewears cPanel stops. The Ruth Drive static publish on memewears is untouched (spec dont).'
+  do_this: 'Kris names the host. CODI: flyctl certs add, DNS records, verify https on the custom host, then remove the ride rsync step from the BloodRide publish path (leave the Drive publish alone).'
+  do_also: "SHIPPED STATE 2026-09-02 00:30Z. Kris moved DNS (roadtrip.opeongo.net CNAME → qe8xgne.roadtrip-clodemode.fly.dev); cert Issued; https 200. Two threads ran the same NEXT_THREAD prompt concurrently (both oriented as session atx-sjc-road-2026-09-01): thread A shipped roadtrip 463643f / Fly v11 (SITE_URL → canonical + og tags, README, \"fly.dev stays as a fallback, no redirect\") and closed this todo; thread B's CODI codi-roadtrip-custom-host-2026-09-02 layered roadtrip b049f31 / Fly v12 on top: every non-canonical Host (the .fly.dev one included) 301s to SITE_URL + path+query, /healthz exempt, SITE_URL only from fly.toml [env] (empty = no redirect, no tags), plus the leg-4 Tioga caveat. clodemode.com /odo/ CTA repointed (ABOUT d5e9abc, clodemode v134). RULED 2026-09-02 ~00:45Z, Kris (relayed to thread B by thread A's session, clode-d4): KEEP THE 301 — v12 stands; a phone signed in on the .fly.dev host signs in once more on roadtrip.opeongo.net. Residual — the memewears ride rsync retirement — split to todo-bloodride-retire-the-ride-rsync-to-memewears-now-that-roadtrip-opeongo-net-is-live (sibling live on bloodride at the time; deferred). Follow-ups filed: todo-roadtrip-og-image-is-svg-mint-a-raster-social-card, todo-roadtrip-seed-leg-caveat-is-dropped-at-import-surface-it-on-leg-page-and-geojson."

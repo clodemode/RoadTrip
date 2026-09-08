@@ -1,0 +1,34 @@
+entries:
+- slug: todo-roadtrip-seed-leg-caveat-is-dropped-at-import-surface-it-on-leg-page-and-geojson
+  title: 'roadtrip: the seed''s per-leg "caveat" (Tioga Pass entry rules, Sonora Pass alt) is dropped
+    at import — nothing in store.go, handlers.go or the templates reads it; surface it on the leg page
+    and in route.geojson'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: data
+  character_slug: krispy
+  tags:
+  - roadtrip
+  - atx-sjc
+  - seed
+  - geojson
+  - leg
+  - krispy
+  status: design
+  description: 'Found 2026-09-02 while verifying the leg-4 Tioga caveat rewrite (roadtrip b049f31, Fly
+    v12): seed/atx-sjc-2026-09.geojson carries a "caveat" property on the mammoth-lakes-to-san-jose LineString,
+    but `grep -rn caveat` across *.go/*.html/*.js returns nothing — store.go''s leg columns are id,ride_slug,ord,slug,name,date,est_miles,est_hours,route_hint,line_geojson,
+    so the import keeps route_hint and silently discards caveat, and the live /route.geojson leg features
+    expose only date, est_drive_hours, est_miles, kind, leg, name, route_hint, slug. The caveat is the
+    one line the driver actually needs at the Lee Vining turn (no Yosemite entry reservation in 2026,
+    fee or interagency pass, Valley lots full by 07:30 weekends, CA-108 Sonora Pass as the alt). Add a
+    caveat TEXT column to legs (seed-owned, refreshed on boot like route_hint), export it as a GeoJSON
+    property, and render it on /legs/<slug> under the route hint; a schema add is deploy-coupled and safe
+    under suspend.'
+  dont: Don't move the caveat into route_hint to dodge the schema change — route_hint is the turn-by-turn
+    line and the map popup truncates it.
+  do_this: 'store.go: add caveat to the leg struct, CREATE TABLE (ALTER TABLE ADD COLUMN guarded by a
+    meta key for existing volumes), legCols and the seed importer (pstr(p, "caveat")); handlers.go routeGeoJSON:
+    add "caveat" to the leg properties; templates/leg.html: render it when non-empty. Verify with curl
+    route.geojson | python3 and the leg page after deploy.'

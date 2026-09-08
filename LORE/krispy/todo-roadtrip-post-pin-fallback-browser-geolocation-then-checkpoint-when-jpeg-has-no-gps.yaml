@@ -1,0 +1,22 @@
+entries:
+- slug: todo-roadtrip-post-pin-fallback-browser-geolocation-then-checkpoint-when-jpeg-has-no-gps
+  title: 'roadtrip: a phone post with no EXIF GPS gets no map pin — add browser geolocation on the post form, then fall back to the selected checkpoint''s coords (before 2026-09-04)'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: tools
+  character_slug: krispy
+  tags:
+  - roadtrip
+  - atx-sjc
+  - photo
+  - gps
+  - geolocation
+  - pin
+  - krispy
+  - spring-2026-09
+  status: shipped
+  description: 'Observed 2026-09-01 18:47 CDT: Kris''s first phone post ("Test", post-1) rendered on / and /photos with the right local time and orientation but window.RIDE.posts was empty — no lat/lng, so no pin. Photos captured straight from the form''s file input (capture=environment) or shared from the library often arrive without a GPS IFD. Fix in roadtrip/ (handlers.go, templates/post_form.html, store posts.lat/lng): (1) post form JS: on load, navigator.geolocation.getCurrentPosition fills hidden lat/lng/accuracy fields (https, Safari prompts once; reduced to 4 dp; a visible "location: on / off" toggle); (2) server: post pin = EXIF GPS if present, else form lat/lng, else the selected checkpoint''s coords with precision approx (and a muted "near <checkpoint>" popup line); hide_location still wins; (3) RIDE payload emits every post with a pin, thumb, when; (4) README photo section says why. Deploy and verify with a real phone post before departure 2026-09-04 06:30 CDT. Sequence after the CINDERS terrain CODI finishes in roadtrip/ and before or in parallel with GONZO (GONZO touches only creature.svg + one css file).'
+  do_this: One CODI, file-scoped to handlers.go, store.go (posts columns), templates/post_form.html, static/js/post.js. codi_ledger_record on completion.
+  depends_on:
+  - spec-bloodride-atx-sjc-2026-09-live-ride-surface-go-or-django

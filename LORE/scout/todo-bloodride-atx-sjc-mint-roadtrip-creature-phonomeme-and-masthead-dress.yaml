@@ -1,0 +1,22 @@
+entries:
+- slug: todo-bloodride-atx-sjc-mint-roadtrip-creature-phonomeme-and-masthead-dress
+  title: Mint the roadtrip app's creature (phonomemic name from Kris) + finish the LORE_CHARACTER masthead dress-up the Drive and Ride never got
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: surface
+  character_slug: scout
+  tags:
+  - roadtrip
+  - atx-sjc
+  - character
+  - phonomeme
+  - masthead
+  - scout
+  - spring-2026-09
+  status: shipped
+  description: 'Kris 2026-09-01: "blood drive and blood ride never got the full LORE_CHARACTER aka PHONO_MEMES dress up." EagleLakeRocks set the pattern (Perch in the masthead disc, tagline, CLODE badge, footer credit). The Go roadtrip app (CLODE/roadtrip/, CODI atx-sjc-ride-build-go) ships with a placeholder creature.svg and two constants (CreatureName, CreatureTag). Gate 1: Kris names the creature — phonomemic per slug `phonomeme`, the sound carries the function (a road-trip keeper / odometer / navigator sense). Gate 2 (SCOUT chain: scout_whitespace baseline → SVG craft via svg_create/svg_anatomy_register → scout_inspect after): mint the 64x64 SVG in the Perch style, drop it at static/img/creature.svg, set the two constants, register the character in the registry (character_yaml_sync) with icon, role, tagline, rarity. Deadline soft: before departure 2026-09-04 if Kris names it by 09-02; otherwise the placeholder rides and the mint lands from the road.'
+  do_this: Ask Kris for the name first; never invent a FOOLS character name. Then one SCOUT CODI. On completion codi_ledger_record(codi_slug=…, status=…, lore_refs=phonomeme,spec-eagle-lake-rocks-go-microvm-open-dataset,spec-bloodride-atx-sjc-2026-09-live-ride-surface-go-or-django,…).
+  depends_on:
+  - phonomeme
+  - spec-bloodride-atx-sjc-2026-09-live-ride-surface-go-or-django

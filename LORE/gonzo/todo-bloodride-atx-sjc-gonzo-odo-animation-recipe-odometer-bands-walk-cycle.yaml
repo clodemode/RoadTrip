@@ -1,0 +1,22 @@
+entries:
+- slug: todo-bloodride-atx-sjc-gonzo-odo-animation-recipe-odometer-bands-walk-cycle
+  title: 'GONZO: build Odo''s animation recipe — the nine bands tick like an odometer as miles accrue, plus a light walk cycle for the masthead'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: content
+  character_slug: gonzo
+  tags:
+  - roadtrip
+  - atx-sjc
+  - odo
+  - gonzo
+  - animation
+  - recipe
+  - spring-2026-09
+  status: shipped
+  description: 'Kris 2026-09-01: "gonzo for building an animation recipe" after SCOUT mints Odo. Gonzo''s Kitchen: recipe_create + animation_rule_create / animation_rule_preview against SCOUT''s creature.svg (bands must be addressable ids: band-1..band-9, legs, tail). Two rules: (1) ODOMETER — bands tick/flip as the ride''s miles accrue (data-miles from the app: sum of est_miles for legs with arrived_at, plus photo-pin progress); (2) WALK — a subtle 2-frame leg shuffle on hover/idle, reduced-motion respected. Output: CSS/SMIL only, no JS libraries, under 2 KB, applied in roadtrip/static (masthead) and reused on the clodemode.com Odo page. Deploy roadtrip-clodemode after; verify live; ledger.'
+  do_this: One GONZO CODI after the SCOUT mint ships and after CINDERS Part B if both touch roadtrip/static/css; otherwise parallel with CINDERS Part A. codi_ledger_record on completion.
+  depends_on:
+  - todo-bloodride-atx-sjc-cinders-odo-on-clodemode-teaser-and-southwest-terrain-backgrounds
+  - todo-bloodride-atx-sjc-mint-roadtrip-creature-phonomeme-and-masthead-dress

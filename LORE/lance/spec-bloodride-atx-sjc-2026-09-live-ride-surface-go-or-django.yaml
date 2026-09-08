@@ -1,0 +1,40 @@
+entries:
+- slug: spec-bloodride-atx-sjc-2026-09-live-ride-surface-go-or-django
+  title: 'BLOOD_RIDE fresh path — Austin → San Jose ride (2026-09-04..07) served live from Fly, stack ruled by Kris: Go per EagleLakeRocks, or Django as-is'
+  domain: lore
+  lore_type: spec
+  app_scope: roadtrip
+  lair: all
+  character_slug: lance
+  tags:
+  - roadtrip
+  - ride
+  - spec
+  - atx-sjc
+  - go
+  - fly
+  - live-blog
+  - spring-2026-09
+  status: building
+  description: 'THE RIDE: atx-sjc-2026-09 (short_slug atx-sjc), Kris, CAR, ONE-WAY topology. Leg 1 Sep 4: home in Hudson Bend → Big Spring TX → the host home, Cloudcroft NM, arrive before dark (sunset ≈ 19:20 MDT; ~600 mi / 10 h; sights, lakes, a cute little town). Leg 2 Sep 5: Cloudcroft → near Flagstaff AZ (~470 mi). Leg 3 Sep 6: Flagstaff → near Mammoth Lakes CA (~500 mi). Leg 4 Sep 7: Mammoth Lakes → San Jose (~290 mi, Tioga Pass). Seed: bloodride/data/inbox/ride/atx-sjc/planned.geojson — RWGPS-import shape (LineString per leg, Point per checkpoint, kind=candidate sights), per-checkpoint tz because westbound crosses CDT → MDT → MST-no-DST (Arizona) → PDT; the Django EASTERN_LNG_THRESHOLD Central/Eastern hack does not cover this trip.
+
+
+    WHY A FRESH PATH: the May pipeline (FredBerg) is Mac-bound — Django in about-bloodride-1 → preview_ride bake → rsync to memewears cPanel = blood.opeongo.net static. From a car it needs Docker, the MCP and an rsync; the phone cannot post. A live app on Fly with a /data volume makes the phone the client. The Ruth Drive static publish on memewears is untouched by this spec.
+
+
+    OPTION A — Go, the EagleLakeRocks pattern (spec-eagle-lake-rocks-go-microvm-open-dataset): static binary on scratch, modernc sqlite on /data, Leaflet, bcrypt admin, seeds from planned.geojson on first boot, suspend, 256mb, cold boot under 1 s. Scope for Sep 4: ride/leg/checkpoint from seed; post (kind, occurred_at, title, body, leg, checkpoint, photo); JPEG upload from the phone with EXIF gps+time (rwcarlsen/goexif, pure Go) and a thumbnail (image/jpeg + x/image/draw); map = leg polylines + checkpoint pins + photo pins; gallery; per-leg pages. OUT: HEIC (no pure-Go decoder — iPhone Camera Formats = Most Compatible, or share as JPEG), Instagram embeds, separate recommendations/mishaps pages (post kinds instead), the Drive/donor lens. Est 1.5–2k lines Go+templates, ~1 day build + ½ day deploy/verify. Repo must be PRIVATE kebab-case (the seed carries the home address) unless the origin pin is fuzzed.
+
+
+    OPTION B — Django as-is on Fly: the bloodride image already builds (python 3.14-slim, collectstatic baked). Needs fly.toml (dfw, /data volume, 1gb, suspend), env SECRET_KEY / DEBUG=0 / ALLOWED_HOSTS / SITE_URL, then import_rwgps against the seed. Half a day, zero new app code; inbox review UI, HEIC, crop, EXIF, geo-audit all exist. Cost: the Django weight Kris wants to leave, 22.6 s cold wake unless suspended, 2G for HEIC ingest.
+
+
+    RECOMMENDATION: A if Kris rules by the morning of Sep 2; B is the fallback with no new code beyond fly.toml. Either way DNS for the ride host moves to Fly and the ride rsync to memewears retires.'
+  depends_on:
+  - spec-eagle-lake-rocks-go-microvm-open-dataset
+  - spec-ride-app-role-and-scope
+  - spec-ride-roadtrip-output-deliverables
+  - spec-ride-rwgps-import-contract
+  - spec-ride-trip-topology-loop-or-one-way-or-open
+  dont: Don't build both options. Don't bring the Drive/donor/song lens or Instagram embeds into the Sep 4 scope. Don't hard-code a single ride tz — Arizona has no DST. Don't publish the home address on a public repo or a public origin pin. Don't rsync ride output to memewears any more; leave the Ruth Drive static publish alone. Don't treat the candidate sights in the seed as commitments.
+  do_this: 'Kris rules A or B. Then ONE CODI per NEXT_THREAD_PROMPT_ATX_SJC_RIDE.md: build from the seed, deploy to Fly (suspend), Kris sets the admin secrets, verify one JPEG post from a phone lands on the map with the correct local time, then close todo-bloodride-atx-sjc-rule-stack-then-build-live-ride-surface-by-2026-09-03. Open data items to resolve before departure: Cloudcroft street geocode, Flagstaff and Mammoth lodging pins, San Jose address, 2026 Yosemite/Tioga entry rules.'
+  do_also: 'SHIPPED STATE 2026-09-01: CLODE/roadtrip/ (Go, private local repo, no remote), Fly app roadtrip-clodemode (dfw, suspend, 256mb, volume roadtrip_data), live at https://roadtrip.opeongo.net (Fly host roadtrip-clodemode.fly.dev stays as fallback); read-only until Kris sets ADMIN_PASSWORD_HASH + SESSION_KEY. Creature: Odo, a nine-banded armadillo, "Odo counts every mile." — CreatureName/CreatureTag constants in roadtrip/main.go; LANCE is the guide. Photos are JPEG only (no pure-Go HEIC decoder): iPhone Camera → Formats → Most Compatible. Private addresses: pattern-go-microvm-private-overlay-json-on-data-volume-never-in-repo. Character chain after the build: SCOUT mint → CINDERS visuals (clodemode.com page + per-leg southwest terrain) → GONZO animation recipe, each its own todo. After the trip, the same seed shape is the intake for every ride on either stack; migrating fredberg-2026-05 and blance-tx-canada is todo-roadtrip-post-trip-migrate-fredberg-and-blance-seeds-decide-django-bloodride-drive-lens-only.'

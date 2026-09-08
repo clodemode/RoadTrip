@@ -1,0 +1,67 @@
+{{template "head" .}}
+<section class="card narrow admin">
+  <h1>Edit post</h1>
+  <p class="muted small">
+    posted {{local .Post.OccurredAt .Post.TZ}}
+    &middot; leg {{.Post.LegOrd}}: {{.Post.LegName}}
+    {{if .Post.CheckpointName}}&middot; {{.Post.CheckpointName}}{{end}}
+  </p>
+  {{with .Error}}<p class="error">{{.}}</p>{{end}}
+
+  {{/* The photo is shown for recognition only — this screen edits metadata,
+       never content. Replacing a photo means deleting the post and posting it
+       again, which keeps the content-addressed media store append-only. */}}
+  {{with .Post.Photo}}
+  <a class="post-photo" href="/media/{{.Path}}">
+    <img src="/media/{{.ThumbPath}}" alt="" loading="lazy">
+  </a>
+  {{end}}
+
+  <form method="post" action="/admin/post/{{.Post.ID}}/edit" class="stack">
+    <input type="hidden" name="back" value="{{.Back}}">
+    <div class="row">
+      <label>Kind<select name="kind" id="f-kind">
+        {{range .Kinds}}<option value="{{.Value}}"{{if eq .Value $.Post.Kind}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select></label>
+      <label>Zone<select name="tz" id="f-tz">
+        {{range .Zones}}<option value="{{.}}"{{if eq . $.Post.TZ}} selected{{end}}>{{.}}</option>{{end}}
+      </select></label>
+    </div>
+    <label>Title<input name="title" maxlength="140" autocomplete="off" value="{{.Post.Title}}"></label>
+    <label>Body<textarea name="body" rows="3">{{.Post.Body}}</textarea></label>
+    <div class="row">
+      <label>Leg<select name="leg_id" id="f-leg">
+        {{range .Legs}}<option value="{{.ID}}"{{if eq .ID $.Post.LegID}} selected{{end}}>{{.Ord}}: {{.Name}}</option>{{end}}
+      </select></label>
+      <label>Checkpoint<select name="checkpoint_id" id="f-cp">
+        <option value="">&mdash;</option>
+        {{range .Legs}}<optgroup label="Leg {{.Ord}}">
+          {{range .Checkpoints}}<option value="{{.ID}}" data-tz="{{.TZ}}" data-leg="{{.LegID}}"{{if eq .ID $.Post.CheckpointID}} selected{{end}}>{{.Ord}}. {{.Name}}{{with index $.Private .Ord}} &mdash; {{.}}{{end}}</option>{{end}}
+        </optgroup>{{end}}
+      </select></label>
+    </div>
+    <label>When <span class="muted">(the wall clock in the zone above)</span>
+      <input type="datetime-local" name="when" value="{{.When}}"></label>
+    <button type="submit" class="big">Save</button>
+    <p class="muted small">Picking a checkpoint moves the post to that checkpoint&rsquo;s leg and zone. The
+      photo and the pin are not edited here &mdash; the pin has its own re-pin control on the post itself, so
+      saving this form leaves a deliberate re-pin alone. The one exception: a pin that came <em>from</em> a
+      checkpoint follows the checkpoint you choose.</p>
+    <p class="muted small"><a href="{{.Back}}#post-{{.Post.ID}}">Cancel</a></p>
+  </form>
+</section>
+<script>
+/* Same coupling as the post form: a checkpoint carries its own zone and leg,
+   so choosing one keeps the two selects from contradicting it. The server
+   applies the identical rule, so this is convenience and never the authority. */
+(function () {
+  var cp = document.getElementById('f-cp'), tz = document.getElementById('f-tz'), leg = document.getElementById('f-leg');
+  cp.addEventListener('change', function () {
+    var o = cp.options[cp.selectedIndex];
+    if (!o || !o.value) return;
+    if (o.dataset.tz) tz.value = o.dataset.tz;
+    if (o.dataset.leg) leg.value = o.dataset.leg;
+  });
+})();
+</script>
+{{template "foot" .}}

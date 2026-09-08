@@ -1,0 +1,17 @@
+entries:
+- slug: todo-roadtrip-mint-the-ride-creature-name-tagline-svg
+  title: 'roadtrip: mint the ride''s LORE creature — Kris names it (phonomemic), then drop in static/img/creature.svg + the two constants in main.go'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: content
+  character_slug: cinders
+  tags:
+  - roadtrip
+  - atx-sjc
+  - creature
+  - fools
+  - phonomeme
+  status: superseded
+  description: 'The roadtrip app (CLODE/roadtrip/, Fly app roadtrip-clodemode) ships with a placeholder creature in the masthead: static/img/creature.svg (a road under a compass rose, 64x64, viewBox 0 0 64 64, <title>) and two constants in main.go — CreatureName = "Creature", CreatureTag = CreatureName + " keeps the miles honest." The cast line under the hero reads "Trip-keeper: Kris · Guide: Lance · <CreatureName>". Minting = Kris picks a phonomemic name (LORE slug phonomeme: the sound encodes the function), a minted SVG replaces creature.svg, the two constants change, redeploy. Nothing else references the placeholder. Also worth a CHARACTERS yaml under ABOUT/CLODE/LORE/CHARACTERS/ once named, the way Perch got one for EagleLakeRocks.'
+  do_this: Kris names the creature; a CODI replaces static/img/creature.svg, sets CreatureName/CreatureTag in roadtrip/main.go, flyctl deploy -a roadtrip-clodemode, and registers the character yaml.

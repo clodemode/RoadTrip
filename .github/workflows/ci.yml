@@ -1,0 +1,72 @@
+# CI — every push and every pull request.
+#
+# This runs the checks a deploy would run, so a red branch is known BEFORE
+# anyone reaches for the deploy workflow. It never touches Fly and never needs
+# a secret: nothing here can reach the live ride.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A newer push to the same ref supersedes an in-flight run — CI on a branch
+  # nobody is looking at any more is just queue.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: build, vet, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # The go directive in go.mod is the single source of truth for the
+          # toolchain, so CI cannot drift from what the Dockerfile builds with.
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt needed on:"
+            echo "$unformatted"
+            gofmt -d .
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test -race -count=1 ./...
+
+  image:
+    name: docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Prod ships the IMAGE, so an image that does not build is a broken
+      # deploy no matter how green the Go job is. Built here, never pushed —
+      # publishing an image is the deploy workflow's job alone.
+      - name: build the production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

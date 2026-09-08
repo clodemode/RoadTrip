@@ -1,0 +1,281 @@
+:root {
+  --bg: #f7f8fa; --fg: #1a1d21; --muted: #6b7280; --line: #dfe3e8;
+  --card: #ffffff; --accent: #1d4ed8; --danger: #b91c1c; --ok: #059669;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#11141a; --fg:#e6e8eb; --muted:#9aa3af; --line:#272c36;
+          --card:#171b22; --accent:#60a5fa; }
+}
+* { box-sizing: border-box; }
+html, body { overflow-x:clip; } /* the full-bleed hero uses 50vw, which counts the scrollbar */
+body { margin:0; background:var(--bg); color:var(--fg);
+  font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+main { max-width: 1000px; margin: 0 auto; padding: 0 1rem 3rem; }
+a { color: var(--accent); }
+.muted { color: var(--muted); } .small { font-size: .85rem; }
+.inline { display:inline; }
+
+/* --- masthead: the creature disc, the wordmark, and the CLODE mark -------- */
+.masthead { background:linear-gradient(135deg,#3b2f1e 0%,#6b4b23 55%,#b8742a 100%);
+  color:#f8f4ee; border-bottom:3px solid #2a2114; }
+.mast-inner { max-width:1000px; margin:0 auto; padding:.85rem 1rem;
+  display:flex; align-items:center; justify-content:space-between; gap:1.2rem;
+  flex-wrap:wrap; }
+.mast-brand { display:flex; align-items:center; gap:.85rem;
+  color:inherit; text-decoration:none; min-width:0; }
+/* A pale disc so the creature has something to read against on the dark bar.
+   Its colour follows the leg (--leg-disc, southwest block below): straw,
+   gypsum, granite, tufa — never Odo's own rust. */
+.mast-creature { flex:0 0 auto; width:64px; height:64px; border-radius:50%;
+  background:radial-gradient(circle at 50% 46%, var(--leg-disc) 0%, var(--leg-disc) 60%,
+             color-mix(in srgb, var(--leg-disc) 35%, transparent) 72%, transparent 78%);
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.28)); }
+.mast-words { display:flex; flex-direction:column; gap:.15rem; min-width:0; }
+.mast-title { font-size:1.45rem; font-weight:700; letter-spacing:-.02em; line-height:1.1; }
+.mast-tag { font-size:.86rem; color:#ecd9b8; }
+.mast-tag b { color:#ffffff; font-weight:650; }
+
+.mast-nav { display:flex; align-items:center; gap:1.1rem; flex-wrap:wrap; }
+.mast-links { display:flex; align-items:center; gap:1rem; font-size:.92rem; }
+.mast-links a, .mast-links .linkish { color:#f3e6d0; text-decoration:none; }
+.mast-links a:hover, .mast-links .linkish:hover { color:#fff; text-decoration:underline; }
+.mast-links .post-link { font-weight:700; }
+.linkish { background:none; border:0; padding:0; font:inherit; cursor:pointer; }
+
+.clode-badge { display:flex; flex-direction:column; align-items:center;
+  gap:.05rem; padding:.4rem .85rem; border:1.5px solid rgba(255,255,255,.45);
+  border-radius:9px; text-decoration:none; color:#fff; line-height:1.1;
+  background:rgba(255,255,255,.07); transition:background .15s, border-color .15s; }
+.clode-badge:hover { background:rgba(255,255,255,.18); border-color:#fff; }
+.cb-kicker { font-size:.62rem; text-transform:uppercase; letter-spacing:.13em; color:#ecd9b8; }
+.cb-name { font-size:1.02rem; font-weight:800; letter-spacing:.06em; }
+
+@media (max-width:640px) {
+  .mast-inner { padding:.7rem .8rem; gap:.7rem; }
+  .mast-creature { width:52px; height:52px; }
+  .mast-title { font-size:1.2rem; }
+  .mast-tag { font-size:.78rem; }
+  .mast-nav { width:100%; justify-content:space-between; }
+}
+
+/* --- hero ------------------------------------------------------------------ */
+.hero { padding:1.2rem 0 .8rem; }
+.hero-top { display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; }
+.hero h1 { margin:0; font-size:1.8rem; letter-spacing:-.01em; line-height:1.15; }
+.badge { display:inline-block; padding:.2rem .7rem; border-radius:999px;
+  background:var(--accent); color:#fff; font-size:.8rem; font-weight:700; letter-spacing:.03em; }
+.hero-line { margin:.5rem 0 .2rem; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.hero-line b { font-size:1.05rem; }
+.pill-topology { background:#374151; }
+.cast { margin:.1rem 0 .8rem; font-size:.88rem; color:var(--muted); }
+.crumb { margin:0 0 .4rem; font-size:.9rem; }
+.page-head { padding:1.2rem 0 .6rem; }
+.page-head h1 { margin:0 0 .2rem; font-size:1.6rem; }
+
+.leg-strip { list-style:none; margin:.6rem 0 0; padding:0; display:flex; gap:.6rem;
+  overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:.3rem; }
+.leg-strip li { flex:0 0 auto; }
+.leg-guide { display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:.2rem; padding:.3rem .5rem; max-width:120px; text-align:center; }
+.leg-guide img { width:40px; height:40px; }
+.guide-tag { font-size:.68rem; color:var(--muted); line-height:1.2; letter-spacing:.02em; }
+.leg-chip a { display:flex; flex-direction:column; gap:.1rem; min-width:170px; max-width:240px;
+  padding:.55rem .7rem; border:1px solid var(--line); border-left:5px solid var(--leg);
+  border-radius:9px; background:var(--card); color:inherit; text-decoration:none; }
+.leg-chip.today a { box-shadow:0 0 0 2px var(--leg); }
+.leg-n { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
+  border-radius:50%; background:var(--leg, var(--accent)); color:#fff; font-size:.78rem; font-weight:800; }
+.leg-n.big { width:34px; height:34px; font-size:1rem; vertical-align:middle; }
+.leg-name { font-weight:600; font-size:.92rem; line-height:1.25; }
+.leg-sub { font-size:.78rem; color:var(--muted); }
+
+.leg-hero { border-left:6px solid var(--leg); padding-left:.9rem; }
+.guide-line { display:flex; align-items:center; gap:.6rem; margin:.4rem 0; font-size:.9rem; color:var(--muted); }
+.guide-line img { width:40px; height:40px; flex:0 0 auto; }
+.route-hint { margin:.4rem 0 0; font-size:.88rem; color:var(--muted); }
+
+/* --- map ------------------------------------------------------------------- */
+#map { height: 520px; border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  background:var(--card); }
+.cp-pin span { display:flex; align-items:center; justify-content:center; width:100%; height:100%;
+  border-radius:50%; background:#1f2937; color:#fff; border:2px solid #fff;
+  box-shadow:0 0 0 1px rgba(0,0,0,.4); font:800 12px/1 ui-sans-serif,system-ui,sans-serif; }
+.cp-pin.arrived span { background:var(--ok); }
+.post-pin span { display:flex; align-items:center; justify-content:center; width:100%; height:100%;
+  border-radius:50%; background:#f59e0b; color:#fff; border:2px solid #fff; font-size:12px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.4); }
+.post-pin img { width:34px; height:34px; object-fit:cover; border-radius:6px; border:2px solid #fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.5); display:block; }
+.popup h3 { margin:0 0 .25rem; font-size:1rem; }
+.popup p { margin:.15rem 0; font-size:.86rem; }
+.popup .muted { color:#555; }
+.popup-photo { display:block; width:100%; max-width:240px; border-radius:6px; margin-bottom:.4rem; }
+
+/* --- checkpoints ----------------------------------------------------------- */
+h2 { font-size:1.15rem; margin:1.6rem 0 .6rem; }
+.section-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.cp-list { list-style:none; margin:0; padding:0; border:1px solid var(--line); border-radius:10px;
+  background:var(--card); overflow:hidden; }
+.cp { display:grid; grid-template-columns:auto 1fr auto; gap:.7rem; align-items:center;
+  padding:.55rem .8rem; border-bottom:1px solid var(--line); border-left:5px solid var(--leg); }
+.cp:last-child { border-bottom:0; }
+.cp-n { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px;
+  border-radius:50%; background:#1f2937; color:#fff; font-size:.8rem; font-weight:800; }
+.cp.arrived .cp-n { background:var(--ok); }
+.cp-main { display:flex; flex-direction:column; min-width:0; }
+.cp-name { font-weight:600; }
+.cp-label { font-size:.8rem; }
+.cp-time { display:flex; align-items:center; gap:.5rem; font-size:.82rem; text-align:right; flex-wrap:wrap;
+  justify-content:flex-end; }
+.arrived-at { color:var(--ok); font-weight:600; }
+
+/* --- timeline -------------------------------------------------------------- */
+.post { display:grid; grid-template-columns:auto 1fr; gap:.9rem; padding:.9rem;
+  margin:.7rem 0 0; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+.post:not(:has(.post-photo)) { grid-template-columns:1fr; }
+.post-photo img { display:block; width:180px; height:180px; object-fit:cover; border-radius:8px; }
+.post-body { min-width:0; }
+.post-meta { margin:0 0 .3rem; font-size:.82rem; color:var(--muted); display:flex; gap:.4rem;
+  flex-wrap:wrap; align-items:center; }
+.post h3 { margin:.1rem 0 .3rem; font-size:1.05rem; }
+.post-text { margin:0; white-space:pre-line; }
+.post-admin { text-align:right; margin:.15rem 0 0; }
+
+.pill { display:inline-block; padding:.1rem .5rem; border-radius:999px;
+  font-size:.72rem; font-weight:700; color:#fff; background:var(--muted); text-transform:uppercase;
+  letter-spacing:.04em; }
+.pill-photo{background:#f59e0b} .pill-note{background:#4b5563} .pill-sight{background:#0891b2}
+.pill-meal{background:#dc2626} .pill-lodging{background:#7c3aed} .pill-mishap{background:#b91c1c}
+.pill-tip{background:#059669}
+
+/* --- gallery ----------------------------------------------------------------- */
+.gallery-leg { margin-top:1.4rem; border-left:5px solid var(--leg); padding-left:.8rem; }
+.gallery-leg h2 { margin:.4rem 0 .6rem; display:flex; align-items:center; gap:.5rem; }
+.gallery { display:grid; gap:.6rem; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); }
+.gallery figure { margin:0; }
+.gallery img { display:block; width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; }
+.gallery figcaption { font-size:.78rem; color:var(--muted); margin-top:.25rem; }
+
+.sight-list { margin:0; padding-left:0; list-style:none; }
+.sight-list li { padding:.3rem 0; border-bottom:1px solid var(--line); font-size:.92rem; }
+.sight-list li:last-child { border-bottom:0; }
+
+/* --- forms (mobile-first: one thumb-sized screen) ---------------------------- */
+.card { margin-top:1.4rem; padding:1.1rem 1.2rem; background:var(--card);
+  border:1px solid var(--line); border-radius:10px; }
+.card.narrow { max-width:480px; margin-inline:auto; }
+.card h1 { margin:0 0 .3rem; font-size:1.3rem; }
+.stack { display:flex; flex-direction:column; gap:.7rem; margin-top:.8rem; }
+.row { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; }
+label { display:flex; flex-direction:column; gap:.25rem; font-size:.85rem; color:var(--muted); }
+input,select,textarea { padding:.55rem .65rem; border:1px solid var(--line); border-radius:8px;
+  background:var(--bg); color:var(--fg); font:inherit; font-size:1rem; width:100%; }
+textarea { resize:vertical; }
+label.file input { padding:.4rem 0; border:0; background:none; }
+label.check { flex-direction:row; align-items:center; gap:.45rem; color:var(--fg); font-size:.92rem; }
+label.check input { width:auto; }
+button, .button { padding:.55rem .95rem; border:0; border-radius:8px; background:var(--accent);
+  color:#fff; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+button.big { padding:.85rem 1rem; font-size:1.05rem; }
+button.tiny { padding:.2rem .55rem; font-size:.75rem; border-radius:6px; }
+button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); }
+.error { color:var(--danger); font-size:.9rem; }
+.arrive-strip { display:flex; gap:.4rem; flex-wrap:wrap; margin:.6rem 0 .2rem; }
+
+footer { max-width:1000px; margin:0 auto; padding:1.4rem 1rem 3rem;
+  border-top:1px solid var(--line); color:var(--muted); font-size:.85rem; }
+footer p { margin:.3rem 0; }
+
+@media (max-width:640px) {
+  #map { height:380px; }
+  .hero h1 { font-size:1.45rem; }
+  .post-photo img { width:110px; height:110px; }
+  .cp { grid-template-columns:auto 1fr; }
+  .cp-time { grid-column:2; justify-content:flex-start; text-align:left; }
+}
+
+/* --- southwest: one palette per leg, keyed off body[data-leg] ---------------
+   Tokens: --leg-bg sky, --leg-bg-2 horizon haze, --leg-ink text, --leg-muted
+   secondary text, --leg-accent (badge, buttons, links inside the hero),
+   --leg-disc the masthead disc behind Odo. --t1 far … --t4 ground and --t5
+   band colour the terrain silhouettes; templates/terrain.html carries shape
+   only. WCAG ratios computed 2026-09-01: ink/bg ≥ 12.9, ink/bg-2 ≥ 11.0,
+   muted/bg ≥ 5.9, white on accent ≥ 4.6, ink over the far layer ≥ 8.0.
+   Leg 1 is the default, so an empty or unknown data-leg still resolves. The
+   hero is light in every colour scheme: a road-trip site reads like paper. */
+body, body[data-leg="hudson-bend-to-cloudcroft"] { /* Hill Country → West Texas → Cloudcroft */
+  --leg-bg:#f6efe0; --leg-bg-2:#ece2cc; --leg-ink:#2b2418; --leg-muted:#5f5443;
+  --leg-accent:#3f6b3a; --leg-disc:#f1dfa6;
+  --t1:#b9c8b2; --t2:#c9884f; --t3:#5c7f4d; --t4:#d9c27a; --t5:#c9884f; }
+  /* limestone cream, caliche white, live-oak green, plains straw, Sacramento pine, mesa rust */
+body[data-leg="cloudcroft-to-flagstaff"] { /* White Sands → Painted Desert → Flagstaff */
+  --leg-bg:#eef3f8; --leg-bg-2:#f4f1ea; --leg-ink:#23262e; --leg-muted:#555b66;
+  --leg-accent:#a3402f; --leg-disc:#f7f3ea;
+  --t1:#bcc6b2; --t2:#c4674d; --t3:#4d6b4a; --t4:#ece7dc; --t5:#8d6b8f; }
+  /* Flagstaff sky, gypsum white, Painted Desert red, sage, ponderosa, purple band */
+body[data-leg="flagstaff-to-mammoth-lakes"] { /* Mojave → Hoover Dam → Eastern Sierra */
+  --leg-bg:#e9f0f6; --leg-bg-2:#e6d9c2; --leg-ink:#22252a; --leg-muted:#545a61;
+  --leg-accent:#5b6830; --leg-disc:#e8e6e0;
+  --t1:#b9bcc0; --t2:#6b6e70; --t3:#8a9450; --t4:#d6c4a0; --t5:#6b6e70; }
+  /* alpine blue, Nevada tan, creosote olive, granite, basalt grey */
+body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake → Tioga → Central Valley → the Bay */
+  --leg-bg:#eef1f2; --leg-bg-2:#dbe6ee; --leg-ink:#1f2a30; --leg-muted:#4f5d66;
+  --leg-accent:#8a6416; --leg-disc:#eadfc8;
+  --t1:#c3c8cc; --t2:#7d9bb2; --t3:#d8b45a; --t4:#cbb994; --t5:#7d9bb2; }
+  /* Bay fog, Tioga alpine, Central Valley gold, Mono Lake tufa, Sierra granite */
+
+/* The ride hero is full-bleed sky with the leg's horizon along its foot; the
+   text sits in the sky and the leg chips stand on the ground. Everything
+   below it — map, checkpoints, timeline — stays on plain paper so photos and
+   pins read. Full bleed = pull out of main's column, pad back to it. */
+.hero-sky { position:relative; overflow:hidden; color:var(--leg-ink);
+  background:linear-gradient(var(--leg-bg) 45%, var(--leg-bg-2) 100%);
+  margin-inline:calc(50% - 50vw); padding:1.2rem calc(max(0px, 50vw - 500px) + 1rem) 1rem; }
+.hero-sky > * { position:relative; z-index:1; }
+.hero-sky .terrain { position:absolute; left:0; right:0; bottom:0; z-index:0;
+  width:100%; height:46%; display:block; pointer-events:none; }
+.hero-sky .muted, .hero-sky .cast, .hero-sky .guide-tag, .hero-sky .leg-sub { color:var(--leg-muted); }
+.hero-sky a { color:var(--leg-accent); }
+.hero-sky .badge { background:var(--leg-accent); }
+/* Chips — and Lance's guide card — are opaque paper in every colour scheme:
+   they stand on the silhouettes, so their text never meets a green hill. */
+.hero-sky .leg-chip a { background:#fff; color:var(--leg-ink); border-color:rgba(0,0,0,.14); }
+.hero-sky .leg-guide { background:#fff; border:1px solid rgba(0,0,0,.14); border-radius:9px; }
+.hero-sky .leg-strip { padding-bottom:0; }
+
+/* Leg pages: the same horizon as a thin band across the top, then plain paper. */
+.terrain-band { position:relative; overflow:hidden; margin-inline:calc(50% - 50vw);
+  height:clamp(64px, 14vw, 120px); background:linear-gradient(var(--leg-bg), var(--leg-bg-2)); }
+.terrain-band .terrain { position:absolute; left:0; right:0; bottom:0; width:100%; height:78%;
+  display:block; pointer-events:none; }
+
+/* Post form: the pin group. Four sources, one fuzz toggle, and a line that
+   says in plain words what the public map will get — the whole point of the
+   block is that the app never decides silently again. */
+fieldset.pin { border:1px solid var(--rule, #d8d3c8); border-radius:.5rem; padding:.6rem .75rem .5rem;
+  margin:0; display:flex; flex-direction:column; gap:.3rem; }
+fieldset.pin legend { padding:0 .35rem; font-size:.85rem; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--muted, #6b6459); }
+fieldset.pin label.check { flex-wrap:wrap; }
+fieldset.pin input:disabled + *, fieldset.pin label.check input:disabled { opacity:.5; }
+#f-fuzz { margin-top:.25rem; }
+#pin-publishes { margin:.35rem 0 0; padding-top:.35rem; border-top:1px dashed var(--rule, #d8d3c8); }
+#exif-status { margin:-.4rem 0 0; }
+
+/* Admin-only, on a post card: what was stored and what was published, plus
+   the re-pin control. Never rendered to an anonymous visitor. */
+.post-pin { margin:.4rem 0 .2rem; font-variant-numeric:tabular-nums; }
+.post-repin { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin:.1rem 0 0;
+  font-size:.85rem; color:var(--muted, #6b6459); }
+.post-repin label { flex-direction:row; align-items:center; gap:.3rem; margin:0; }
+.post-repin select { width:auto; padding:.15rem .3rem; font-size:.85rem; }
+/* The way to the edit screen. Sits between the pin line and the re-pin
+   control, because the two are read together: what this post claims, then the
+   two ways to correct it. */
+.post-edit { margin:.1rem 0 .3rem; font-size:.85rem; }
+
+/* One checkpoint's block on the lodging screen. The rule separates them so a
+   long list stays readable on a phone, where this is actually used. */
+.lodging-cp { padding:.4rem 0 .2rem; border-top:1px solid var(--rule, #e6e0d6); }
+.lodging-cp:first-of-type { border-top:0; }
+.lodging-cp p { margin:0 0 .3rem; }

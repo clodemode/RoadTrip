@@ -1,0 +1,76 @@
+{{template "head" .}}
+<section class="hero hero-sky">
+  {{template "terrain" .PageLeg}}
+  <div class="hero-top">
+    <h1>{{.Ride.Name}}</h1>
+    <span class="badge">{{.Day.Badge}}</span>
+  </div>
+  <p class="hero-line">
+    <b>{{.Ride.OriginLabel}}</b> &rarr; <b>{{.Ride.TerminusLabel}}</b>
+    <span class="pill pill-topology">ONE-WAY</span>
+    <span class="muted">{{day .Ride.StartDate}} &ndash; {{day .Ride.EndDate}} &middot; {{.Ride.Mode}}</span>
+  </p>
+  <p class="cast">Trip-keeper: Kris &middot; Guide: {{.GuideName}} &middot; {{.CreatureName}}</p>
+  <ol class="leg-strip">
+    <li class="leg-guide">
+      <img src="/static/img/lance.svg?v={{.V}}" width="40" height="40" alt="{{.GuideName}}">
+      <span class="guide-tag">{{.GuideTag}}</span>
+    </li>
+    {{range .Legs}}
+    <li class="leg-chip{{if and $.Day.Today (eq $.Day.Today.ID .ID)}} today{{end}}" style="--leg:{{legColor .Ord}}">
+      <a href="/legs/{{.Slug}}">
+        <span class="leg-n">{{.Ord}}</span>
+        <span class="leg-name">{{.Name}}</span>
+        <span class="leg-sub">{{day .Date}} &middot; {{num .EstMiles}} mi</span>
+      </a>
+    </li>
+    {{end}}
+  </ol>
+</section>
+
+<div id="map" data-mode="ride"></div>
+
+<section class="checkpoints">
+  <h2>Checkpoints</h2>
+  <ol class="cp-list">
+  {{range $leg := .Legs}}{{range .Checkpoints}}
+    <li class="cp{{if .ArrivedAt}} arrived{{end}}" style="--leg:{{legColor $leg.Ord}}">
+      <span class="cp-n">{{.Ord}}</span>
+      <span class="cp-main">
+        <span class="cp-name">{{.Name}}</span>
+        <span class="cp-label muted">{{.Label}}{{if eq .Precision "fuzzed"}} &middot; approximate{{end}}</span>
+      </span>
+      <span class="cp-time">
+        {{if .ArrivedAt}}<span class="arrived-at">arrived {{local .ArrivedAt .TZ}}</span>
+        {{else if .PlannedArrive}}<span class="muted">plan: arrive {{clock .PlannedArrive .TZ}}</span>
+        {{else if .PlannedDepart}}<span class="muted">plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
+        {{if $.Authed}}
+          <form method="post" action="/admin/checkpoint/{{.ID}}/arrive" class="inline">
+            {{if .ArrivedAt}}<input type="hidden" name="clear" value="1"><button class="tiny ghost">undo</button>
+            {{else}}<button class="tiny">Arrived</button>{{end}}
+          </form>
+        {{end}}
+      </span>
+    </li>
+  {{end}}{{end}}
+  </ol>
+</section>
+
+<section class="timeline">
+  <div class="section-head">
+    <h2>From the road</h2>
+    {{if .Authed}}<a class="button" href="/admin/post">+ Post</a>{{end}}
+  </div>
+  {{if not .Posts}}<p class="muted">Nothing posted yet.</p>{{end}}
+  {{range .Posts}}
+    {{template "post_card" (card . $.Authed)}}
+    {{if $.Authed}}
+    <form method="post" action="/admin/post/{{.ID}}/delete" class="post-admin"
+          onsubmit="return confirm('Delete this post?')"><button class="tiny ghost">delete</button></form>
+    {{end}}
+  {{end}}
+</section>
+
+<script>window.RIDE = {{json .Map}};</script>
+<script defer src="/static/js/map.js?v={{.V}}"></script>
+{{template "foot" .}}

@@ -1,0 +1,43 @@
+entries:
+- slug: spec-roadtrip-mark-stones-rail-and-lance-leg-navigation
+  title: roadtrip navigation — MARK_STONES on every page (planned places, then the visited ones keep their
+    mark) and LANCE's legs as the leg links
+  domain: lore
+  lore_type: spec
+  app_scope: roadtrip
+  lair: surface
+  character_slug: lance
+  tags:
+  - roadtrip
+  - atx-sjc
+  - navigation
+  - mark-stones
+  - lance
+  - scout
+  - gonzo
+  - spring-2026-09
+  status: building
+  description: 'Kris 2026-09-01: "change the navigation, we could click on parts of lance like his legs";
+    "all pages have the mark_stones listed"; "mark_stones on the roadtrip are the locations we plan to,
+    then the ones we do visit and we keep a mark". MARK_STONE = a planned place on a leg: a checkpoint
+    or a sight. It is PLANNED (hollow) until the trip-keeper marks it — checkpoint: arrived_at (exists,
+    one tap); sight: new visited_at (one tap POST /admin/sight/{id}/mark, clear=1 undoes). A marked stone
+    keeps its mark (local time in the stone''s leg tz) forever; a passed-but-unmarked stone stays hollow
+    — never auto-marked. RAIL on every public page (base.html, server-rendered, no new JS): per leg in
+    order, the leg''s checkpoints with its sights interleaved after the leg''s start checkpoint; hollow
+    vs filled glyph; the current leg (today / selected) expanded, the others collapsed to "3 of 5 marked";
+    tapping a stone opens its leg page anchored at the stone; a stone with a post nearby links the post.
+    LANCE is the navigator at the rail''s head: his SVG inline, his legs are real anchor hotspots — trip
+    legs 1–4 on four legs front to back, the remaining two are Home (origin) and Terminus (last checkpoint);
+    the current leg''s leg is filled with the leg colour, hover/focus highlights, aria-labels, keyboard
+    reachable; lance.svg gains ids leg-1..leg-6 (GONZO hotspot craft). Data: sights.visited_at nullable,
+    additive boot migration; RIDE payload gains stones. Budget: under +6 KB per page, phone-first, reduced-motion
+    respected. Ships as one SCOUT CODI before departure 2026-09-04 06:30 CDT.'
+  dont: Don't auto-mark a stone by date or GPS; the mark is a deliberate tap. Don't replace the map or
+    the timeline; the rail sits with them. Don't add routes beyond the sight mark/clear. Don't make Lance's
+    hotspots JS-only — they are anchors.
+  do_this: One SCOUT CODI (scout_whitespace before/after if the tools accept the surface), GONZO hotspot
+    piece inside it. Commit, push, deploy, phone-width screenshot in the Browser pane, ledger.
+  depends_on:
+  - spec-bloodride-atx-sjc-2026-09-live-ride-surface-go-or-django
+  - spec-ride-trip-topology-loop-or-one-way-or-open

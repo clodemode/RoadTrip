@@ -1,0 +1,119 @@
+# Deploy to Fly — BY HAND ONLY.
+#
+# workflow_dispatch and nothing else. There is deliberately no push trigger:
+# roadtrip is live under someone's thumb from a car, and auto-releasing every
+# commit to trunk would put an unreviewed build in front of the ride with no
+# explicit go. The fleet rule (fintrack, operator ruling 2026-09-01) is that a
+# deploy originates in CI and is dispatched by a person.
+#
+# ONE-TIME SETUP: a deploy token in the repo secret FLY_API_TOKEN —
+#   fly tokens create deploy -a roadtrip-clodemode
+# then Settings → Secrets and variables → Actions → New repository secret.
+#
+#   mode=plan   every gate, and the image built on Fly's remote builder,
+#               WITHOUT releasing it. The default, so a slip of the finger
+#               does not reach the ride.
+#   mode=apply  the same gates, then the release, then an INDEPENDENT probe
+#               that the instance actually serves — a deploy's own verdict is
+#               not a state report.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan = build only (no release). apply = build and release."
+        type: choice
+        required: true
+        default: plan
+        options: [plan, apply]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two releases at the same machine at once.
+  group: deploy-roadtrip
+  cancel-in-progress: false
+
+env:
+  FLY_APP: roadtrip-clodemode
+  # /healthz is the one path exempt from both the canonical-host 301 and the
+  # SITE_VISIBILITY=private gate, so it answers on the .fly.dev host while the
+  # site itself is closed. That is what makes it usable as a probe.
+  PROBE_URL: https://roadtrip-clodemode.fly.dev/healthz
+
+jobs:
+  deploy:
+    name: ${{ inputs.mode }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # --- Gates. The same checks CI runs, re-run here, because a deploy is
+      # dispatched against a ref and not against a CI run: "trunk was green
+      # yesterday" is not a statement about the commit being shipped.
+      - name: gate — gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt needed on: $unformatted"
+            exit 1
+          fi
+
+      - name: gate — go vet
+        run: go vet ./...
+
+      - name: gate — go test
+        run: go test -race -count=1 ./...
+
+      - name: name the commit being shipped
+        run: |
+          echo "::notice title=shipping::${{ github.sha }} (${{ github.ref_name }}) → $FLY_APP, mode=${{ inputs.mode }}"
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # --remote-only: the image is built on Fly's builder, so it does not
+      # depend on this runner's local docker state and is reproducible off any
+      # one machine.
+      - name: plan — build without releasing
+        if: inputs.mode == 'plan'
+        run: flyctl deploy --build-only --remote-only -a "$FLY_APP"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: apply — build and release
+        if: inputs.mode == 'apply'
+        run: flyctl deploy --remote-only -a "$FLY_APP" --wait-timeout 300
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # An independent probe: ask the instance itself, rather than trusting the
+      # deploy's own exit code. The machine may be suspended, so allow for the
+      # resume before calling it a failure.
+      - name: apply — probe that it serves
+        if: inputs.mode == 'apply'
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -sS -o /tmp/probe.txt -w '%{http_code}' --max-time 20 "$PROBE_URL" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "::notice title=probe::$PROBE_URL → 200 $(cat /tmp/probe.txt)"
+              exit 0
+            fi
+            echo "attempt $i: HTTP $code — retrying"
+            sleep 6
+          done
+          echo "::error title=probe::$PROBE_URL never returned 200; the release may be bad"
+          cat /tmp/probe.txt || true
+          exit 1
+
+      - name: status
+        if: always()
+        run: flyctl status -a "$FLY_APP" || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

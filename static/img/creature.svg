@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Odo, a nine-banded armadillo" class="odo">
+  <title>Odo</title>
+  <style>
+    /* GONZO recipe odo-mile-counter (CSS only, lives inside the SVG so it animates
+       both as an img element and inline). Rules: odo-odometer + odo-walk. */
+    @keyframes odo-odometer{0%,86%,100%{transform:translateY(0);opacity:1}90%{transform:translateY(-1.4px);opacity:.7}95%{transform:translateY(.7px);opacity:.92}}
+    @keyframes odo-walk{0%,100%{transform:translateX(2px)}50%{transform:translateX(-2px)}}
+    @keyframes odo-tail{0%,100%{transform:rotate(3deg)}50%{transform:rotate(-3deg)}}
+    .bands>path{animation:odo-odometer 6s ease-in-out infinite}
+    #band-2{animation-delay:.12s}#band-3{animation-delay:.24s}#band-4{animation-delay:.36s}#band-5{animation-delay:.48s}
+    #band-6{animation-delay:.6s}#band-7{animation-delay:.72s}#band-8{animation-delay:.84s}#band-9{animation-delay:.96s}
+    #leg-front,#leg-back{animation:odo-walk .6s steps(1,end) 3}
+    #leg-back{animation-delay:-.3s}
+    #tail{animation:odo-tail .6s ease-in-out 3;transform-box:fill-box;transform-origin:100% 0}
+    .odo:hover #leg-front,.odo:hover #leg-back,.odo:hover #tail{animation-iteration-count:infinite}
+    /* data-miles hook: the app sets miles-N (N = min(9, floor(miles/150))) on the root;
+       bands 1..N light a hair darker. Nothing sets it yet. */
+    .miles-1 .bands>path:nth-child(-n+1),.miles-2 .bands>path:nth-child(-n+2),.miles-3 .bands>path:nth-child(-n+3),
+    .miles-4 .bands>path:nth-child(-n+4),.miles-5 .bands>path:nth-child(-n+5),.miles-6 .bands>path:nth-child(-n+6),
+    .miles-7 .bands>path:nth-child(-n+7),.miles-8 .bands>path:nth-child(-n+8),.miles-9 .bands>path:nth-child(-n+9){filter:brightness(.82)}
+    @media (prefers-reduced-motion:reduce){.odo *{animation:none}}
+  </style>
+  <defs>
+    <clipPath id="shell-clip"><path d="M10 46C10 29 20 19 34 19c12 0 21 8 21 21v6z"/></clipPath>
+  </defs>
+  <!-- the road he counts -->
+  <path id="road" d="M3 57h58" stroke="#8a6a4a" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <!-- tail: long, ringed, trailing behind -->
+  <path id="tail" d="M14 40c-6 2-11 7-13 15 5-5 9-8 14-10z" fill="#b8693f"/>
+  <path d="M8.5 46l2 2.5M5 50l2 2" stroke="#7a4a2a" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <!-- four legs, one per leg of the ride -->
+  <path id="leg-back"  d="M17 45v11M25 46v11" stroke="#7a4a2a" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+  <path id="leg-front" d="M40 46v11M48 45v11" stroke="#7a4a2a" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+  <!-- belly -->
+  <path id="belly" d="M11 45c3 5 10 7 23 7s20-2 22-7z" fill="#f2dcbf"/>
+  <!-- shell: one long carapace, then the nine bands cut into it, head to tail -->
+  <path id="shell" d="M10 46C10 29 20 19 34 19c12 0 21 8 21 21v6z" fill="#c9784b"/>
+  <g class="bands" clip-path="url(#shell-clip)" stroke="#7a4a2a" stroke-width=".9">
+    <path id="band-1" d="M43.2 47l1.3-30h-2.6l-1.3 30z" fill="#b8693f"/>
+    <path id="band-2" d="M40.6 47l1.3-30h-2.6l-1.3 30z" fill="#d68a5c"/>
+    <path id="band-3" d="M38 47l1.3-30h-2.6l-1.3 30z"   fill="#b8693f"/>
+    <path id="band-4" d="M35.4 47l1.3-30h-2.6l-1.3 30z" fill="#d68a5c"/>
+    <path id="band-5" d="M32.8 47l1.3-30h-2.6l-1.3 30z" fill="#b8693f"/>
+    <path id="band-6" d="M30.2 47l1.3-30h-2.6l-1.3 30z" fill="#d68a5c"/>
+    <path id="band-7" d="M27.6 47l1.3-30h-2.6l-1.3 30z" fill="#b8693f"/>
+    <path id="band-8" d="M25 47l1.3-30h-2.6l-1.3 30z"   fill="#d68a5c"/>
+    <path id="band-9" d="M22.4 47l1.3-30h-2.6l-1.3 30z" fill="#b8693f"/>
+    <!-- scute edges: the fixed plates either side of the bands -->
+    <path id="scutes" d="M19.8 47l1.3-30M45.8 47l1.3-30" stroke-width="1.6" fill="none"/>
+  </g>
+  <!-- head shield and pointed snout -->
+  <path id="head" d="M49 33c5-2 9 0 12 5 1.5 3 2 6 1.5 8L51 46z" fill="#c9784b"/>
+  <path id="snout" d="M57 39c3 2 5 5 5.5 7L54 45z" fill="#b8693f"/>
+  <!-- ears -->
+  <g id="ear" fill="#b8693f">
+    <path d="M49.5 33c-1.5-4 0-8 2.5-10 1.5 3 1 7-.5 10z"/>
+    <path d="M54 32c-.5-4 1.5-8 4-9.5 1 3 0 7-1.5 9.5z"/>
+  </g>
+  <!-- eye and nose -->
+  <circle id="eye" cx="56" cy="38.5" r="1.7" fill="#1a1207"/>
+  <circle id="nose" cx="62.3" cy="45.6" r="1.3" fill="#1a1207"/>
+</svg>

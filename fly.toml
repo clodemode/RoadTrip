@@ -1,0 +1,66 @@
+# roadtrip — the live ride surface (atx-sjc-2026-09 first).
+#
+# A Go static binary + SQLite + photos on a persistent volume. Sized
+# deliberately small; see README for why the stack is not Django.
+app = "roadtrip-clodemode"
+primary_region = "dfw"   # Dallas — the ride departs from Austin
+
+[build]
+
+[env]
+  DATA_DIR = "/data"
+  PORT = "8080"
+  RIDE_SLUG = "atx-sjc-2026-09"
+  # The one public origin: canonical + og:url on every page, and every other
+  # host the app answers on (roadtrip-clodemode.fly.dev included) 301s here,
+  # /healthz excepted. Cert issued 2026-09-02. Unset = no redirect, no tags.
+  SITE_URL = "https://roadtrip.opeongo.net"
+  # TEMPORARY, ruled by Kris 2026-09-02 ("we will open it later"): the whole
+  # site sits behind the one admin password. /healthz, the login page and the
+  # two static files it renders with stay open — see README. Re-opening is
+  # this line set back to "public" and a redeploy.
+  SITE_VISIBILITY = "public"   # opened 2026-09-08 by Kris after the precision review + the EXIF GPS strip (v26)
+  # Which way the post form's "Fuzz location" toggle starts AT A PRIVATE
+  # PLACE, and nothing else. "snap" = ticked (today's behaviour); "exact" =
+  # clear. Every point away from a private place is exact in both modes.
+  PIN_PRECISION = "snap"
+
+[[mounts]]
+  source = "roadtrip_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+  # SUSPEND, not stop — fleet standard. A stopped machine pays a full VM boot
+  # before it answers; the fleet measured that at 22.6 s to first byte against
+  # 0.37 s warm (fintrack, 2026-08-04). Suspend restores the running process
+  # from a RAM snapshot in a few hundred ms, and Fly bills rootfs only in BOTH
+  # states — so the latency is bought for free. 512 mb is far under the 2 GB
+  # suspend cap. The /data volume is untouched; suspend snapshots memory only.
+  #
+  # STANDING CAVEAT: resume does NOT re-run the entrypoint. All boot work here
+  # is deploy-coupled (schema create, first-boot seed) and never time-coupled,
+  # so that is safe. The day-of-trip badge is computed per request, not at
+  # boot. Under suspend this machine can run for months without a cold boot —
+  # do NOT add periodic work to startup without revisiting this, or it will
+  # silently stop firing.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # 512, not 256: on 2026-09-02 00:49Z a phone photo post (a full-size JPEG
+  # decoded in memory) OOM-killed the process at anon-rss 158 MB and four
+  # posts were lost. The decode path is bounded now (photo.go), but a road
+  # trip is not the place to run at the edge of the kernel's patience.
+  memory = "512mb"

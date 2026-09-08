@@ -1,0 +1,232 @@
+# The DATA carriage — by hand only, and what it WRITES travels in exactly one
+# direction.
+#
+# WHY THIS IS NARROW. Prod is the source of record for everything the ride
+# produces: posts, photos, arrival stamps, all authored from a phone on the
+# road. Pushing any of that upward would destroy the only copy. The private
+# overlay is the sole exception — it is operator-authored config, not a record,
+# its canonical copy is the PRIVATE_JSON secret below, and a freshly
+# provisioned volume comes up without it. So it is the one thing that can
+# safely ride up, and the one thing that has to.
+#
+# This workflow therefore writes private.json and NOTHING else. It cannot
+# reach the database, the media store, or any post. If you find yourself
+# wanting to widen what it writes, that is the moment to stop and pull down
+# instead — which is what census is for.
+#
+# ONE-TIME SETUP — two repository secrets:
+#   PUSH_TOKEN       the fixed push token, the same value as the Fly secret
+#                    of that name. The carriage carries it in one header
+#                    instead of holding a session: a sign-in put the plaintext
+#                    admin password on the wire and left a cookie jar on the
+#                    runner for the length of the job, and neither was worth
+#                    it for one POST. The app checks the header wherever it
+#                    checks the session, so this is not a second auth path —
+#                    it is the same gate, entered by machine.
+#   PRIVATE_JSON     the whole overlay document, e.g.
+#                    {"checkpoints":{"3":{"address":"…","notes":"…"}}}
+#                    Keys are checkpoint ORDS. This is the canonical copy;
+#                    edit it here, or edit it at /admin/lodging and paste the
+#                    result back so the two do not drift. Needed for plan and
+#                    apply; census never reads it.
+#
+#   mode=census prove the credential, then READ the running instance and
+#               report what is on the volume: how many posts, which of them
+#               share a photo, which were taken seconds apart, and which
+#               checkpoints have been arrived at. Writes nothing, anywhere.
+#   mode=plan   the same credential proof, plus the secret's shape, WITHOUT
+#               writing. The default.
+#   mode=apply  the same checks, then the write, then a read-back that the
+#               instance reports the checkpoint count it was sent.
+#
+# THE TOKEN GATE RUNS FIRST, and on its own. It needs nothing but PUSH_TOKEN,
+# so a run still answers "does the credential work against the live instance"
+# when the overlay secret has never been set — which is exactly the state a
+# fresh repository is in, and exactly when you most want to know.
+name: Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "census = read the instance (no write). plan = validate only. apply = push the overlay."
+        type: choice
+        required: true
+        default: plan
+        options: [census, plan, apply]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data-roadtrip
+  cancel-in-progress: false
+
+env:
+  SITE: https://roadtrip.opeongo.net
+
+jobs:
+  push:
+    name: ${{ inputs.mode }}
+    runs-on: ubuntu-latest
+    steps:
+      # NOTE: no checkout. This carriage talks to a running instance; it has no
+      # use for the repository, and not cloning it is one less way for the
+      # overlay to end up beside the code.
+
+      - name: gate — the token is set and the instance accepts it
+        env:
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+        run: |
+          if [ -z "$PUSH_TOKEN" ]; then
+            echo "::error title=data::PUSH_TOKEN is not set"
+            exit 1
+          fi
+          # /admin/posts.json is a GET behind the same requireAuth the push
+          # lands behind, so a 200 here proves the credential without writing
+          # anything. A 302 is the visibility gate turning away an unauthed
+          # request: the token was refused, or this build predates it.
+          code=$(curl -sS -o /tmp/posts.json -w '%{http_code}' \
+            -H "Authorization: Bearer $PUSH_TOKEN" \
+            --max-time 30 "$SITE/admin/posts.json")
+          if [ "$code" != "200" ]; then
+            echo "::error title=data::the token was refused (HTTP $code) — check PUSH_TOKEN against the Fly secret"
+            exit 1
+          fi
+          echo "::notice title=data::token accepted by $SITE"
+
+      # The census is a READ. It exists because /route.geojson drops an
+      # unpinned post and the image is scratch, so the app is the only census
+      # there is — and because running it here means it does not need a laptop
+      # with the token on it.
+      #
+      # What reaches this log is ids and counts. Not titles, not photo paths,
+      # not a single coordinate: a run log is a surface like any other, and the
+      # rule for surfaces is the same everywhere on this site. The full
+      # document stays on the runner and dies with the job.
+      - name: census — what is actually on the volume
+        if: inputs.mode == 'census'
+        env:
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+        run: |
+          echo "posts:      $(jq '.count' /tmp/posts.json)"
+          echo "with photo: $(jq '[.posts[] | select(.photo)] | length' /tmp/posts.json)"
+          echo "pinned:     $(jq '[.posts[] | select(.lat != null)] | length' /tmp/posts.json)"
+          echo
+
+          # A duplicate is the same photo filed twice — the shape a retried
+          # upload leaves behind, since the media store is content-addressed
+          # and hands the second post the first one's row.
+          echo "posts sharing one photo:"
+          dupes=$(jq -r '
+            [.posts[] | select(.photo)]
+            | group_by(.photo.id)[]
+            | select(length > 1)
+            | "  photo \(.[0].photo.id) (\(.[0].photo.sha256[0:12])…) ← posts \([.[].id] | join(", "))"
+          ' /tmp/posts.json)
+          echo "${dupes:-  none}"
+          echo
+
+          # Near-misses: two DIFFERENT photos taken within a few seconds of
+          # each other. Usually a burst, sometimes the same moment posted
+          # twice from two files. A human decides which; this only points.
+          echo "photos taken within 5s of each other:"
+          near=$(jq -r '
+            [.posts[] | select(.photo and .photo.taken_at != "")]
+            | sort_by(.photo.taken_at) as $p
+            | [range(1; $p | length)]
+            | map(
+                select(
+                  ($p[.].photo.id != $p[.-1].photo.id)
+                  and (($p[.].photo.taken_at | fromdate) - ($p[.-1].photo.taken_at | fromdate) <= 5)
+                )
+                | "  posts \($p[.-1].id) and \($p[.].id), \((($p[.].photo.taken_at | fromdate) - ($p[.-1].photo.taken_at | fromdate)))s apart"
+              )
+            | .[]
+          ' /tmp/posts.json)
+          echo "${near:-  none}"
+          echo
+
+          # Where the ride has actually got to. Names, stamps and the privacy
+          # posture — never the points, which is why precision is worth
+          # printing: "fuzzed" is the assurance that the pin on the map is a
+          # 5 km cell and not a doorstep.
+          curl -sS -o /tmp/route.json -H "Authorization: Bearer $PUSH_TOKEN" \
+            --max-time 30 "$SITE/route.geojson"
+          echo "checkpoints:"
+          jq -r '
+            .features[] | select(.properties.kind == "checkpoint") | .properties
+            | "  \(.order). \(.name)  [\(.precision)]  \(if .made_it then "made it — \(.arrived_at)" else "not yet" end)  id=\(.id)"
+          ' /tmp/route.json
+          echo
+          echo "driven tracks: $(jq '[.features[] | select(.properties.kind == "track")] | length' /tmp/route.json)"
+
+      - name: gate — the secret is a well-formed overlay
+        if: inputs.mode != 'census'
+        env:
+          PRIVATE_JSON: ${{ secrets.PRIVATE_JSON }}
+        run: |
+          if [ -z "$PRIVATE_JSON" ]; then
+            if [ "${{ inputs.mode }}" = "apply" ]; then
+              echo "::error title=data::PRIVATE_JSON is not set — there is nothing to push"
+              exit 1
+            fi
+            # A plan has already done the useful half above. An unset secret is
+            # still worth shouting about rather than passing quietly: it means
+            # the overlay on the volume has NO canonical copy off it, and a
+            # reprovisioned volume would come up without the addresses for good.
+            echo "::warning title=data::PRIVATE_JSON is not set — the overlay on the volume has no canonical copy off it"
+            exit 0
+          fi
+          printf '%s' "$PRIVATE_JSON" > /tmp/private.json
+          # Shape, not content: every key under .checkpoints must be a
+          # checkpoint ord, or the app would accept the document and then
+          # silently ignore the mistyped entry.
+          jq -e '
+            (.checkpoints // {}) as $c
+            | ($c | type == "object")
+              and ($c | keys | all(test("^[0-9]+$")))
+          ' /tmp/private.json > /dev/null || {
+            echo "::error title=data::PRIVATE_JSON must be {\"checkpoints\":{\"<ord>\":{…}}} with numeric ord keys"
+            exit 1
+          }
+          # A count is safe to print. The addresses are the whole point of the
+          # overlay and never reach this log.
+          echo "::notice title=data::overlay carries $(jq '(.checkpoints // {}) | length' /tmp/private.json) checkpoint(s)"
+
+      - name: plan — stop before writing
+        if: inputs.mode == 'plan'
+        run: |
+          echo "::notice title=data::plan only — the credential works and the overlay was validated; nothing was written"
+
+      - name: apply — push the overlay
+        if: inputs.mode == 'apply'
+        env:
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+        run: |
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+            -H "Authorization: Bearer $PUSH_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/private.json \
+            --max-time 30 "$SITE/admin/private")
+          if [ "$code" != "200" ]; then
+            echo "::error title=data::push returned HTTP $code"
+            cat /tmp/out.json || true
+            exit 1
+          fi
+          # The instance reports back how many checkpoints it stored. Compare
+          # it with what was sent: equal means the write landed whole.
+          sent=$(jq '(.checkpoints // {}) | length' /tmp/private.json)
+          got=$(jq '.checkpoints' /tmp/out.json)
+          echo "::notice title=data::sent $sent, instance stored $got"
+          [ "$sent" = "$got" ] || {
+            echo "::error title=data::instance stored $got of $sent checkpoints"
+            exit 1
+          }
+
+      # No sign-out step: there is no session to end. The token is a header on
+      # each request and never becomes state on this runner — what is left to
+      # clear is the overlay and the census, both of which name real places.
+      - name: always — clear the pulled data off the runner
+        if: always()
+        run: rm -f /tmp/private.json /tmp/out.json /tmp/posts.json /tmp/route.json

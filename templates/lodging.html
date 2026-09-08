@@ -1,0 +1,31 @@
+{{template "head" .}}
+<section class="card narrow admin">
+  <h1>Lodging</h1>
+  <p class="muted small">Addresses and notes for each checkpoint. These live only on the volume
+    (<code>private.json</code>) &mdash; never in the repo, never in the seed, never on a public page.
+    Only a signed-in trip-keeper sees them, and only the address reaches the post form.</p>
+  {{with .Error}}<p class="error">{{.}}</p>{{end}}
+  {{if .Saved}}<p class="muted small">&#10003; Saved.</p>{{end}}
+
+  <form method="post" action="/admin/lodging" class="stack">
+    {{range .Legs}}
+    <fieldset class="pin">
+      <legend>Leg {{.Ord}}: {{.Name}}</legend>
+      {{range .Checkpoints}}
+      {{$p := index $.Private .Ord}}
+      <div class="lodging-cp">
+        <p class="muted small">{{.Ord}}. <b>{{.Name}}</b>{{if eq .Precision "fuzzed"}} &middot; <span class="muted">private place &mdash; pins here are fuzzed</span>{{end}}</p>
+        <label>Address<input name="address-{{.Ord}}" maxlength="200" autocomplete="off"
+                             value="{{$p.Address}}" placeholder="street, town"></label>
+        <label>Notes<input name="notes-{{.Ord}}" maxlength="500" autocomplete="off"
+                           value="{{$p.Notes}}" placeholder="anything worth remembering"></label>
+      </div>
+      {{end}}
+    </fieldset>
+    {{end}}
+    <button type="submit" class="big">Save</button>
+    <p class="muted small">Clearing both fields for a checkpoint removes its entry entirely &mdash;
+      that is how a stale address goes away.</p>
+  </form>
+</section>
+{{template "foot" .}}

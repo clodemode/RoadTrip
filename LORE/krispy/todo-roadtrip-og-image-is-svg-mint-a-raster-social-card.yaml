@@ -1,0 +1,29 @@
+entries:
+- slug: todo-roadtrip-og-image-is-svg-mint-a-raster-social-card
+  title: 'roadtrip: og:image is creature.svg — most social scrapers (Facebook, iMessage, Slack, X) ignore
+    SVG; mint a 1200×630 PNG/JPG card under static/img and point og:image at it'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: surface
+  character_slug: krispy
+  tags:
+  - roadtrip
+  - atx-sjc
+  - og
+  - social-preview
+  - svg
+  - krispy
+  status: design
+  description: '2026-09-02: base.html emits og:image = {SITE_URL}/static/img/creature.svg?v=… because
+    static/ carries no raster (only creature.svg and lance.svg; static/vendor holds Leaflet PNGs). The
+    Open Graph spec allows SVG but Facebook, iMessage, Slack, LinkedIn and X drop non-raster og:image,
+    so a shared https://roadtrip.opeongo.net link renders with no card image. Fix: render Odo (creature.svg,
+    the odo-mile-counter GONZO recipe) to a 1200×630 PNG or JPG social card (title band + armadillo),
+    commit it under static/img/, and switch og:image in templates/base.html to it (keep ?v={{.V}}); add
+    og:image:width/height and twitter:card=summary_large_image. Verify with social_preview_check against
+    the live host after deploy.'
+  dont: Don't rasterize on the Fly machine — the image is scratch with no tooling; bake locally and commit
+    the file.
+  do_this: Bake a 1200×630 raster from creature.svg (rsvg-convert or a headless browser screenshot), commit
+    static/img/og-card.png, set og:image to it in base.html, deploy, then social_preview_check https://roadtrip.opeongo.net/.

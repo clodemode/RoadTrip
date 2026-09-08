@@ -1,0 +1,23 @@
+{{template "head" .}}
+<section class="page-head">
+  <p class="crumb"><a href="/">&larr; {{.Ride.Name}}</a></p>
+  <h1>Photos</h1>
+  <p class="muted">{{.Total}} photo{{if ne .Total 1}}s{{end}}, grouped by leg. Tap one for the original.</p>
+</section>
+
+{{if not .Groups}}<p class="muted">No photos yet.</p>{{end}}
+{{range .Groups}}
+<section class="gallery-leg" style="--leg:{{legColor .Leg.Ord}}">
+  <h2><span class="leg-n">{{.Leg.Ord}}</span> <a href="/legs/{{.Leg.Slug}}">{{.Leg.Name}}</a>
+      <span class="muted small">{{day .Leg.Date}}</span></h2>
+  <div class="gallery">
+  {{range .Posts}}
+    <figure>
+      <a href="/media/{{.Photo.Path}}"><img src="/media/{{.Photo.ThumbPath}}" alt="{{.Title}}" loading="lazy"></a>
+      <figcaption>{{if .Title}}{{.Title}} &middot; {{end}}{{local .OccurredAt .TZ}}</figcaption>
+    </figure>
+  {{end}}
+  </div>
+</section>
+{{end}}
+{{template "foot" .}}

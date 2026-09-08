@@ -1,0 +1,39 @@
+entries:
+- slug: todo-roadtrip-masthead-inline-odo-svg-and-data-miles-class-so-hover-walk-and-odometer-bands-light
+  title: 'roadtrip masthead: swap the creature <img> for the inline SVG and set .miles-N from the ride''s
+    miles, so Odo''s hover walk and lit odometer bands go live'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: content
+  character_slug: gonzo
+  tags:
+  - roadtrip
+  - atx-sjc
+  - odo
+  - gonzo
+  - animation
+  - spring-2026-09
+  status: design
+  description: 'GONZO recipe odo-mile-counter shipped 2026-09-01 (roadtrip commit after 48b281c, ABOUT
+    8d99c70): the animation is a <style> inside static/img/creature.svg, so the masthead <img> already
+    ticks its bands and walks 1.8 s after load. Two hooks are in the file but cannot fire through an <img>:
+    (1) .odo:hover keeps the legs/tail walking (page pointer events never reach an image document); (2)
+    .miles-1..9 on the svg root darkens bands 1..N via .bands>path:nth-child(-n+N) — the data-miles hook,
+    N = min(9, floor(miles/150)), miles = sum of est_miles for legs with an arrival. clodemode.com /odo/
+    inlines the same SVG, so hover already works there. To light both in roadtrip: the masthead needs
+    the SVG inline. The Go binary parses only templates/*.html (main.go: ParseFS(templateFS, "templates/*.html")),
+    so the path is a templates/_creature.html carrying {{define "creature"}}<svg class="odo {{.MilesClass}}"
+    ...>{{end}} (the drawing duplicated from static/img/creature.svg, which stays for the favicon), base.html''s
+    <img class="mast-creature"> replaced by {{template "creature" .}} with the same alt carried as <title>/aria-label,
+    and handlers.go computing MilesClass in the page data (store.go has est_miles and arrived_at per leg).
+    The recipe file is the source; if the drawing changes, both copies change.'
+  dont: Don't try to drive the hover or the miles class through an <img> — no page CSS or class reaches
+    inside an image document. Don't move the animation out of creature.svg into page CSS; the favicon
+    and the clodemode.com partial rely on the file being self-contained.
+  do_this: 'One KRISPY or GONZO CODI on roadtrip/ after atx-sjc departure work quiets: add templates/_creature.html
+    (define "creature"), swap the masthead img in base.html, compute MilesClass in handlers.go, keep static/img/creature.svg
+    for the favicon, verify with docker run + curl that / carries class="odo miles-N" and the alt text
+    survives as aria-label, deploy roadtrip-clodemode, ledger.'
+  do_also: Consider a tiny mast-creature hover affordance in app.css (cursor or a lighter disc) so the
+    walk-on-hover is discoverable.

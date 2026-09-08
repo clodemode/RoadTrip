@@ -1,0 +1,59 @@
+entries:
+- slug: spec-roadtrip-public-flip-strip-exif-gps-from-served-originals-and-re-pin-review-2026-09-08
+  title: 'roadtrip public flip 2026-09-08: served originals must lose their EXIF GPS (upload path + one-shot
+    sweep of the 21 stored JPEGs), robots.txt, then the precision review re-pins post 4 and Kris rules
+    on the three pre-departure home posts before SITE_VISIBILITY goes public'
+  domain: lore
+  lore_type: spec
+  app_scope: roadtrip
+  lair: tools
+  character_slug: clode
+  tags:
+  - roadtrip
+  - atx-sjc
+  - public-flip
+  - exif
+  - gps
+  - privacy
+  - robots
+  status: design
+  description: 'KRIS RULED 2026-09-08: "We are also ready to flip it to Public (after a thorough review)."
+    The review (todo-roadtrip-review-every-stored-posts-precision-before-flipping-site-visibility-to-public)
+    was run 2026-09-08 15:55Z against the live census (23 posts, 22 with a photo). FINDINGS. (1) BLOCKER
+    — the served originals keep their EXIF: photo.go says so ("the original keeps its EXIF and browsers
+    honour it") and four originals pulled from /media/ each carry a 15-tag GPS IFD, including photo 3
+    (Sprinkle, taken at home 2026-08-31) and photo 8 (Host Charles, taken AT the Cloudcroft residence).
+    The post pin fuzzing protects the map; the JPEG bytes do not, and /media/ is public, immutable and
+    CORS-cacheable once the site opens. Every post with a photo would publish its exact capture point.
+    (2) Post 4 "On my wY" is an exact EXIF pin INSIDE the Hudson Bend home cell — it must snap to the
+    fuzzed checkpoint (POST /admin/post/4/pin with pin_source=checkpoint, checkpoint 1) before the flip.
+    (3) Posts 1 "Test", 2 "Hi Mom", 3 "Sprinkle" are pre-departure posts pinned to the fuzzed home checkpoint
+    — pins are safe, but they are test/home content on a public timeline; Kris rules keep or delete. (4)
+    Post 24 (A Plus Smog) is an exact browser pin in the Menlo Park cell — a public business 4 km from
+    the residence; Kris confirms it may stay exact. (5) robots.txt answers 302→login today (the private
+    gate) and will 404 once open; route.geojson is CORS *. (6) The private overlay renders only under
+    {{if .Authed}} (base.html, leg.html, index.html) — safe. (7) SITE_VISIBILITY is fly.toml [env] "private";
+    the flip is the one line + Deploy apply, then anonymous curl of / and /route.geojson must be 200 and
+    /admin/* still gated.'
+  dont: Don't flip SITE_VISIBILITY before the GPS strip is deployed AND the sweep has rewritten every
+    stored original — a crawled JPEG cannot be un-published. Don't strip by re-encoding (quality loss,
+    155 MB float buffers on a 512 MB VM — see the OOM todo); drop the GPS IFD (or the whole APP1 EXIF
+    except orientation) by segment surgery on the JPEG bytes. Don't change the media paths — they are
+    content-addressed names, not hashes anyone verifies, and every post row points at them. Don't touch
+    the photo row's own lat/lng/taken_at — the DB keeps the exact point for re-pins; only the served bytes
+    lose it. Don't do the review from a signed-in browser.
+  do_this: 'CODI in roadtrip (Go, build+test via `docker build` — go is not on the Mac): (a) photo.go:
+    after readEXIF, write the original through a JPEG segment filter that removes the GPS IFD (keep DateTimeOriginal
+    + Orientation), so a new upload never stores GPS; (b) one-shot boot sweep media_gps_stripped_v1 (same
+    pattern as pins_fuzzed_near_private_v1) that rewrites every existing original in place, atomically
+    (temp + rename), logs count, idempotent; (c) GET /robots.txt: allow /, disallow /admin/ and /media/
+    (originals need not be indexed), sitemap none; (d) tests: a JPEG fixture with a GPS IFD round-trips
+    to one without, size shrinks, DecodeConfig still reads, orientation kept; (e) README: the strip, the
+    sweep, robots. PR → CI → Kris or the Mac thread dispatches Deploy apply. THEN the orchestrator: re-pin
+    post 4 to checkpoint 1; apply Kris''s ruling on posts 1–3 and 24; pull one original with PIL and prove
+    GPS_IFD=none; set SITE_VISIBILITY="public" in fly.toml, Deploy apply, anonymous curl / = 200, /route.geojson
+    = 200 with the intended coordinates, /admin/posts.json = 302; close the review todo.'
+  do_also: 'Closes todo-roadtrip-review-every-stored-posts-precision-before-flipping-site-visibility-to-public
+    when the flip lands. Companion: spec-clode-roadtrip-becomes-its-own-app-scope-bloodride-retires-to-static-2026-09-08
+    (this row moves to app_scope=roadtrip with the rest). ruling-roadtrip-site-is-private-until-kris-opens-it-and-pins-are-precise-except-at-private-places
+    is satisfied by the flip and should be annotated, not deleted.'

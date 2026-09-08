@@ -1,0 +1,20 @@
+entries:
+- slug: todo-roadtrip-review-every-stored-posts-precision-before-flipping-site-visibility-to-public
+  title: 'roadtrip: before SITE_VISIBILITY is flipped to public, review the precision of every post already stored — closing the site makes exact pins invisible, opening it publishes them all at once'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: tools
+  character_slug: krispy
+  tags:
+  - roadtrip
+  - atx-sjc
+  - privacy
+  - gps
+  - fuzz
+  - visibility
+  - pre-flight
+  status: shipped
+  description: Consequence of ruling-roadtrip-site-is-private-until-kris-opens-it-and-pins-are-precise-except-at-private-places. While SITE_VISIBILITY=private, nothing a post stores is visible to anyone not signed in, so an exact pin at a private place is harmless in practice and easy to stop thinking about. The moment Kris flips the site to public — his stated intent, "we will open it later" — every post made during the closed period becomes visible AT WHATEVER PRECISION IT WAS STORED, all at once and retroactively. The per-post fuzz toggle makes that a per-post decision at post time, but a decision made on the road, at night, in a hurry, is exactly the one worth re-reading later. The photo rows also keep their own EXIF regardless of what the post publishes, so a re-pin can always recover the exact point; the reverse, un-publishing a point that was already crawled, cannot be undone.
+  dont: 'Don''t flip SITE_VISIBILITY to public without this review, and don''t do the review from a signed-in browser — read what an anonymous client would get. Don''t assume the fuzz defaults held: any post can have had its toggle flipped by hand.'
+  do_this: 'Before the flip: list every post with its pin_source, its fuzz state, and whether its point falls in a fuzzed checkpoint''s cell (a small admin listing, or read the store directly); re-pin anything that should not be exact; then flip SITE_VISIBILITY to public in fly.toml, redeploy, and verify with an ANONYMOUS curl that / and /route.geojson answer 200 again and that the coordinates in /route.geojson are the ones intended. Consider adding a robots.txt at the same time — there is none today (404), and the open GeoJSON is CORS *.'

@@ -1,0 +1,9 @@
+# Runtime state never enters the repo: the volume holds the database and photos.
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+# The built binary.
+/roadtrip
+# Local scratch.
+.DS_Store

@@ -1,0 +1,19 @@
+entries:
+- slug: todo-roadtrip-push-token-bearer-refused-302-on-v23-local-token-file-does-not-open-the-app
+  title: 'roadtrip: the PUSH_TOKEN bearer in ~/.roadtrip_push_token is refused (302 to /admin/login) by the deployed v23 build, so Phase C (overlay push, census, arrive the nights) cannot run from the Mac until the token and the Fly secret agree'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: tools
+  character_slug: clode
+  tags:
+  - atx-sjc
+  - roadtrip
+  - push-token
+  - phase-c
+  - deploy
+  status: shipped
+  description: 'Found 2026-09-08 14:04Z by thread "RoadTrip Lodging and Web Layout updates" (read-only deploy check). Fly roadtrip-clodemode is at release v23 (02:05Z today), Deploy run 34178835787 mode=apply from origin/trunk b07d94d, which carries PR #3 (/admin/lodging data carriage), #4 (push token, Made-it-To, Bridgeport/Menlo Park seed), #5 (census + standalone token gate) and #6 (arrival stamped with its time). Code-side the bearer path exists: auth.go pushAuthed reads `Authorization: Bearer <token>` with constant-time compare and IsAuthed answers it before the cookie; main.go logs "push token: set|unset" at boot. Fly `secrets list` shows PUSH_TOKEN digest ae54efc47d93e02c, status Deployed. The local file ~/.roadtrip_push_token (0600, mtime Sep 7 11:17 PDT = the 18:17Z mint) holds a 24-hex value. Yet a verbose curl with that bearer to /admin/posts.json and /route.geojson gets HTTP 302 → /admin/login (header confirmed sent, /healthz 200). So either the file and the Fly secret hold different values (a re-mint on one side), or the running process has no PUSH_TOKEN in env. The boot log line from 02:05Z was outside the flyctl logs window, so which one was not proven. Consequence: todo-roadtrip-next-thread-merge-phase-a-pr-deploy-then-phase-c-token-pushes-2026-09-07 step (2) proof fails and step (3) Phase C has not been run; that todo and the spec are still status=design. Whether the nights have been arrived from the lodging posts is unverified — the site is private and only a signed-in browser or a working bearer can read route.geojson.'
+  dont: Don't mint a second credential or add Basic auth to route around it (spec ruling). Don't paste the token value into LORE, a log, a chat, or a commit — compare digests or re-set from the file. Don't sign in with the admin password from a thread to dodge the check.
+  do_this: '(1) Read the boot line: redeploy or `flyctl machine restart` is NOT needed — fetch older logs (`flyctl logs -a roadtrip-clodemode --no-tail` after a cold boot, or the Fly dashboard log search around 2026-09-08T02:05Z) for "push token: set" vs "unset". (2) If unset: `flyctl secrets set PUSH_TOKEN="$(tr -d ''\n'' < ~/.roadtrip_push_token)" -a roadtrip-clodemode` (secrets set restarts the machine). If set: the values differ — re-set the Fly secret AND the GitHub Actions secret from the file, or re-mint into the file and set both. (3) Prove: bearer curl to /admin/posts.json returns JSON; anonymous `curl -sI /` still 302. (4) Then resume the Phase C todo from its step (3).'
+  do_also: Also check the Data workflow's census mode (run 34159928818 succeeded 2026-09-07 20:34Z with the repo secret) — if it passed after the token gate landed, the GitHub secret is good and the local file is the odd one out.

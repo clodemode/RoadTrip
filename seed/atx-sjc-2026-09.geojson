@@ -1,0 +1,654 @@
+{
+ "type": "FeatureCollection",
+ "name": "atx-sjc-2026-09 — Austin → San Jose, planned (Kris, 2026-09-01)",
+ "ride": {
+  "slug": "atx-sjc-2026-09",
+  "short_slug": "atx-sjc",
+  "name": "Austin → San Jose",
+  "start_date": "2026-09-04",
+  "end_date": "2026-09-07",
+  "mode": "CAR",
+  "topology": "ONE-WAY",
+  "origin_label": "Hudson Bend",
+  "terminus_label": "Menlo Park"
+ },
+ "_notes": [
+  "RWGPS-import shape: one LineString feature per Leg (in order), Point features per Checkpoint/Sight.",
+  "Django: python manage.py import_rwgps atx-sjc-2026-09 /data/inbox/ride/atx-sjc/planned.geojson --dry-run",
+  "Go: seed/<slug>.geojson on first boot, the EagleLakeRocks pattern.",
+  "Coordinates are planning-grade (town centroids, ~1 km) until a checkpoint is arrived at, when the app overwrites its point with where the car actually stopped and marks it precision=exact — unless it is precision=fuzzed, which stays on the grid.",
+  "Night 3 was Bridgeport, CA (2026-09-06), not Mammoth Lakes; legs 3 and 4 were re-pointed to match. The terminus is a private residence in Menlo Park: precision=fuzzed, its point is already the 0.05° grid cell, and leg 4's last vertex is that same cell.",
+  "Timezones move westbound: CDT (TX) → MDT (NM) → MST no-DST (AZ) → PDT (NV/CA). Every checkpoint carries its own tz.",
+  "kind=candidate Sights are suggestions only — prune, they are not commitments.",
+  "Origin is public-safe: checkpoint 1 is 'Hudson Bend (home)', precision=fuzzed, and both its pin and the first vertex of leg 1 are snapped to the 0.05° grid. The app re-snaps any precision=fuzzed checkpoint at render time and never shows street text for it.",
+  "Private text (a lodging street address) lives in $DATA_DIR/private.json on the volume — {\"checkpoints\": {\"<ord>\": {\"address\": \"…\"}}} — never in this file or this repo; the app renders it on admin pages only. Any checkpoint with precision=fuzzed is snapped to the 0.05° grid on render. Planning data (legs, checkpoints not yet arrived, candidate sights) is refreshed from this seed on every boot; arrived checkpoints, posts and photos are never touched."
+ ],
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 1,
+    "name": "Hudson Bend → Big Spring → Cloudcroft",
+    "slug": "hudson-bend-to-cloudcroft",
+    "kind": "PLANNED",
+    "mode": "CAR",
+    "date": "2026-09-04",
+    "est_miles": 600,
+    "est_drive_hours": 10,
+    "constraint": "Arrive Cloudcroft before dark — sunset ≈ 19:20 MDT",
+    "route_hint": "US-183 N → Lampasas → US-190 → Brady → US-87 → San Angelo → Big Spring; then US-87 → Lamesa → US-180 → Seminole → Hobbs NM → US-82 → Artesia → US-82 W (Mayhill) → Cloudcroft"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -97.95,
+      30.4
+     ],
+     [
+      -98.1817,
+      31.0638
+     ],
+     [
+      -99.335,
+      31.1352
+     ],
+     [
+      -100.437,
+      31.4638
+     ],
+     [
+      -101.4787,
+      32.2504
+     ],
+     [
+      -101.951,
+      32.7376
+     ],
+     [
+      -102.6449,
+      32.719
+     ],
+     [
+      -103.136,
+      32.7026
+     ],
+     [
+      -104.403,
+      32.8423
+     ],
+     [
+      -105.475,
+      32.8873
+     ],
+     [
+      -105.742,
+      32.957
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 2,
+    "name": "Cloudcroft → Ash Fork",
+    "slug": "cloudcroft-to-ash-fork",
+    "kind": "PLANNED",
+    "mode": "CAR",
+    "date": "2026-09-05",
+    "est_miles": 520,
+    "est_drive_hours": 9,
+    "lodging_status": "confirmed — Ash Fork, AZ",
+    "route_hint": "US-82 → Alamogordo (White Sands detour optional) → US-54 → Carrizozo → US-380 → I-25 → Socorro → US-60 W (VLA, Pie Town) → Springerville AZ → Show Low → AZ-77 → Holbrook → I-40 W → Flagstaff → Williams → Ash Fork"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -105.742,
+      32.957
+     ],
+     [
+      -105.9603,
+      32.8995
+     ],
+     [
+      -105.877,
+      33.6415
+     ],
+     [
+      -106.8917,
+      34.0584
+     ],
+     [
+      -107.61,
+      34.08
+     ],
+     [
+      -108.133,
+      34.299
+     ],
+     [
+      -109.286,
+      34.133
+     ],
+     [
+      -110.0298,
+      34.2542
+     ],
+     [
+      -110.1582,
+      34.902
+     ],
+     [
+      -111.6513,
+      35.1983
+     ],
+     [
+      -112.4849,
+      35.2231
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 3,
+    "name": "Ash Fork → Bridgeport",
+    "slug": "ash-fork-to-bridgeport",
+    "kind": "PLANNED",
+    "mode": "CAR",
+    "date": "2026-09-06",
+    "est_miles": 505,
+    "est_drive_hours": 8.5,
+    "lodging_status": "confirmed — Bridgeport, CA",
+    "route_hint": "I-40 W → Kingman → US-93 → Hoover Dam → Las Vegas → US-95 N → Beatty (the Death Valley alternate rejoins at Lone Pine) → Tonopah → US-6 W → Bishop → US-395 N → Mammoth Lakes → Lee Vining → Bridgeport"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -112.4849,
+      35.2231
+     ],
+     [
+      -114.053,
+      35.1894
+     ],
+     [
+      -114.7377,
+      36.0161
+     ],
+     [
+      -115.1398,
+      36.1699
+     ],
+     [
+      -116.759,
+      36.9086
+     ],
+     [
+      -117.2301,
+      38.0672
+     ],
+     [
+      -118.4762,
+      37.8188
+     ],
+     [
+      -118.3951,
+      37.3614
+     ],
+     [
+      -118.9721,
+      37.6485
+     ],
+     [
+      -119.1191,
+      37.9576
+     ],
+     [
+      -119.2312,
+      38.2555
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 4,
+    "name": "Bridgeport → Menlo Park",
+    "slug": "bridgeport-to-menlo-park",
+    "kind": "PLANNED",
+    "mode": "CAR",
+    "date": "2026-09-07",
+    "est_miles": 250,
+    "est_drive_hours": 6,
+    "caveat": "Driven 2026-09-07 over CA-108 Sonora Pass (9,624 ft), ruled by Kris 2026-09-08 — not Tioga/CA-120, so the Yosemite entry note no longer applies to this leg. US-395 runs NORTH from Bridgeport to Sonora Junction before CA-108 turns west; the pass is steep (26% pitches near the summit) and closes in winter.",
+    "route_hint": "US-395 N → Sonora Junction → CA-108 W Sonora Pass → Dardanelle → Strawberry → Sonora → CA-108/CA-120 → Oakdale → Manteca → I-580 W → I-680/CA-84 → Menlo Park"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -119.2312,
+      38.2555
+     ],
+     [
+      -119.449,
+      38.352
+     ],
+     [
+      -119.636,
+      38.328
+     ],
+     [
+      -119.83,
+      38.34
+     ],
+     [
+      -120.011,
+      38.196
+     ],
+     [
+      -120.382,
+      37.984
+     ],
+     [
+      -120.847,
+      37.767
+     ],
+     [
+      -121.2161,
+      37.7974
+     ],
+     [
+      -122.2,
+      37.45
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 1,
+    "name": "Hudson Bend (home)",
+    "label": "Home — origin",
+    "leg": 1,
+    "tz": "America/Chicago",
+    "is_terminal": true,
+    "planned_depart": "2026-09-04T06:30:00-05:00",
+    "precision": "fuzzed"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -97.95,
+     30.4
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 2,
+    "name": "Big Spring, TX",
+    "label": "Waypoint — via Big Spring",
+    "leg": 1,
+    "tz": "America/Chicago",
+    "precision": "approx"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -101.4787,
+     32.2504
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 3,
+    "name": "Cloudcroft, NM",
+    "label": "Night 1 — before dark",
+    "leg": 1,
+    "tz": "America/Denver",
+    "is_terminal": true,
+    "planned_arrive": "2026-09-04T18:30:00-06:00",
+    "precision": "fuzzed",
+    "note": "pin is the Cloudcroft village centroid; street-level geocode pending"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -105.742,
+     32.957
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 4,
+    "name": "Ash Fork, AZ",
+    "label": "Night 2 — Canyon's Edge Motel",
+    "leg": 2,
+    "tz": "America/Phoenix",
+    "is_terminal": true,
+    "precision": "approx"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -112.4849,
+     35.2231
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 5,
+    "name": "Bridgeport, CA",
+    "label": "Night 3 — The Bodie Hotel (Bunk Room)",
+    "leg": 3,
+    "tz": "America/Los_Angeles",
+    "is_terminal": true,
+    "precision": "approx"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.2312,
+     38.2555
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 6,
+    "name": "Menlo Park, CA",
+    "label": "Terminus",
+    "leg": 4,
+    "tz": "America/Los_Angeles",
+    "is_terminal": true,
+    "precision": "fuzzed",
+    "note": "a private residence: the point below is already the 0.05° grid cell, and the app re-snaps it on the way out"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -122.2,
+     37.45
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Big Spring State Park — Scenic Mountain loop",
+    "leg": 1,
+    "why": "the overlook above the town; 10-min drive-through"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -101.4736,
+     32.232
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Comanche Trail Park + the spring",
+    "leg": 1,
+    "why": "the actual 'big spring', small lake, easy leg-stretch"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -101.479,
+     32.234
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Artesia, NM — Main Street bronzes",
+    "leg": 1,
+    "why": "cute little town candidate; last real town before the climb to Cloudcroft"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -104.403,
+     32.8423
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Cloudcroft village + Mexican Canyon Trestle",
+    "leg": 1,
+    "why": "9,000 ft, the evening walk if there is light left"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -105.756,
+     32.949
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "White Sands National Park",
+    "leg": 2,
+    "why": "~45 min detour from Alamogordo, morning light on the dunes"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -106.172,
+     32.7872
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Valley of Fires lava flow",
+    "leg": 2,
+    "why": "on US-380, free roadside walk"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -105.927,
+     33.682
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Very Large Array",
+    "leg": 2,
+    "why": "right on US-60, visitor center"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -107.6184,
+     34.0784
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "MEAL",
+    "name": "Pie Town, NM",
+    "leg": 2,
+    "why": "lunch, obviously"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -108.133,
+     34.299
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Petrified Forest / Painted Desert",
+    "leg": 2,
+    "why": "I-40 drive-through park, 1 h"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -109.783,
+     35.065
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Winslow — Standin' on the Corner",
+    "leg": 2,
+    "why": "5-min photo stop"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -110.6974,
+     35.0242
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Hoover Dam",
+    "leg": 3,
+    "why": "on the way; skip the tour, walk the top"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -114.7377,
+     36.0161
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Death Valley — Zabriskie Point (alt route)",
+    "leg": 3,
+    "why": "only if taking the Death Valley alternate; 110°F"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -116.812,
+     36.42
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Convict Lake",
+    "leg": 3,
+    "why": "10 min off US-395 just before Mammoth; sunset spot"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -118.858,
+     37.59
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Mono Lake — South Tufa",
+    "leg": 3,
+    "why": "evening stop before Bridgeport (visited 2026-09-06, post 13)"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.027,
+     37.939
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "candidate",
+    "sight_kind": "SIGHT",
+    "name": "Sonora Pass summit",
+    "leg": 4,
+    "why": "9,624 ft on CA-108 — the pass actually driven"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.636,
+     38.328
+    ]
+   }
+  }
+ ]
+}
