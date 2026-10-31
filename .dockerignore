@@ -6,3 +6,4 @@ Dockerfile
 fly.toml
 README.md
 /roadtrip
+.claude/
