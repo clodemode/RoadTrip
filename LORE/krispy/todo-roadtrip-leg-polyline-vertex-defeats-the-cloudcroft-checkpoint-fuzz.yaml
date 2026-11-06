@@ -15,7 +15,7 @@ entries:
   - seed
   - geojson
   - spring-2026-09
-  status: design
+  status: shipped
   description: 'Found 2026-09-02 while verifying the pin-choice work (roadtrip fc2c733 / Fly v16). Checkpoint
     3 "Cloudcroft, NM" is precision=fuzzed, and the store correctly snaps it to 32.95/-105.75 on the way
     out — but leg 1''s LineString ENDS at, and leg 2''s BEGINS at, the seed''s un-snapped vertex [-105.742,
@@ -39,3 +39,5 @@ entries:
   do_also: Low stakes while SITE_VISIBILITY=private (nothing is anonymous right now), which is why this
     is filed rather than folded into fc2c733. It becomes real the moment Kris flips visibility back to
     public — do it before that flip, not after.
+  closed_by_actor: 1feba0cc-eca0-4d49-8bc9-5d199ba4a9b6
+  closed_at: '2026-11-06T22:24:28.921094+00:00'

@@ -15,7 +15,7 @@ entries:
   - streaming
   - spend-cap
   - 2026-11
-  status: design
+  status: shipped
   description: |-
     Chester was built and tested against a local stand-in for the Messages API. Every test stubs the API at the SDK's HTTP boundary, so nothing about the real service has been observed. Three things are unproven and each can fail silently or loudly on the first real question.
 
@@ -40,3 +40,5 @@ entries:
   impact: high
   triaged_at: '2026-11-06T21:28:12.146691+00:00'
   triaged_by: clode
+  closed_by_actor: 1feba0cc-eca0-4d49-8bc9-5d199ba4a9b6
+  closed_at: '2026-11-06T22:30:31.225335+00:00'

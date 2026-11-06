@@ -1,0 +1,46 @@
+entries:
+- slug: spec-roadtrip-adopts-the-design-system-bootstrap-light-one-theme-a-vendored-foundation-folded-on-purpose-phone-first-and-no-dialogs-with-roadtrips-own-brand-kept
+  title: 'roadtrip adopts the platform Design System: Bootstrap 5.3.3 light underneath, one theme, a vendored
+    foundation stylesheet that changes only by a deliberate fold, phone portrait first, content that opens
+    in place, and roadtrip''s own brand (Odo, the masthead, the leg colours) kept as app tokens'
+  domain: lore
+  lore_type: spec
+  app_scope: roadtrip
+  lair: style
+  character_slug: scout
+  tags:
+  - design-system
+  - style
+  - foundation
+  - fold
+  - phone
+  - light-theme
+  - 2026-11
+  status: design
+  description: |-
+    Kris, 2026-11-06: implement the Design System on roadtrip. The system is the private artifact named in guidance-fintrack-design-system-artifact-holds-values-and-previews-read-its-readme-before-ui-work-lore-wins-on-disagreement; it holds values and previews, LORE holds the rulings, and LORE wins. This row copies no value from it.
+
+    A. FOUNDATION. Bootstrap 5.3.3 CSS vendored under static/vendor and embedded in the binary (no CDN: the map tiles stay the site's only third-party request), html carrying data-bs-theme light. Prefer its utilities; custom CSS only for gaps.
+    B. THE FOLD. static/css/foundation.css is roadtrip's app-side copy of the system's rules that apply here (tokens, tints, type, cards, focus, disclosure, phone rules), opening with a stamp that names the system version it was folded from and the fold date. It changes only when someone folds on purpose (ruled 2026-11-03, todo-clode-a-foundation-stylesheet-is-vendored-into-each-app-and-changes-only-by-a-deliberate-fold-so-a-standards-change-never-churns-a-release). static/css/app.css keeps what is roadtrip's own: the masthead, Odo, the leg colour cycle, the map, as app tokens beside the foundation, the way another app keeps its own brand colour.
+    C. ONE THEME. Light only: the dark colour-scheme block goes, and a test fails if a stylesheet carries one again.
+    D. THE RULES THAT BITE HERE. Row and surface meaning by the low-alpha tints, never as the only signal. A figure (miles, hours, dollars, counts) is set with tabular numerals. Red on a number means negative: a long day, a cost and a count are never red figures. Cards use the system's one radius and one shadow. Keyboard focus is the system's visible outline. Motion is at most the short chevron turn and is off under reduced motion. No emoji; an icon, where one is needed, is an inline SVG path from the icon set the system names, never a webfont.
+    E. IN PLACE. No modal and no browser dialog anywhere: the delete-post confirm becomes an in-place confirm; every existing confirm() goes, and a test fails if one returns.
+    F. PHONE FIRST. Designed at 390px: no page scrolls sideways, touch targets are at least 44px, the masthead navigation does not clip or wrap a word, forms stay compact. Then tablet and desktop.
+    G. EVERY PAGE. The front page, a leg, photos, the post form and edit, lodging, sign in, the planner, the checklist, Chester and its log. Plain words on every surface; character names (Odo, Lance, Chester) stay as names.
+    H. NO BEHAVIOUR CHANGE. Routes, forms, field names, JSON and the map's data stay as they are; this is markup and style.
+  dont: DONT copy a token value or a ruling from the system into LORE. DONT load anything from a CDN.
+    DONT add a dark theme, a modal, a browser dialog, a webfont or an emoji. DONT set a positive figure
+    in red. DONT change a route, a field name or a JSON shape. DONT refresh the foundation copy by any
+    automatic step.
+  do_this: Read the system's README and the component notes that apply before touching a template. Restyle
+    every page on one branch stacked on the open helper branch; keep the suite green; add the small style-audit
+    tests (no dark block, no confirm(), no CDN URL in templates); check every page in a browser at 390px
+    and at desktop width.
+  do_also: This closes the dark-block todo and the masthead-wrap todos when their tests prove it. A disagreement
+    between the system and LORE is filed as a todo naming both.
+  depends_on:
+  - guidance-fintrack-design-system-artifact-holds-values-and-previews-read-its-readme-before-ui-work-lore-wins-on-disagreement
+  effort: L
+  impact: medium
+  triaged_at: '2026-11-06T22:20:32.132080+00:00'
+  triaged_by: scout
