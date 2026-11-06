@@ -289,8 +289,46 @@ func (a *App) requireAuth(next http.HandlerFunc) http.Handler {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
+		// A write that rides on the cookie must come from this site's own
+		// pages. The cookie is SameSite=Lax, which stops another site's form
+		// but not a page on a sibling host of the same site: the browser
+		// sends the cookie with that page's POST, and here that could write
+		// to the trip or spend Chester's money. The push token is not a
+		// cookie and no browser attaches it, so that path is left alone.
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !a.auth.pushAuthed(r) && !a.ownOrigin(r) {
+			log.Printf("refused: a signed-in %s %s came from another origin", r.Method, r.URL.Path)
+			http.Error(w, "this request came from another site", http.StatusForbidden)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ownOrigin reports whether a request may have come from one of this site's
+// own pages, by its Origin header. A browser sends Origin with every POST a
+// page makes, form or fetch, and a page cannot forge it. When the header is
+// there its host must be the host the request was sent to or SITE_URL's host;
+// anything else, "null" included, is another origin. A request with no
+// Origin header is not a browser's cross-origin write and passes unchanged.
+func (a *App) ownOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Host)
+	if host == strings.ToLower(r.Host) {
+		return true
+	}
+	if a.siteURL != "" {
+		if site, err := url.Parse(a.siteURL); err == nil && site.Host != "" && host == strings.ToLower(site.Host) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data map[string]any) {

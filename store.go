@@ -301,7 +301,9 @@ CREATE TABLE IF NOT EXISTS chester_queries (
   chester_value   REAL,
   reference_value REAL,
   value_unit      TEXT NOT NULL DEFAULT '',
-  verdict_at      TEXT NOT NULL DEFAULT ''
+  verdict_at      TEXT NOT NULL DEFAULT '',
+  partial         TEXT NOT NULL DEFAULT '',
+  usd_estimated   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS chester_asked ON chester_queries(asked_at);
 `
@@ -337,6 +339,11 @@ func (s *Store) migrate() error {
 	if err := s.addColumns("posts", []string{
 		"lat REAL", "lng REAL", "pin_source TEXT NOT NULL DEFAULT 'none'", "accuracy_m REAL",
 		"pin_fuzzed INTEGER NOT NULL DEFAULT 0",
+	}); err != nil {
+		return err
+	}
+	if err := s.addColumns("chester_queries", []string{
+		"partial TEXT NOT NULL DEFAULT ''", "usd_estimated INTEGER NOT NULL DEFAULT 0",
 	}); err != nil {
 		return err
 	}

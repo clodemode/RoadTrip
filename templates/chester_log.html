@@ -11,12 +11,12 @@
 <section class="ch-summary">
   <h2>Summary</h2>
   {{if .Sum.Rows}}
-  <p class="muted small">{{.Sum.N}} question(s), {{.Sum.Ruled}} ruled, {{usd2 .Sum.USD}} in all.</p>
+  <p class="muted small">{{.Sum.N}} question(s), {{.Sum.Ruled}} ruled, {{usd2 .Sum.USD}} in all.{{if .Sum.Failed}} {{.Sum.Failed}} ended with no answer.{{end}}</p>
   <ul class="ch-sum-list">
     {{range .Sum.Rows}}
     <li class="ch-sum">
       <b>{{if eq .Mode "plan"}}Plan{{else}}Quick{{end}} &middot; {{.VerdictLabel}}</b>
-      <span>{{.N}} question(s)</span>
+      <span>{{.N}} question(s){{if .Failed}}, {{.Failed}} with no answer{{end}}</span>
       <span>median {{secs .MedianMS}}</span>
       <span>{{usd2 .USD}}</span>
       <span>{{if .Pairs}}mean error {{pct .MAPE}} over {{.Pairs}} pair(s){{else}}no number pairs{{end}}</span>
@@ -43,6 +43,12 @@
     <p class="ch-question">{{.Question}}</p>
     {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
     {{if .Answer}}<div class="ch-answer ch-answer-log">{{.Answer}}</div>{{end}}
+    {{if .Partial}}
+    <details class="cl-edit">
+      <summary>Not an answer: what had been written when it stopped</summary>
+      <p class="muted">{{.Partial}}</p>
+    </details>
+    {{end}}
     {{if .Places}}
     <ul class="ch-places">
       {{range .Cards}}
@@ -63,7 +69,7 @@
       <div><dt>Total</dt><dd>{{.TotalMS}} ms</dd></div>
       <div><dt>Tokens in / out / cached</dt><dd>{{.TokensIn}} / {{.TokensOut}} / {{.CacheRead}}</dd></div>
       <div><dt>Searches</dt><dd>{{.Searches}}</dd></div>
-      <div><dt>Cost</dt><dd>{{usd .USD}}</dd></div>
+      <div><dt>Cost</dt><dd>{{usd .USD}}{{if .USDEstimated}} (an estimate){{end}}</dd></div>
       <div><dt>Stopped</dt><dd>{{if .StopReason}}{{.StopReason}}{{else}}no stop reason{{end}}</dd></div>
       <div><dt>Position sent</dt><dd>{{.Position}}</dd></div>
       {{with .Note}}<div><dt>Notes</dt><dd>{{.}}</dd></div>{{end}}

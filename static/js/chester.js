@@ -2,7 +2,9 @@
  *
  * The form posts to /chester/ask and the answer comes back one JSON object a
  * line: text as it is written, a status while it thinks or searches, the
- * place cards, one plain error sentence, and "done". Everything shown is set
+ * place cards, one plain error sentence, and "done". An error that says the
+ * question failed takes down whatever words had arrived: half an answer is
+ * not an answer. Everything shown is set
  * as text, never as markup: the answer and the cards are words a model wrote,
  * and the only addresses that become links are the ones the server built.
  *
@@ -120,13 +122,21 @@
         break;
       case 'error':
         hide(status);
+        if (ev.drop) {
+          // The question failed. What was streamed so far is not an answer:
+          // take it down, and let the sentence stand in its place.
+          answer.textContent = '';
+          places.textContent = '';
+          hide(answer); hide(places);
+          spoken = '';
+        }
         show(error, ev.d);
         break;
       case 'done':
         hide(status);
         var bits = [];
         if (ev.ms) bits.push((ev.ms / 1000).toFixed(1) + ' seconds');
-        if (ev.usd) bits.push('$' + ev.usd.toFixed(4));
+        if (ev.usd) bits.push('$' + ev.usd.toFixed(4) + (ev.est ? ' (an estimate)' : ''));
         if (ev.id) bits.push('logged as question ' + ev.id);
         if (bits.length) show(meta, bits.join(' · '));
         if (error.hidden) readAloud(spoken);

@@ -55,6 +55,30 @@ const (
 	chesterSaidNoLedger = "Today's spending could not be read, so Chester will not ask."
 )
 
+// chesterSaidOverLimit is the refusal when a question could take the day's
+// spending past the limit. It names what is left, what this question could
+// cost, and whether the cheaper mode would still fit.
+func chesterSaidOverLimit(cfg *chesterConfig, mode string, spent float64) string {
+	left := cfg.DailyUSD - spent
+	if left <= 0 {
+		return fmt.Sprintf("Chester has reached today's limit: %s of %s spent. It starts again at midnight UTC.",
+			usd2(spent), usd2(cfg.DailyUSD))
+	}
+	said := fmt.Sprintf("Chester has %s left of today's limit of %s, and a %s question can cost up to %s, so it was not asked.",
+		usd2(left), usd2(cfg.DailyUSD), mode, usd2(cfg.mode(mode).worstUSD()))
+	if quick := cfg.Quick.worstUSD(); mode == chesterPlan && !chesterOverLimit(spent, quick, cfg.DailyUSD) {
+		said += fmt.Sprintf(" A quick question, at up to %s, still fits.", usd2(quick))
+	}
+	return said + " The limit starts again at midnight UTC."
+}
+
+// chesterOverLimit is the rule: a question is refused when the day's
+// spending plus the most it could cost is above the limit. The hair's width
+// keeps two sums that should be equal from differing in the last bit.
+func chesterOverLimit(spent, worst, limit float64) bool {
+	return spent+worst > limit+1e-9
+}
+
 func usd2(v float64) string { return "$" + strconv.FormatFloat(v, 'f', 2, 64) }
 func usd4(v float64) string { return "$" + strconv.FormatFloat(v, 'f', 4, 64) }
 
@@ -82,9 +106,10 @@ func (a *App) chesterPage(w http.ResponseWriter, r *http.Request) {
 //	q=<text>          the trip-keeper's own
 //	lat=, lng=        the phone's position, when it was sent
 //
-// A question that is refused before it is sent (no key, busy, over the day's
-// limit, nothing asked) is answered with a status and a JSON body carrying
-// one sentence, and no row is written: nothing was spent.
+// A question that is refused before it is sent (no key, busy, nothing asked,
+// or the day's limit: what is spent today plus the most this question could
+// cost is above it) is answered with a status and a JSON body carrying one
+// sentence, and no row is written: nothing was spent.
 func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	refuse := func(status int, msg string) {
 		writeJSON(w, status, map[string]any{"status": "refused", "error": msg})
@@ -147,11 +172,14 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusInternalServerError, chesterSaidNoLedger)
 		return
 	}
-	if spent >= cfg.DailyUSD {
-		log.Printf("chester: refused, the day's limit is reached (%s of %s)", usd2(spent), usd2(cfg.DailyUSD))
-		refuse(http.StatusTooManyRequests, fmt.Sprintf(
-			"Chester has reached today's limit: %s of %s spent. It starts again at midnight UTC.",
-			usd2(spent), usd2(cfg.DailyUSD)))
+	m := cfg.mode(mode)
+	// The limit is checked against the most this question could cost, not
+	// against nothing: checked only at zero, one long question could take
+	// the day well past it.
+	if worst := m.worstUSD(); chesterOverLimit(spent, worst, cfg.DailyUSD) {
+		log.Printf("chester: refused, a %s question could pass the day's limit (%s of %s spent, up to %s more)",
+			mode, usd2(spent), usd2(cfg.DailyUSD), usd2(worst))
+		refuse(http.StatusTooManyRequests, chesterSaidOverLimit(cfg, mode, spent))
 		return
 	}
 	cx, err := a.chesterContext(now, lat, lng)
@@ -173,22 +201,23 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	m := cfg.mode(mode)
 	res := a.chester.ask(r.Context(), mode, cx, question, emit)
-	usd := chesterCost(m.Model, res.Served, res.Usage)
-	note := strings.Join(res.Notes, "; ")
-	if res.ErrKind != "" {
-		if note != "" {
-			note += "; "
-		}
-		note += "ended: " + res.ErrKind
+	usd, estimated := res.Usage.cost(), res.Usage.CeilingUSD > 0
+	notes := res.Notes
+	if estimated {
+		notes = append(notes, "the cost is an estimate: a round was cut off before the API said what it used, so "+
+			usd4(res.Usage.CeilingUSD)+" was charged for it, the most it could have written")
 	}
+	if res.ErrKind != "" {
+		notes = append(notes, "ended: "+res.ErrKind)
+	}
+	note := strings.Join(notes, "; ")
 	row := &ChesterQuery{
 		Ride: cx.Ride, AskedAt: utcString(now), TZ: cx.TZ, Mode: mode, Preset: preset, Question: question,
 		PromptVersion: chesterPromptVersion, Model: m.Model, ServedModel: res.Served, Effort: m.Effort,
 		FirstMS: res.FirstMS, TotalMS: res.TotalMS, TokensIn: res.Usage.In, TokensOut: res.Usage.Out,
 		CacheRead: res.Usage.CacheRead, CacheWrite: res.Usage.CacheWrite, Searches: res.Usage.Searches,
-		USD: usd, Answer: res.Answer, Places: res.Places, StopReason: res.Stop,
+		USD: usd, USDEstimated: estimated, Answer: res.Answer, Partial: res.Partial, Places: res.Places, StopReason: res.Stop,
 		Error: a.chester.stripKey(res.Err), Note: a.chester.stripKey(note), PosSource: "none",
 	}
 	if cx.Pos != nil {
@@ -207,9 +236,11 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		emit(chesterEvent{T: "places", Places: chesterCards(res.Places)})
 	}
 	if res.Err != "" {
-		emit(chesterEvent{T: "error", D: row.Error})
+		// Drop: whatever words were streamed before this are not an answer,
+		// and the page takes them down and shows this sentence instead.
+		emit(chesterEvent{T: "error", D: row.Error, Drop: true})
 	}
-	emit(chesterEvent{T: "done", ID: row.ID, Stop: firstOf(res.Stop, res.ErrKind), USD: usd, MS: res.TotalMS})
+	emit(chesterEvent{T: "done", ID: row.ID, Stop: firstOf(res.Stop, res.ErrKind), USD: usd, MS: res.TotalMS, Est: estimated})
 }
 
 func firstOf(vs ...string) string {
@@ -257,7 +288,9 @@ var chesterRefusals = map[string]string{
 var chesterNotices = map[string]string{chOKSaved: "Verdict saved."}
 
 const chesterPricesNote = "Dollars are worked out from each response's own token counts at list prices, " +
-	"plus web searches at $10 per 1,000. A model the price table does not know is priced as the dearest one."
+	"plus web searches at $10 per 1,000. A model the price table does not know is priced as the dearest one. " +
+	"A question that was cut off before the API said what it used is charged the most it could have written, " +
+	"and its cost is marked as an estimate."
 
 // chesterLog is the experiment's page: the summary by mode and verdict, then
 // every question with its figures, its answer, its places and the form that

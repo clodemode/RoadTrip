@@ -284,6 +284,12 @@ func main() {
 		if cfg.baseURL != "" {
 			log.Printf("WARN chester: ANTHROPIC_BASE_URL is set, so questions go to that address and not to the API")
 		}
+		for _, mode := range []string{chesterQuick, chesterPlan} {
+			if worst := cfg.mode(mode).worstUSD(); chesterOverLimit(0, worst, cfg.DailyUSD) {
+				log.Printf("WARN chester: a %s question can cost up to $%.2f, above the day's limit, so every %s question will be refused",
+					mode, worst, mode)
+			}
+		}
 	}
 	if _, err := store.Ride(rideSlug); err != nil {
 		log.Printf("WARN RIDE_SLUG=%s is not in the database — / will 404 until it is seeded", rideSlug)

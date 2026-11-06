@@ -88,9 +88,9 @@ session cookie will never come back.
 | `SITE_VISIBILITY` | `public` (default in code) or `private`; **private puts the whole site behind the one admin password** — see below |
 | `PIN_PRECISION` | `snap` (default) or `exact`; decides only whether the post form's **Fuzz location** toggle starts ticked at a private place |
 | `ANTHROPIC_API_KEY` | the key Chester asks the Claude API with. **A secret, set by the operator on the host and never in a file here**; unset ⇒ Chester is off, its page says so and boot logs `chester: disabled`. See "Chester" |
-| `CHESTER_MODEL_QUICK`, `CHESTER_MODEL_PLAN` | the model each mode asks; both default `claude-opus-5-5` |
+| `CHESTER_MODEL_QUICK`, `CHESTER_MODEL_PLAN` | the model each mode asks; both default `claude-opus-5-5`. It must be a model the web search tool in use (`web_search_20260209`) is documented for: `claude-opus-5-5`, `claude-opus-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-5-5`, `claude-sonnet-5` or `claude-sonnet-4-6`. Any other leaves Chester off, and boot logs why |
 | `CHESTER_EFFORT_QUICK`, `CHESTER_EFFORT_PLAN` | `low`, `medium`, `high`, `xhigh` or `max`; default `low` for quick and `medium` for plan |
-| `CHESTER_DAILY_USD` | the most Chester may spend in one UTC day, in dollars; default `5` |
+| `CHESTER_DAILY_USD` | the most Chester may spend in one UTC day, in dollars; default `5`. Above zero and no more than `100`: anything else (a typo such as `1e308` included) leaves Chester off, and boot logs why |
 | `CHESTER_FALLBACK` | `default` (the default) or `off`; whether a question the API's safety classifiers decline is re-run on the model the API recommends for that case |
 | `ANTHROPIC_BASE_URL` | optional; sends Chester's questions to another address. For a local stub only: the key goes wherever this points |
 | `PORT` | default `8080` |
@@ -145,6 +145,15 @@ entirely rather than matching an empty one. Boot logs `push token: set` or
 It exists because signing in puts the plaintext password on the wire and leaves
 a cookie jar on whatever machine did it — a poor trade for one POST from a CI
 runner or one curl from the roadside.
+
+**A write that rides on the cookie must come from this site.** The session
+cookie is `SameSite=Lax`, which stops another site's form but not a page on a
+sibling host of the same site: a browser sends the cookie with that page's
+POST. So `requireAuth` refuses, with 403, any request that is not a GET, is
+signed in by the cookie, and carries an `Origin` header whose host is neither
+the host the request was sent to nor `SITE_URL`'s. A request with no `Origin`
+header is unchanged, and so is one carrying the token: no browser attaches
+that header by itself.
 
 ```bash
 H="Authorization: Bearer $PUSH_TOKEN"; S=https://roadtrip.opeongo.net
@@ -320,17 +329,50 @@ on the page as markup, and a web address it gives is kept only when it is a
 plain `http` or `https` address.
 
 **Signed in only, and capped.** `/chester` and everything under it answer only
-to the session or the push token, because every question spends money. Before
-each question the day's spending (UTC) is read from the log; at
-`CHESTER_DAILY_USD` Chester refuses in plain words until midnight UTC. One
+to the session or the push token, because every question spends money. One
 question runs at a time, and a second is told that Chester is busy. A question
 that fails leaves one sentence on the page and stays in the box.
+
+**The daily limit.** Before each question the day's spending (UTC) is read
+from the log, and the question is refused when that spending plus the most the
+question could cost is above `CHESTER_DAILY_USD`. Checked only against what is
+already spent, one long question could take the day well past the limit. The
+most a question could cost is every request it may take (three) writing its
+mode's `max_tokens` at the model's output price, plus every web search each
+request is allowed:
+
+| Mode | Worst case | At the default model ($20 per million output tokens) |
+|---|---|---|
+| quick | 3 × (8,000 tokens + 2 searches) | $0.54 |
+| plan | 3 × (32,000 tokens + 5 searches) | $2.07 |
+
+So with the default limit of $5 a plan question is asked until $2.93 is
+spent, and a quick one until $4.46. The refusal says what is left today, what
+the question could cost, and whether a quick one still fits; it lifts at
+midnight UTC. What a question reads is not in the worst case, because nothing
+bounds it in advance, and a typical question costs a small part of these
+figures. A limit below a mode's worst case refuses every question in that
+mode, and boot logs a warning saying so.
 
 **What a question costs** is worked out from the response's own token counts
 at list prices, plus web searches at $10 per 1,000. A model the price table
 does not know is priced as the dearest one in it, so an unknown model can only
-reach the limit sooner. When the API answers with a model other than the one
-asked for, each price takes the dearer of the two.
+reach the limit sooner. When the API re-ran a declined question on another
+model, the response lists every attempt, and each is counted at its own
+model's price: the declined attempt is billed too. Without that list, each
+price takes the dearer of the model asked and the model that answered.
+
+**A question that is cut off.** When the answer stops before the API has said
+how it ended (a dropped connection, the time limit, the browser going away),
+there is no final count of what was written. The page and the log row then say
+the answer was cut off, and that request is charged the most it could have
+written: its mode's `max_tokens` at the output price. The row marks the cost
+as an estimate. Searches such a request ran are not known and are not charged.
+A request the API turned down outright, or that never left the machine, is
+charged nothing. Whatever words had arrived when a question failed (cut off,
+declined, or stopped at the length limit) are kept on the row as a partial,
+apart from the answer: the page takes them down, and the log and its summary
+never count them as an answer.
 
 **What the API is told.** The active ride's plan as the public pages show it
 (days, legs, miles, hours, checkpoint names and zones, arrival stamps), today's
@@ -339,9 +381,12 @@ nearest checkpoint, and one position: the phone's when the trip-keeper taps
 *Send my position*, else the last pinned post. That position goes through the
 store's fuzz seam first, so a point at or near a private place is replaced by
 the same 0.05° cell a post's pin would get. The private overlay, a checklist's
-private text and photos are never sent. The web search is given a time zone,
-and a town only when the nearest checkpoint's own name is one; never a
-coordinate.
+private text and photos are never sent. The nearest checkpoint's town is
+said only when that checkpoint's own name is one. The web search tool is given
+the ride-day's time zone and nothing else: never a coordinate, and not the
+town. The tools come first in the prompt, ahead of the plan, so a town or a
+zone that moved with the car would discard the cached plan at every stop; the
+town is in the question's own message instead, after the cached part.
 
 **The key.** Chester needs an API key for the Claude API. The operator sets it
 as a Fly secret named `ANTHROPIC_API_KEY`, by hand, with their own key; it is
@@ -354,8 +399,10 @@ masthead has no link, `/chester` says Chester is not set up, and boot logs
 
 **The log.** `GET /admin/chester/log` lists every question: when and in which
 zone, the mode, the question, the model and effort, milliseconds to the first
-word and in all, tokens in, out and read from the cache, searches, dollars, the
-answer, the places, how it stopped, and the fuzzed position that was sent. A
+word and in all, tokens in, out and read from the cache, searches, dollars
+(marked when they are an estimate), the answer or, for a question that failed,
+what had been written, the places, how it stopped, and the fuzzed position
+that was sent. A
 verdict is one tap in place: **Right**, **Partly**, **Wrong** or
 **Unverified**, with what it was checked against, a note, and an optional pair
 of figures (Chester's and the reference, in minutes, dollars or miles). The

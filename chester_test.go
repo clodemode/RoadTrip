@@ -440,9 +440,9 @@ func TestChesterSettings(t *testing.T) {
 	if cfg.Quick.MaxUses != 2 || cfg.Plan.MaxUses != 5 || cfg.Quick.Timeout != 60*time.Second || cfg.Plan.Timeout != 180*time.Second {
 		t.Errorf("per-mode limits: quick %+v, plan %+v", cfg.Quick, cfg.Plan)
 	}
-	cfg = chesterEnv(t, stub, map[string]string{"CHESTER_MODEL_QUICK": "claude-haiku-5-5", "CHESTER_MODEL_PLAN": "claude-fable-5-1",
+	cfg = chesterEnv(t, stub, map[string]string{"CHESTER_MODEL_QUICK": "claude-sonnet-5-5", "CHESTER_MODEL_PLAN": "claude-opus-5",
 		"CHESTER_EFFORT_QUICK": "MEDIUM", "CHESTER_EFFORT_PLAN": "xhigh", "CHESTER_DAILY_USD": "1.50", "CHESTER_FALLBACK": "off"})
-	if cfg.Quick.Model != "claude-haiku-5-5" || cfg.Plan.Model != "claude-fable-5-1" ||
+	if cfg.Quick.Model != "claude-sonnet-5-5" || cfg.Plan.Model != "claude-opus-5" ||
 		cfg.Quick.Effort != "medium" || cfg.Plan.Effort != "xhigh" || cfg.DailyUSD != 1.5 || cfg.Fallback {
 		t.Errorf("overrides: %+v / %+v, $%v, fallback %v", cfg.Quick, cfg.Plan, cfg.DailyUSD, cfg.Fallback)
 	}
@@ -813,13 +813,14 @@ func TestChesterDailyCapRefusesInPlainWords(t *testing.T) {
 	}
 	// Yesterday's spending is yesterday's: it does not count.
 	spend(now.AddDate(0, 0, -1), 50)
-	spend(now, 4.99)
-	if got, _ := app.store.ChesterSpent(now); !near(got, 4.99) {
-		t.Fatalf("today's spend reads %v, want 4.99", got)
+	spend(now, 4.40)
+	if got, _ := app.store.ChesterSpent(now); !near(got, 4.40) {
+		t.Fatalf("today's spend reads %v, want 4.40", got)
 	}
-	// Under the limit: answered.
+	// Room for the most a quick question could cost: answered.
 	askEvents(t, askForm(t, app, url.Values{"preset": {"fuel"}}))
-	spend(now, 0.01)
+	spent, _ := app.store.ChesterSpent(now)
+	spend(now, 5-spent)
 	// At it: refused, in words, and the API is not asked.
 	w := askForm(t, app, url.Values{"preset": {"fuel"}})
 	if w.Code != http.StatusTooManyRequests {
@@ -939,7 +940,7 @@ func TestChesterFailuresAreSaidPlainly(t *testing.T) {
 		wantSaid string
 		wantStop string
 		wantNote string
-		answer   string
+		partial  string // what had been written; kept, and never the answer
 	}{
 		{"a refusal before any word",
 			stream(events(evStart(stubModel, 80, 0, 0),
@@ -984,9 +985,9 @@ func TestChesterFailuresAreSaidPlainly(t *testing.T) {
 			}
 			r := rows[0]
 			if r.Question != question || r.Error != c.wantSaid || r.StopReason != c.wantStop || !strings.Contains(r.Note, c.wantNote) ||
-				r.Answer != c.answer || len(r.Places) != 0 {
-				t.Errorf("the row: question %q, error %q, stop %q, note %q, answer %q, %d place(s)",
-					r.Question, r.Error, r.StopReason, r.Note, r.Answer, len(r.Places))
+				r.Answer != "" || r.Partial != c.partial || len(r.Places) != 0 {
+				t.Errorf("the row: question %q, error %q, stop %q, note %q, answer %q, partial %q, %d place(s)",
+					r.Question, r.Error, r.StopReason, r.Note, r.Answer, r.Partial, len(r.Places))
 			}
 			if len(stub.requests()) != 1 {
 				t.Errorf("the API was asked %d time(s); these failures are not retried", len(stub.requests()))
