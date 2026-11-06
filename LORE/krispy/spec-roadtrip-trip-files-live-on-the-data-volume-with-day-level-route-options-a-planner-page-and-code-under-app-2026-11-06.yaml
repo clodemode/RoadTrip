@@ -16,7 +16,7 @@ entries:
   - app-profile
   - public-repo-guard
   - 2026-11
-  status: design
+  status: shipped
   description: |-
     Kris, 2026-11-06: a second trip is loaded before a departure the following week. The repo is PUBLIC, so this pass moves trip data off the code release. This row is written as if public: it names no place, date of travel or person.
 
@@ -33,6 +33,8 @@ entries:
     F. GUARDS. .gitignore covers the handoff folder and the data dir; a test fails closed when a tracked file is a trip document outside the seed allowlist and testdata, or when a guard line is missing. Fixtures are synthetic.
 
     G. PATHS. The binary lives at /app/roadtrip, data at /data, and APP_PROFILE.yaml at the repo root declares them.
+
+    Shipped: 2026-11-06, thread-rt-kingston-to-hudson-bend-trip-2026-11-06: Merged as clodemode/RoadTrip PR 1 (merge 19b27b9, 2026-11-06 21:13 UTC), deployed 21:33 UTC; the second trip was pushed to the volume by token and made active; 133 tests, a cold review and six fixes.
   dont: 'DONT commit a real trip document, a handoff folder or anything from the data dir. DONT add a
     trip to seed/. DONT name a private place, a travel date or a person in LORE, a commit message or a
     PR body: the repo is public. DONT render a coordinate that skipped the store''s fuzz path. DONT let
@@ -48,3 +50,5 @@ entries:
   impact: high
   triaged_at: '2026-11-06T19:20:36.238547+00:00'
   triaged_by: krispy
+  closed_at: '2026-11-06T22:24:25.293913+00:00'
+  closed_by_actor: thread-rt-kingston-to-hudson-bend-trip-2026-11-06

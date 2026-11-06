@@ -17,7 +17,7 @@ entries:
   - web-search
   - spend-cap
   - 2026-11
-  status: design
+  status: shipped
   description: |-
     Kris, 2026-11-06. Written as if public: no place, travel date or person.
 
@@ -34,6 +34,8 @@ entries:
     E. THE LOG IS THE EXPERIMENT. Every query is a row: when and where (zone kept), mode, question, model, effort, time to first word and total, tokens, searches, dollars, answer, places, stop reason or error. The trip-keeper stamps a verdict in place: right, partly, wrong or unverified; what it was checked against (navigation app, booking site, map, on the ground); a note; and an optional number pair (Chester's figure and the reference, in minutes, dollars or miles). A signed-in log page lists rows, takes verdicts with one tap and summarises by mode and verdict with latency, cost and mean error; a signed-in JSON export carries the whole log. The log lives on the volume and never reaches an open endpoint.
 
     F. ON A HOTSPOT. Timeouts per mode, the question kept in the box on failure, one plain error line, a refusal stop reason handled, no boot-time work.
+
+    Shipped: 2026-11-06, thread-rt-kingston-to-hudson-bend-trip-2026-11-06: Merged as clodemode/RoadTrip PR 2 (merge 16df6f3, 2026-11-06 22:20 UTC), deployed 22:29 UTC; 173 tests, a cold review and two fix rounds; six live quick questions on the operator's key (five local, one on the live site through Fly: first words at 2.9 s, done at 4.8 s, $0.044).
   dont: 'DONT expose Chester to an anonymous visitor. DONT log or commit the API key. DONT send the private
     overlay or an unfuzzed private coordinate to the API. DONT present a drive time as live traffic. DONT
     absorb an unruled answer into the plan. DONT hardcode the model: it is a per-mode setting. DONT open
@@ -50,3 +52,5 @@ entries:
   impact: high
   triaged_at: '2026-11-06T19:23:16.712039+00:00'
   triaged_by: clode
+  closed_at: '2026-11-06T22:30:30.559634+00:00'
+  closed_by_actor: thread-rt-kingston-to-hudson-bend-trip-2026-11-06

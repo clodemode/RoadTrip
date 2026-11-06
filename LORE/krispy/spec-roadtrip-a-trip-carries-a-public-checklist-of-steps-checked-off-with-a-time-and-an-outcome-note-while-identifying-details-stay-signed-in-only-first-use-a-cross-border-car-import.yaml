@@ -16,7 +16,7 @@ entries:
   - public-content
   - car-import
   - 2026-11
-  status: design
+  status: shipped
   description: |-
     Kris, 2026-11-06: the car import is a big part of the trip, its plan would help someone later, and personal details such as the VIN must never reach the public site. Written as if public.
 
@@ -29,6 +29,8 @@ entries:
     D. THE PAGE. GET /checklist (linked from the masthead and summarised on the front page as n of m done): stages in order, each with its progress, steps with their stamp and outcome note, then the questions and sources. The disclaimer is always shown: one traveller's notes, not advice, confirm with the agencies. Phone first: 44px targets, no sideways scroll at 390px, light theme.
 
     E. THE PRIVATE OVERLAY IS PER RIDE. The existing private overlay is keyed by checkpoint ord alone, so once the active ride changes, an earlier ride's addresses attach to the new ride's checkpoints. Key the overlay by ride, keep reading the old shape as belonging to the first ride, and prove with a test that one ride's private text never renders on another.
+
+    Shipped: 2026-11-06, thread-rt-kingston-to-hudson-bend-trip-2026-11-06: Merged in clodemode/RoadTrip PR 1 (merge 19b27b9), deployed 2026-11-06 21:33 UTC; the checklist was pushed by token; the live anonymous pages were scanned and carry none of its private text.
   dont: DONT render private text to an anonymous visitor or in any open endpoint. DONT accept a VIN-shaped
     token in a public field, and DONT echo it in the refusal or a log. DONT overwrite a done step or an
     answered question on a re-push. DONT put a real checklist in the repo, a fixture, a commit message
@@ -45,3 +47,5 @@ entries:
   impact: high
   triaged_at: '2026-11-06T19:35:11.770620+00:00'
   triaged_by: krispy
+  closed_at: '2026-11-06T22:24:27.471337+00:00'
+  closed_by_actor: thread-rt-kingston-to-hudson-bend-trip-2026-11-06

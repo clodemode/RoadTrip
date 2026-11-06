@@ -14,7 +14,7 @@ entries:
   - fly
   - packaging
   - go
-  status: design
+  status: shipped
   description: 'Filed 2026-10-09 by codi-ab-app-profile-v1-2026-10-09 when ABOUT gained the APP_PROFILE
     loader (INTENT/TOOLS/_app_profile.py, MCP app_profile; clodemode/formicary APP_PROFILE.yaml is the
     worked example). RoadTrip is bind-mounted at /app/fleet/roadtrip but is not a compose include, so
@@ -27,3 +27,5 @@ entries:
     point its README/AGENTS.md at it, verify with app_profile(app=''roadtrip'').'
   depends_on:
   - spec-clode-every-target-app-declares-its-own-venue-paths-in-an-app-profile-at-its-repo-root-and-about-reads-them-never-hardcodes-them
+  closed_by_actor: 1feba0cc-eca0-4d49-8bc9-5d199ba4a9b6
+  closed_at: '2026-11-06T22:24:28.613364+00:00'
