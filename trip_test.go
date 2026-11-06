@@ -1275,3 +1275,26 @@ func TestVolumeTripOnePinAloneIsNotATrack(t *testing.T) {
 		t.Errorf("one pin made a track: %v", tracks)
 	}
 }
+
+// While the whole site is private, the planner is as closed as every other
+// page: the plan, its alternatives and its dates are not for a visitor who
+// has not signed in.
+func TestPlannerIsClosedWhileTheSiteIsPrivate(t *testing.T) {
+	app := activeTripApp(t)
+	app.sitePrivate = true
+	for _, p := range []string{"/plan", "/plan.json", "/plan.json?opt-finish=stopover"} {
+		w := send(t, app, "GET", p, "", "", nil)
+		if w.Code != http.StatusFound || !strings.HasPrefix(w.Header().Get("Location"), "/admin/login") {
+			t.Errorf("%s while private: status %d, Location %q; want a 302 to the login", p, w.Code, w.Header().Get("Location"))
+		}
+		if strings.Contains(w.Body.String(), "Alder") {
+			t.Errorf("%s while private carries the plan", p)
+		}
+		if w := send(t, app, "GET", p, testToken, "", nil); w.Code != http.StatusOK {
+			t.Errorf("%s while private, with the token: status %d", p, w.Code)
+		}
+	}
+	if w := send(t, app, "GET", "/healthz", "", "", nil); w.Code != http.StatusOK {
+		t.Errorf("/healthz while private: status %d", w.Code)
+	}
+}
