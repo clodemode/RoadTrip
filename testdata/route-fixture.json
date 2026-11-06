@@ -1,0 +1,43 @@
+{
+  "schema": "roadtrip-route/0.1",
+  "synthetic": true,
+  "name": "Alder to Elm",
+  "avg_mph": 60,
+  "long_day_hours": 9.5,
+  "stops": [
+    {"id": "alder", "name": "Alder", "lat": 40.1234, "lng": -100.4321, "kind": "start", "note": "a planning note that must not travel", "tag": "private-tag"},
+    {"id": "birch_gate", "name": "Birch Gate", "lat": 41.0, "lng": -101.0, "kind": "border", "note": "another planning note", "tag": ""},
+    {"id": "cedar_camp", "name": "Cedar Camp", "lat": 42.0, "lng": -102.0, "kind": "night", "note": "", "tag": ""},
+    {"id": "dogwood", "name": "Dogwood", "lat": 43.0, "lng": -104.0, "kind": "night", "note": "a planning note about the room", "tag": "room-tag"},
+    {"id": "fir_hollow", "name": "Fir Hollow", "lat": 43.8, "lng": -105.2, "kind": "optional", "note": "optional stop", "tag": "optional"},
+    {"id": "elm", "name": "Elm", "lat": 44.3217, "lng": -106.2789, "kind": "end", "note": "", "tag": ""}
+  ],
+  "refs": [
+    {"id": "hazel", "name": "Hazel", "lat": 41.6, "lng": -101.6, "tier": 1}
+  ],
+  "fixed_segments": ["d2"],
+  "options": [
+    {"id": "day1", "title": "Day 1 route", "default": "ridge", "choices": [
+      {"id": "ridge", "label": "Ridge road", "detail": "the long way round", "segments": ["d1_ridge"]},
+      {"id": "valley", "label": "Valley road", "detail": "shorter", "segments": ["d1_valley"]}
+    ]},
+    {"id": "finish", "title": "Finish", "default": "direct", "choices": [
+      {"id": "direct", "label": "Direct", "detail": "in one day", "segments": ["d3_direct"]},
+      {"id": "stopover", "label": "Via a stopover", "detail": "adds a night and a day", "segments": ["d3_stop", "d4_stop"]}
+    ]}
+  ],
+  "segments": [
+    {"id": "d1_ridge", "day": 1, "label": "over the ridge", "from": "alder", "to": "cedar_camp", "via": ["birch_gate", "hazel"], "miles": 600,
+     "geometry": [[40.1234, -100.4321], [40.13, -100.44], [40.5, -100.6], [41.0, -101.0], [41.6, -101.6], [42.0, -102.0]]},
+    {"id": "d1_valley", "day": 1, "label": "along the valley", "from": "alder", "to": "cedar_camp", "via": ["birch_gate"], "miles": 540,
+     "geometry": [[40.1234, -100.4321], [40.14, -100.42], [40.4, -100.9], [41.0, -101.0], [41.5, -101.9], [42.0, -102.0]]},
+    {"id": "d2", "day": 2, "label": "the only road", "from": "cedar_camp", "to": "dogwood", "via": [], "miles": 300,
+     "geometry": [[42.0, -102.0], [42.5, -103.0], [43.0, -104.0]]},
+    {"id": "d3_direct", "day": 3, "label": "straight through", "from": "dogwood", "to": "elm", "via": [], "miles": 420,
+     "geometry": [[43.0, -104.0], [43.6, -105.0], [44.31, -106.26], [44.3217, -106.2789]]},
+    {"id": "d3_stop", "day": 3, "label": "to the stopover", "from": "dogwood", "to": "fir_hollow", "via": [], "miles": 200,
+     "geometry": [[43.0, -104.0], [43.4, -104.6], [43.8, -105.2]]},
+    {"id": "d4_stop", "day": 4, "label": "the last stretch", "from": "fir_hollow", "to": "elm", "via": [], "miles": 180,
+     "geometry": [[43.8, -105.2], [44.2, -106.0], [44.32, -106.27], [44.3217, -106.2789]]}
+  ]
+}

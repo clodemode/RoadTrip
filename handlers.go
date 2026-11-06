@@ -88,6 +88,9 @@ func (a *App) funcs() template.FuncMap {
 		"trimPrefix": func(s, prefix string) string { return strings.TrimPrefix(s, prefix) },
 		"num":        func(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) },
 		"inc":        func(i int) int { return i + 1 },
+		// mi and hr write a planner figure to one decimal, always.
+		"mi": fmtMiles,
+		"hr": fmtMiles,
 	}
 }
 
@@ -123,6 +126,10 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /legs/{slug}", a.legPage)
 	mux.HandleFunc("GET /photos", a.photos)
 	mux.HandleFunc("GET /route.geojson", a.routeGeoJSON)
+	// The planner: the active ride's days and, for a trip with options, every
+	// alternative. /plan.json is the same arithmetic as data.
+	mux.HandleFunc("GET /plan", a.planPage)
+	mux.HandleFunc("GET /plan.json", a.planJSON)
 
 	mux.HandleFunc("GET /admin/login", a.loginForm)
 	mux.HandleFunc("POST /admin/login", a.loginSubmit)
@@ -142,6 +149,12 @@ func (a *App) routes() http.Handler {
 	// /admin route — the carriage signs in the way a person does, so there is
 	// no second credential and no second auth path to get wrong.
 	mux.Handle("POST /admin/private", a.requireAuth(a.privatePush))
+	// The trip carriage and its switches: a trip document onto the volume,
+	// which ride the site shows, and the saved selection. Same gate as above.
+	mux.Handle("POST /admin/trip", a.requireAuth(a.tripPush))
+	mux.Handle("POST /admin/ride/active", a.requireAuth(a.rideActivate))
+	mux.Handle("GET /admin/rides.json", a.requireAuth(a.ridesJSON))
+	mux.Handle("POST /admin/plan", a.requireAuth(a.planSave))
 
 	return logRequests(a.canonicalHost(a.visibility(mux)))
 }
@@ -273,12 +286,12 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	// the first leg, which doubles as the ride's overall look.
 	if _, ok := data["PageLeg"]; !ok {
 		data["PageLeg"] = ""
-		if legs, err := a.store.Legs(a.rideSlug); err == nil && len(legs) > 0 {
+		if legs, err := a.store.Legs(a.activeSlug()); err == nil && len(legs) > 0 {
 			data["PageLeg"] = legs[0].Slug
 		}
 	}
 	if _, ok := data["Ride"]; !ok {
-		if ride, err := a.store.Ride(a.rideSlug); err == nil {
+		if ride, err := a.store.Ride(a.activeSlug()); err == nil {
 			data["Ride"] = ride
 		} else {
 			data["Ride"] = &Ride{Name: "Roadtrip"}
@@ -298,8 +311,11 @@ type rideView struct {
 	Legs []Leg
 }
 
+// loadRide reads the ACTIVE ride (activeSlug), which is why every page, the
+// post form and the open data all move together when the trip-keeper switches
+// rides, and why none of them can show a ride the others do not.
 func (a *App) loadRide() (*rideView, error) {
-	ride, err := a.store.Ride(a.rideSlug)
+	ride, err := a.store.Ride(a.activeSlug())
 	if err != nil {
 		return nil, err
 	}
@@ -648,7 +664,7 @@ func buildMap(legs []Leg, posts []Post, tracks map[int64][][]float64) mapJS {
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	rv, err := a.loadRide()
 	if err != nil {
-		http.Error(w, "ride "+a.rideSlug+" is not seeded", http.StatusNotFound)
+		http.Error(w, "ride "+a.activeSlug()+" is not seeded", http.StatusNotFound)
 		return
 	}
 	posts, err := a.store.Posts(rv.Ride.Slug, 0)

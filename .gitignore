@@ -7,3 +7,6 @@ data/
 /roadtrip
 # Local scratch.
 .DS_Store
+# A planning handoff is trip input: real places and dates. It stays local,
+# like data/. The repo guard test fails closed if this line goes missing.
+coWork_input/

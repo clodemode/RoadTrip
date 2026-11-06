@@ -16,6 +16,10 @@ ride: **Austin → San Jose**, 2026-09-04 to 09-07, one way.
 - `/photos` — the gallery, grouped by leg.
 - `/route.geojson` — legs, checkpoints and pinned posts as open GeoJSON,
   CORS `*`, plus a `kind=track` line per leg for what was actually driven.
+- `/plan` — the planner: the days with miles, hours and a long-day flag, the
+  trip totals, and — for a trip that carries route options — each option as a
+  control, with the roads not taken drawn dashed on the map. `/plan.json` is
+  the same arithmetic as data. See "Trips on the volume".
 - `/admin/post` — the driver's one screen: photo, kind, title, body, leg,
   checkpoint, zone, hide-location. One tap stamps a checkpoint as arrived.
 - `/admin/posts.json` — the census: **every** post with its photo's identity,
@@ -74,8 +78,9 @@ session cookie will never come back.
 | `ADMIN_PASSWORD_HASH` | bcrypt hash; unset ⇒ read-only site |
 | `SESSION_KEY` | HMAC key for session cookies; unset ⇒ random per boot (sessions drop on restart) |
 | `PUSH_TOKEN` | fixed bearer token accepted wherever the session is; unset ⇒ the header path does not exist. See "Pushing with the token" |
-| `RIDE_SLUG` | which seeded ride `/` shows; default `atx-sjc-2026-09` |
-| `DATA_DIR` | default `/data`; holds `roadtrip.sqlite3`, `media/`, `tmp/` (upload spill, swept on boot) and the optional `private.json` |
+| `RIDE_SLUG` | the ride `/` shows **when no active ride has been set**; default `atx-sjc-2026-09`. The active ride is data, set by `POST /admin/ride/active` — see "Trips on the volume" |
+| `DATA_DIR` | default `/data`; holds `roadtrip.sqlite3`, `media/`, `tmp/` (upload spill, swept on boot), the optional `private.json` and the trip files in `trips/` |
+| `$DATA_DIR/trips/<slug>.geojson` | a trip that is not in the image: pushed with `POST /admin/trip`, read at boot after the embedded seeds; never in the repo. Absent = only the embedded rides |
 | `GOMEMLIMIT` | optional; unset ⇒ the GC's soft limit is 75 % of the cgroup limit or MemTotal (logged at boot as `memory limit: …`) |
 | `$DATA_DIR/private.json` | private overlay, `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` keyed by checkpoint ord; rendered on admin pages only, never in the repo or the seed; absent = no private data |
 | `SITE_URL` | the canonical origin, e.g. `https://roadtrip.opeongo.net`; unset (the local default) ⇒ no redirect and no canonical/og tags |
@@ -174,6 +179,101 @@ What it is for is duplicates, which a phone on a bad hotspot makes: the same
 apart. Delete the loser with `POST /admin/post/<id>/delete`. The photo bytes
 stay on the volume by design — media is content-addressed and another post may
 reference the same file.
+
+## Trips on the volume
+
+The repository is public; a trip is not — where it starts and ends, and when.
+So a new trip is **not** added to `seed/`. It is one GeoJSON document on the
+volume, `$DATA_DIR/trips/<slug>.geojson`, and it gets there by push:
+
+```bash
+H="Authorization: Bearer $PUSH_TOKEN"; S=https://roadtrip.opeongo.net
+
+# the whole trip document; parsed completely before a byte is written
+curl -s -H "$H" -H 'Content-Type: application/geo+json' --data-binary @trip.geojson $S/admin/trip
+
+# make it the ride the site shows (or add ?activate=1 to the push)
+curl -s -H "$H" -X POST -d slug=<slug> $S/admin/ride/active
+curl -s -H "$H" -X POST -d clear=1 $S/admin/ride/active     # back to RIDE_SLUG
+
+# every ride in the database, its row counts, and which one is showing
+curl -s -H "$H" $S/admin/rides.json
+```
+
+A push is applied in the same request — the file is written atomically and the
+ride is created or refreshed at once — because a suspended machine never
+re-runs boot, and "it loads on the next boot" would mean "on the next deploy".
+Boot does read `trips/*.geojson` too, after the embedded seeds and through the
+same path, so a fresh machine or a restored volume comes up whole; a file that
+will not load is logged and skipped, never fatal. The slug is `[a-z0-9-]` and
+becomes the file name; a slug that belongs to an embedded ride is refused.
+
+**The active ride** is a row in the `meta` table, read per request. Setting it
+moves every page, the post form and `/route.geojson` together. The ride that
+stops being shown is not touched: it stays in the database whole.
+
+### Options
+
+A trip document is the seed shape plus three optional top-level keys:
+
+```json
+"avg_mph": 60, "long_day_hours": 9.5,
+"options": [{"id": "day2", "title": "Day 2 route", "default": "a",
+             "choices": [{"id": "a", "label": "…", "detail": "…"}, {"id": "b", "label": "…"}]}]
+```
+
+A feature whose properties carry `"option"` and `"choice"` belongs to that
+choice only; a feature without them is part of every plan. Two roads for one
+day are two `LineString`s with the same `leg` and different choices. A choice
+may add a day and a checkpoint — then the checkpoints after it are written once
+per choice, with the `order` each has under that choice.
+
+A leg may carry `"day": N` instead of a date. It is then dated from the ride's
+start date, and **the start date is part of the stored selection** — so a
+departure that slips a day is one saved field, not an edit to every leg. With
+`avg_mph` set, a leg's hours are its miles at that speed, and a day over
+`long_day_hours` is flagged.
+
+The database holds one plan: the document under the stored selection. The
+alternatives stay in the file. `/plan` shows them all; switching there is local
+to the visitor's browser, and only the signed-in trip-keeper's **Save this
+plan** (`POST /admin/plan`, fields `opt-<option>=<choice>` and `start=`) changes
+the plan for everyone. `GET /plan.json?opt-<option>=<choice>` answers "what
+would that cost" without saving anything.
+
+**A saved change never reaches what the road has made real.** It is refused
+whole — and says why — if the new plan would drop or re-route a leg that holds
+posts, or drop, renumber or replace a checkpoint that is arrived or holds
+posts. Moving the start date is never refused: it moves dates and nothing else.
+A re-pushed document is held to the same rule.
+
+**Every coordinate on `/plan` has been through the store's fuzz seam**, the
+roads not taken included: a `precision: "fuzzed"` checkpoint is its 0.05° cell,
+and no line is drawn within 8 km of one — the line runs to the cell point
+instead. The same mask now covers the ride pages and `/route.geojson`, which
+used to hand back the un-snapped vertex where a leg met a private checkpoint.
+
+### Converting a planning tool's route
+
+```bash
+docker run --rm -v "$PWD/in:/in:ro" -v "$PWD/data:/data" roadtrip \
+  -convert /in/route.json -slug <slug> -start <YYYY-MM-DD> \
+  -zones '<stop>=<Area/City>,<stop>=<Area/City>'
+```
+
+`-convert` reads a route document (schema `roadtrip-route/0.1`: stops, option
+groups, routed segments as `[lat, lng]`) and writes a trip file to
+`$DATA_DIR/trips/<slug>.geojson` — the local data dir, which is gitignored —
+ready to push. A stop's label is derived from what the stop is (start, night,
+finish); the planning tool's free-text notes are not carried. **It refuses a
+stop that has no IANA zone** (`"tz"` on the stop, or `-zones`): there is no
+ride-wide zone to fall back on. `-name` overrides the ride name, `-out` the
+destination.
+
+A test (`guard_test.go`) fails if any file git knows about is a trip document
+outside `seed/atx-sjc-2026-09.geojson` and the synthetic fixtures in
+`testdata/`, or if `.gitignore` or `.dockerignore` loses its `data/` or
+planning-handoff line.
 
 ## Made it to
 
@@ -451,6 +551,11 @@ dispatched against a ref, and "trunk was green yesterday" is not a statement
 about the commit being shipped. The probe hits `/healthz` on the `.fly.dev`
 host, which is the one path exempt from both the canonical-host 301 and the
 `SITE_VISIBILITY=private` gate — so it answers even while the site is closed.
+
+The image keeps the platform path standard: the binary is `/app/roadtrip`
+(`WORKDIR /app`) and everything persistent is under `/data`.
+[`APP_PROFILE.yaml`](APP_PROFILE.yaml) at the repo root declares those paths
+and the Fly app, and is where the CLODE harness reads them from.
 
 **One-time setup:** a deploy token in the repo secret `FLY_API_TOKEN`.
 

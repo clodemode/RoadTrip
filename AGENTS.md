@@ -37,6 +37,8 @@ Read, in order: [README.md](README.md) — it is the long-form design record and
 5. **Planning data is seed-owned until actualized.** Boot refreshes legs, unstamped checkpoints and candidate stops from `seed/*.geojson`. Arrived checkpoints, posts and photos are never touched. A seed edit reaches the site on the next deploy.
 6. **Media is content-addressed and the store is append-only.** Replacing a photo is a delete and a re-post, never an edit in place.
 7. **`PUSH_TOKEN` is the same gate, entered by machine.** It is checked wherever the session is, with `subtle.ConstantTimeCompare`; unset disables the header path entirely rather than matching an empty string. Never log the value — boot logs `push token: set` / `unset`.
+8. **A trip lives on the volume, not in the repo.** A new trip is a document at `$DATA_DIR/trips/<slug>.geojson`, pushed with `POST /admin/trip`; it is never added to `seed/`, and fixtures are synthetic. The ride the site shows is the active ride (`meta`, set by `POST /admin/ride/active`), with `RIDE_SLUG` only the fallback. A plan change — a saved selection or a re-pushed document — is refused whole if it would reach an arrived checkpoint or anything that holds posts.
+9. **Paths are declared in [`APP_PROFILE.yaml`](APP_PROFILE.yaml).** Binary `/app/roadtrip`, data `/data`. That file is the source of truth for them; change a path there in the same commit that moves it.
 
 ## Shipping
 

@@ -279,3 +279,48 @@ fieldset.pin input:disabled + *, fieldset.pin label.check input:disabled { opaci
 .lodging-cp { padding:.4rem 0 .2rem; border-top:1px solid var(--rule, #e6e0d6); }
 .lodging-cp:first-of-type { border-top:0; }
 .lodging-cp p { margin:0 0 .3rem; }
+
+/* --- planner (/plan) ---------------------------------------------------------
+   The option groups, the day list and the totals. Every control a thumb has to
+   hit is at least 44px tall, and nothing here is wider than its column: the
+   choices wrap, the day rows wrap their text, the numbers stay on the right. */
+.plan-totals { margin:.2rem 0 .5rem; font-size:1.02rem; }
+.plan-totals b { font-size:1.2rem; }
+.plan-saved { color:var(--ok); font-weight:600; font-size:.92rem; }
+.plan-maphint { margin:.45rem 0 0; }
+#map[data-mode="plan"] .leaflet-bar a { width:44px; height:44px; line-height:44px; font-size:1.4rem; }
+.plan-form { margin-top:.9rem; display:flex; flex-direction:column; gap:.8rem; }
+.plan-opt { border:1px solid var(--line); border-radius:10px; background:var(--card); margin:0;
+  padding:.45rem .7rem .7rem; min-width:0; }
+.plan-opt legend { padding:0 .35rem; font-size:.88rem; font-weight:700; color:var(--fg); }
+.plan-choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.5rem; }
+.plan-choice { flex-direction:row; align-items:center; gap:.6rem; min-height:44px; min-width:0;
+  padding:.5rem .65rem; border:1.5px solid var(--line); border-radius:8px; color:var(--fg);
+  font-size:.95rem; cursor:pointer; }
+.plan-choice input { width:22px; height:22px; flex:0 0 auto; margin:0; padding:0; }
+.plan-choice:has(input:checked) { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
+.plan-choice-text { display:flex; flex-direction:column; min-width:0; line-height:1.3; overflow-wrap:anywhere; }
+.plan-choice-text .muted { font-size:.8rem; }
+.plan-start { max-width:280px; }
+.plan-start input { min-height:44px; }
+.plan-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; }
+.plan-actions button, .plan-all { min-height:44px; }
+.js .plan-update { display:none; }
+.day-list { list-style:none; margin:0; padding:0; border:1px solid var(--line); border-radius:10px;
+  background:var(--card); overflow:hidden; }
+.day-list li { border-bottom:1px solid var(--line); }
+.day-list li:last-child { border-bottom:0; }
+.day-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:.7rem; align-items:center;
+  width:100%; min-height:56px; padding:.55rem .8rem; border:0; border-radius:0;
+  border-left:5px solid var(--leg, var(--accent)); background:transparent; color:var(--fg);
+  font-weight:400; text-align:left; }
+.day-row.on { background:color-mix(in srgb, var(--accent) 9%, transparent); }
+.day-n { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px;
+  border-radius:50%; background:var(--leg, var(--accent)); color:#fff; font-size:.82rem; font-weight:800; }
+.day-main { display:flex; flex-direction:column; min-width:0; }
+.day-name { font-weight:600; overflow-wrap:anywhere; }
+.day-date { font-size:.8rem; }
+.day-nums { display:flex; flex-direction:column; align-items:flex-end; gap:.15rem; font-size:.9rem;
+  font-variant-numeric:tabular-nums; white-space:nowrap; }
+.pill-long { background:#b45309; }
+.plan-foot { margin:.5rem 0 0; }
