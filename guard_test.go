@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// The repository is public and a trip is not. Three things keep a trip out of
+// The repository is public and a trip is not. Four things keep a trip out of
 // it, and this file is the test that they are all still there:
 //
 //  1. .gitignore and .dockerignore each carry a line for the data dir and one
@@ -22,6 +22,10 @@ import (
 //     trip document, except the one seed the image has always carried and the
 //     fixtures under testdata/.
 //  3. A fixture under testdata/ says it is synthetic.
+//  4. No file git knows about is a trip's CHECKLIST — by its name
+//     (*.checklist.json) or by its shape — except a synthetic fixture under
+//     testdata/. A checklist holds the private text a trip file does not: an
+//     identifier, a name, a value.
 //
 // It fails closed: if it cannot list the files, or lists none, that is a
 // failure and not a pass.
@@ -75,6 +79,42 @@ func isTripDocument(raw []byte) bool {
 	return false
 }
 
+// checklistSuffix (checklist.go) is the name a checklist has on the volume. A
+// file with that name is treated as one whatever is in it: a name is a claim
+// the guard cannot disprove by failing to parse the file.
+func hasChecklistName(f string) bool { return strings.HasSuffix(f, checklistSuffix) }
+
+// isChecklistDocument recognises a checklist by its shape, whatever the file
+// is called: stages that hold steps, or questions that ask something.
+func isChecklistDocument(raw []byte) bool {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] != '{' {
+		return false
+	}
+	var doc struct {
+		Stages []struct {
+			Steps []json.RawMessage `json:"steps"`
+		} `json:"stages"`
+		Questions []struct {
+			Ask *json.RawMessage `json:"ask"`
+		} `json:"questions"`
+	}
+	if json.Unmarshal(raw, &doc) != nil {
+		return false
+	}
+	for _, st := range doc.Stages {
+		if len(st.Steps) > 0 {
+			return true
+		}
+	}
+	for _, q := range doc.Questions {
+		if q.Ask != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func isSynthetic(raw []byte) bool {
 	var doc struct {
 		Synthetic bool `json:"synthetic"`
@@ -111,13 +151,32 @@ func repoGuard(root string, files []string) ([]string, error) {
 				bad = append(bad, fmt.Sprintf("%s is under %s, which holds private data", f, dir))
 			}
 		}
+		// A checklist by NAME is judged before the file is opened, so a file
+		// the guard cannot read or parse is still held to the rule.
+		named := hasChecklistName(f)
+		if named && !strings.HasPrefix(f, "testdata/") {
+			bad = append(bad, fmt.Sprintf("%s is a checklist document outside testdata/", f))
+			continue
+		}
 		fi, err := os.Stat(filepath.Join(root, filepath.FromSlash(f)))
 		if err != nil || fi.IsDir() || fi.Size() > 32<<20 {
+			if named {
+				bad = append(bad, fmt.Sprintf("%s is named as a checklist and could not be read to see that it is synthetic", f))
+			}
 			continue // deleted in the work tree, a submodule, or far too big to be text
 		}
 		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
 		if err != nil {
 			return bad, fmt.Errorf("read %s: %w", f, err)
+		}
+		if named || isChecklistDocument(raw) {
+			switch {
+			case !strings.HasPrefix(f, "testdata/"):
+				bad = append(bad, fmt.Sprintf("%s is a checklist document outside testdata/", f))
+			case !isSynthetic(raw):
+				bad = append(bad, fmt.Sprintf("%s is a checklist document under testdata/ that does not say \"synthetic\": true", f))
+			}
+			continue
 		}
 		if !isTripDocument(raw) {
 			continue
@@ -184,7 +243,8 @@ func TestRepoHoldsNoTripDocument(t *testing.T) {
 	for _, f := range files {
 		seen[f] = true
 	}
-	for _, must := range []string{"main.go", "guard_test.go", "seed/atx-sjc-2026-09.geojson", "testdata/trip-fixture.geojson"} {
+	for _, must := range []string{"main.go", "guard_test.go", "seed/atx-sjc-2026-09.geojson", "testdata/trip-fixture.geojson",
+		"testdata/checklist-fixture.json"} {
 		if !seen[must] {
 			t.Fatalf("the file listing (%d files) does not include %s; it is not a listing of this repository", len(files), must)
 		}
@@ -213,10 +273,23 @@ func TestRepoGuardFires(t *testing.T) {
 	if bytes.Equal(unmarked, trip) {
 		t.Fatal("the fixture has no synthetic marker to remove")
 	}
+	checklist, err := os.ReadFile(filepath.Join("testdata", "checklist-fixture.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isChecklistDocument(checklist) || !isSynthetic(checklist) {
+		t.Fatal("the checklist fixture is not recognised as a synthetic checklist; the cases below would prove nothing")
+	}
+	unmarkedChecklist := bytes.Replace(checklist, []byte(`"synthetic": true,`), nil, 1)
+	if bytes.Equal(unmarkedChecklist, checklist) {
+		t.Fatal("the checklist fixture has no synthetic marker to remove")
+	}
 	ignore := "data/\ncoWork_input/\n"
 	clean := map[string]string{".gitignore": ignore, ".dockerignore": ignore, "main.go": "package main\n",
 		"seed/atx-sjc-2026-09.geojson": string(trip), "testdata/trip-fixture.geojson": string(trip),
-		"testdata/route-fixture.json": string(route), "notes.json": `{"features": []}`}
+		"testdata/route-fixture.json": string(route), "notes.json": `{"features": []}`,
+		"testdata/checklist-fixture.json": string(checklist), "testdata/other.checklist.json": string(checklist),
+		"todo.json": `{"stages": [], "questions": []}`}
 	cases := []struct {
 		name   string
 		change func(tree map[string]string)
@@ -235,6 +308,14 @@ func TestRepoGuardFires(t *testing.T) {
 		{"a commented-out guard line", func(m map[string]string) { m[".gitignore"] = "data/\n# coWork_input/\n" }, `.gitignore has no "coWork_input/" line`},
 		{"no handoff line in .dockerignore", func(m map[string]string) { m[".dockerignore"] = "data/\n" }, `.dockerignore has no "coWork_input/" line`},
 		{"no .gitignore at all", func(m map[string]string) { delete(m, ".gitignore") }, ".gitignore is missing"},
+		{"a checklist at the root", func(m map[string]string) { m["my-trip.checklist.json"] = string(checklist) }, "my-trip.checklist.json is a checklist document outside testdata/"},
+		{"a checklist beside the code under another name", func(m map[string]string) { m["docs/steps.txt"] = string(checklist) }, "docs/steps.txt is a checklist document outside testdata/"},
+		{"a checklist in seed/", func(m map[string]string) { m["seed/next.json"] = string(unmarkedChecklist) }, "seed/next.json is a checklist document outside testdata/"},
+		{"a checklist name with nothing readable in it", func(m map[string]string) { m["trips/x.checklist.json"] = "{ not json" }, "trips/x.checklist.json is a checklist document outside testdata/"},
+		{"a checklist name on an empty file", func(m map[string]string) { m["x.checklist.json"] = "" }, "x.checklist.json is a checklist document outside testdata/"},
+		{"a checklist fixture that does not say it is synthetic", func(m map[string]string) { m["testdata/real.json"] = string(unmarkedChecklist) }, "testdata/real.json is a checklist document under testdata/"},
+		{"a checklist name under testdata/ that does not say it is synthetic", func(m map[string]string) { m["testdata/real.checklist.json"] = "{}" }, "testdata/real.checklist.json is a checklist document under testdata/"},
+		{"a questions-only checklist", func(m map[string]string) { m["q.json"] = `{"questions": [{"id": "a", "ask": "Is it?"}]}` }, "q.json is a checklist document outside testdata/"},
 	}
 	for _, c := range cases {
 		tree := map[string]string{}
@@ -296,5 +377,30 @@ func TestIsTripDocument(t *testing.T) {
 		if isTripDocument([]byte(s)) {
 			t.Errorf("wrongly recognised as a trip document: %s", s)
 		}
+	}
+}
+
+func TestIsChecklistDocument(t *testing.T) {
+	yes := []string{
+		`{"title":"x","stages":[{"id":"a","steps":[{"id":"b","title":"c"}]}]}`,
+		`{"stages":[{"steps":[]},{"steps":[{}]}]}`,
+		`{"questions":[{"ask":"Is it?"}]}`,
+		`  {"questions":[{"id":"q","ask":""}]}`,
+	}
+	no := []string{``, `package main`, `[1,2,3]`, `{"hooks":{}}`, `{"stages":[]}`, `{"stages":[{"id":"a"}]}`,
+		`{"questions":[{"id":"q"}]}`, `{"checkpoints":{"3":{"address":"x"}}}`, `{ not json`,
+		`{"type":"FeatureCollection","features":[]}`}
+	for _, s := range yes {
+		if !isChecklistDocument([]byte(s)) {
+			t.Errorf("not recognised as a checklist: %s", s)
+		}
+	}
+	for _, s := range no {
+		if isChecklistDocument([]byte(s)) {
+			t.Errorf("wrongly recognised as a checklist: %s", s)
+		}
+	}
+	if !hasChecklistName("data/trips/a.checklist.json") || hasChecklistName("checklist.json.txt") || hasChecklistName("checklist.go") {
+		t.Error("hasChecklistName does not follow the volume's file name")
 	}
 }

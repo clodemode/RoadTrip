@@ -477,6 +477,76 @@ func TestTrackRunsOriginPostsTerminus(t *testing.T) {
 	}
 }
 
+// The ride the image carries was driven with every checkpoint stamped, and
+// that is the state this pins: with the origins arrived, each leg's track is
+// exactly its arrived origin, its pinned posts in time order and its arrived
+// terminus, and none of them says its start is planned. The rule that lets a
+// first photo start a track from an UNSTAMPED origin (legTracks) does not
+// reach a leg like these.
+func TestTracksOfAFullyStampedRideAreUnchanged(t *testing.T) {
+	app := testApp(t)
+	legs := testLegs(t, app)
+	want := map[int64][][]float64{}
+	base := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	for i, leg := range legs {
+		for j := 0; j < 2; j++ {
+			lat, lng := 31.0+float64(i)+float64(j)/10, -99.0-float64(i)
+			// Created out of order, so the sort is what orders them.
+			at := base.Add(time.Duration(i*24+(1-j)*3) * time.Hour)
+			mustCreate(t, app, &Post{LegID: leg.ID, Kind: "photo", TZ: leg.TZ,
+				OccurredAt: utcString(at), Lat: &lat, Lng: &lng, PinSource: pinEXIF})
+		}
+		for _, c := range leg.Checkpoints {
+			if err := app.store.SetArrived(c.ID, base, nil); err != nil {
+				t.Fatalf("arrive: %v", err)
+			}
+		}
+	}
+	rv, err := app.loadRide()
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts, err := app.store.Posts(app.rideSlug, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, leg := range rv.Legs {
+		o, tm := legOrigin(rv.Legs, i), legTerminus(leg)
+		pts := [][]float64{{o.Lng, o.Lat}}
+		// j=1 was stamped earlier than j=0.
+		for _, j := range []int{1, 0} {
+			pts = append(pts, []float64{-99.0 - float64(i), 31.0 + float64(i) + float64(j)/10})
+		}
+		want[leg.ID] = append(pts, []float64{tm.Lng, tm.Lat})
+	}
+	got := legTracks(rv.Legs, posts)
+	if len(got) != len(rv.Legs) {
+		t.Fatalf("%d track(s) for %d legs", len(got), len(rv.Legs))
+	}
+	for id, w := range want {
+		g := got[id]
+		if len(g) != len(w) {
+			t.Fatalf("leg %d: track %v, want %v", id, g, w)
+		}
+		for k := range w {
+			if g[k][0] != w[k][0] || g[k][1] != w[k][1] {
+				t.Errorf("leg %d vertex %d: %v, want %v", id, k, g[k], w[k])
+			}
+		}
+	}
+	if planned := plannedStarts(rv.Legs, posts); len(planned) != 0 {
+		t.Errorf("a fully stamped ride has planned starts: %v", planned)
+	}
+	w := httptest.NewRecorder()
+	app.routeGeoJSON(w, httptest.NewRequest("GET", "/route.geojson", nil))
+	if strings.Contains(w.Body.String(), `"planned_start"`) {
+		t.Error("/route.geojson marks a planned start on a fully stamped ride")
+	}
+	if n := strings.Count(w.Body.String(), `"kind": "track"`); n != len(rv.Legs) {
+		t.Errorf("/route.geojson has %d track(s) for %d legs", n, len(rv.Legs))
+	}
+}
+
 // One fix is a pin, not a track — and a one-point LineString is not GeoJSON.
 func TestTrackNeedsTwoPoints(t *testing.T) {
 	app := testApp(t)

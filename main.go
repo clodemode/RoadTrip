@@ -205,6 +205,11 @@ func main() {
 	if loaded, failed := loadVolumeTrips(store, dataDir); loaded+failed > 0 {
 		log.Printf("volume trips: %d loaded, %d not loaded", loaded, failed)
 	}
+	// And each trip's checklist, after its trip: open steps take the file's
+	// text, done ones are never written.
+	if loaded, failed := loadVolumeChecklists(store, dataDir); loaded+failed > 0 {
+		log.Printf("volume checklists: %d loaded, %d not loaded", loaded, failed)
+	}
 
 	app := &App{
 		store:    store,
@@ -256,8 +261,8 @@ func main() {
 	// normal and silent-by-design; a malformed file is worth a warning.
 	if pd, err := loadPrivate(dataDir); err != nil {
 		log.Printf("WARN private overlay: %v", err)
-	} else if n := len(pd.addressByOrd()); n > 0 {
-		log.Printf("private overlay: %d checkpoint address(es) (admin pages only)", n)
+	} else if n := pd.entries(); n > 0 {
+		log.Printf("private overlay: %d checkpoint entr(ies) across %d ride(s) (admin pages only)", n, len(pd.Rides)+1)
 	}
 	if _, err := store.Ride(rideSlug); err != nil {
 		log.Printf("WARN RIDE_SLUG=%s is not in the database — / will 404 until it is seeded", rideSlug)

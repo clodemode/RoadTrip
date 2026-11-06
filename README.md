@@ -82,7 +82,8 @@ session cookie will never come back.
 | `DATA_DIR` | default `/data`; holds `roadtrip.sqlite3`, `media/`, `tmp/` (upload spill, swept on boot), the optional `private.json` and the trip files in `trips/` |
 | `$DATA_DIR/trips/<slug>.geojson` | a trip that is not in the image: pushed with `POST /admin/trip`, read at boot after the embedded seeds; never in the repo. Absent = only the embedded rides |
 | `GOMEMLIMIT` | optional; unset ⇒ the GC's soft limit is 75 % of the cgroup limit or MemTotal (logged at boot as `memory limit: …`) |
-| `$DATA_DIR/private.json` | private overlay, `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` keyed by checkpoint ord; rendered on admin pages only, never in the repo or the seed; absent = no private data |
+| `$DATA_DIR/trips/<slug>.checklist.json` | a trip's checklist: pushed with `POST /admin/checklist`, read at boot after the trips; never in the repo. Holds private text. See "A trip's checklist" |
+| `$DATA_DIR/private.json` | private overlay, keyed by ride and then by checkpoint ord: the top-level `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` is the first ride's (`RIDE_SLUG`), every other ride has its own block under `"rides":{"<slug>":{"checkpoints":{…}}}`; rendered on admin pages only, never in the repo or the seed; absent = no private data |
 | `SITE_URL` | the canonical origin, e.g. `https://roadtrip.opeongo.net`; unset (the local default) ⇒ no redirect and no canonical/og tags |
 | `SITE_VISIBILITY` | `public` (default in code) or `private`; **private puts the whole site behind the one admin password** — see below |
 | `PIN_PRECISION` | `snap` (default) or `exact`; decides only whether the post form's **Fuzz location** toggle starts ticked at a private place |
@@ -211,6 +212,56 @@ becomes the file name; a slug that belongs to an embedded ride is refused.
 **The active ride** is a row in the `meta` table, read per request. Setting it
 moves every page, the post form and `/route.geojson` together. The ride that
 stops being shown is not touched: it stays in the database whole.
+
+### A trip's checklist
+
+A trip may carry a checklist: staged steps and open questions that the
+trip-keeper checks off as they succeed, each with a time and a public note of
+what actually happened. `GET /checklist` is public and written for the next
+person who has to do the same thing; the masthead links to it and the front
+page says *n of m done*. `GET /checklist.json` is the same page as data.
+
+```bash
+# the whole checklist document, for a ride that is already in the database
+curl -s -H "$H" -H 'Content-Type: application/json' --data-binary @trip.checklist.json "$S/admin/checklist?ride=<slug>"
+
+# check a step off now, or after the fact; the public note is "outcome"
+curl -s -H "$H" -X POST $S/admin/checklist/step/<step-id>
+curl -s -H "$H" -X POST -d at=2030-05-01T14:30 --data-urlencode 'outcome=What actually happened.' \
+     --data-urlencode 'private_note=For the trip-keeper only.' $S/admin/checklist/step/<step-id>
+curl -s -H "$H" -X POST -d clear=1 $S/admin/checklist/step/<step-id>        # undo: the time goes, the notes stay
+
+# answer a question the same way
+curl -s -H "$H" -X POST --data-urlencode 'outcome=The answer.' $S/admin/checklist/question/<question-id>
+
+# everything, private text included: signed in or with the token only
+curl -s -H "$H" $S/admin/checklist.json
+```
+
+The document is `title`, `intro`, `disclaimer`, `stages` (each `id`, `title`,
+`tz`, `when`, `steps` of `id`, `title`, `detail`, `private`), `questions`
+(`id`, `group`, `ask`, `why`, `private`) and `sources` (`label`, `url`). It is
+parsed completely before anything is written, an unknown key is refused, and
+it lands at `$DATA_DIR/trips/<slug>.checklist.json`. Without `?ride=` (or a
+`"ride"` in the document) it belongs to the ride the site is showing.
+
+**Public and private.** Titles, details, questions and the outcome notes are
+public. `private`, and the private note taken at check-off, are for the
+signed-in trip-keeper: the public read never loads them (`Store.Checklist`
+with `withPrivate` false does not select those columns), so they are on no
+anonymous page and in no open endpoint. A push is **refused** when a public
+field holds a 17-character token shaped like a vehicle identification number,
+and so is a public note; the refusal names the field and never the value, and
+nothing logs it. That check is a shape, not a promise: a name or a plate in a
+public field is not something it can see.
+
+**A re-push never reaches what is done.** An open step or question takes the
+later document's text; a done step or an answered question is not written at
+all, and one the later document no longer has is kept if done and dropped if
+open. A time is stored as UTC plus the stage's IANA zone (a question takes the
+zone the ride is in), and a wall-clock time typed after the fact is read in
+that zone. The disclaimer is always shown; a document without one gets a
+default.
 
 ### Options
 
@@ -624,7 +675,10 @@ of the overlay and never reach a run log.
 ### Editing lodging from the road
 
 `/admin/lodging` is the same overlay as a form — every checkpoint's address and
-notes, editable from the phone. It is the everyday path; the carriage is for
+notes for **the ride the site is showing**, editable from the phone. It
+rewrites that ride's block and no other: an ord means nothing without its
+ride, so one ride's entries are never shown against, or overwritten by,
+another's (`privateData.forRide` is the only way to read one). It is the everyday path; the carriage is for
 restoring a volume and for keeping a canonical copy off it. Clearing both
 fields for a checkpoint removes its entry, which is how a stale address goes
 away.
@@ -634,9 +688,14 @@ overlay and renames it. The overlay is re-read on *every* admin request, so a
 half-written file would break the pages that exist to show it; a rename within
 the directory is the one write a concurrent reader cannot catch mid-way.
 
+The carriage follows the same rule. The shape it has always sent,
+`{"checkpoints":{…}}`, replaces the first ride's block and leaves every other
+ride's alone; `POST /admin/private?ride=<slug>` replaces that ride's block;
+only a document that carries `"rides"` replaces the whole overlay.
+
 ⚠️ The two copies can drift. A `/admin/lodging` edit does not update
-`PRIVATE_JSON`, and an `apply` replaces the document wholesale rather than
-merging. After editing on the road, paste the result back into the secret.
+`PRIVATE_JSON`, and an `apply` replaces the first ride's block wholesale rather
+than merging. After editing on the road, paste the result back into the secret.
 
 ### Working on it from Claude Code on the web
 

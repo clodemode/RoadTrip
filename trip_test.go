@@ -1210,7 +1210,7 @@ func TestVolumeTripPinnedPostDrawsTheTrack(t *testing.T) {
 		t.Fatal(err)
 	}
 	posts, _ := app.store.Posts(fixtureSlug, 0)
-	m := buildMap(rv.Legs, posts, legTracks(rv.Legs, posts))
+	m := buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts))
 	if len(m.Tracks) != 1 || m.Tracks[0].LegOrd != 1 {
 		t.Fatalf("the map carries tracks %+v; want one, for leg 1", m.Tracks)
 	}
@@ -1260,19 +1260,111 @@ func TestVolumeTripPinnedPostDrawsTheTrack(t *testing.T) {
 	}
 }
 
-// One pin alone is a pin, not a track — the floor legTracks has always had.
-// Stated here because it is the gap in "a photo replaces the plan": the first
-// photo of a day draws no track until the day's origin is stamped arrived or
-// a second pin lands.
-func TestVolumeTripOnePinAloneIsNotATrack(t *testing.T) {
+// The first photo of a day replaces the plan: a leg with one pinned post and
+// an origin nobody stamped has a track from that origin's PUBLISHED point to
+// the pin, and it says its start is the plan. Nothing is stamped arrived to
+// make that happen, and a leg with no pinned post still has no track.
+func TestVolumeTripFirstPinDrawsATrackFromThePlannedStart(t *testing.T) {
 	app := activeTripApp(t)
 	legs := mustLegs(t, app, fixtureSlug)
+	if tracks := legTracks(legs, nil); len(tracks) != 0 {
+		t.Fatalf("a ride with no posts has tracks: %v", tracks)
+	}
 	lat, lng := 41.3, -101.3
 	mustCreate(t, app, &Post{LegID: legs[0].ID, Kind: "photo", TZ: "America/Chicago",
-		Lat: &lat, Lng: &lng, PinSource: pinEXIF})
+		OccurredAt: "2030-05-01T18:00:00Z", Lat: &lat, Lng: &lng, PinSource: pinEXIF})
+	rv, err := app.loadRide()
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts, _ := app.store.Posts(fixtureSlug, 0)
+	tracks, planned := legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)
+	if len(tracks) != 1 || len(planned) != 1 || !planned[legs[0].ID] {
+		t.Fatalf("tracks %v, planned starts %v; want one of each, on leg 1", tracks, planned)
+	}
+	track := tracks[legs[0].ID]
+	// The origin is a private place: the track starts at its snapped cell, the
+	// only point the store hands out, never at the raw coordinate.
+	if len(track) != 2 || track[0][0] != fixtureStart.Lng || track[0][1] != fixtureStart.Lat || track[1][0] != lng || track[1][1] != lat {
+		t.Errorf("track %v; want the origin's published point, then the pin", track)
+	}
+	// No arrival was invented.
+	if o := cpByOrd(t, app, 1); o.ArrivedAt != "" {
+		t.Errorf("the origin was stamped arrived as a side effect: %+v", o)
+	}
+	if c := rideCensus(t, app, fixtureSlug); c.Arrived != 0 {
+		t.Errorf("%d checkpoint(s) arrived; a post stamps none", c.Arrived)
+	}
+	// The map and the open data both say the start is the plan.
+	home := send(t, app, "GET", "/", "", "", nil).Body.String()
+	if !strings.Contains(home, `"planned_start":true`) {
+		t.Error("window.RIDE on / does not mark the track's start as planned")
+	}
+	geo := send(t, app, "GET", "/route.geojson", "", "", nil).Body.String()
+	if !strings.Contains(geo, `"kind": "track"`) || !strings.Contains(geo, `"planned_start": true`) {
+		t.Error("/route.geojson lacks the track, or does not mark its start as planned")
+	}
+	for _, raw := range fixtureRaw {
+		if strings.Contains(home, raw) || strings.Contains(geo, raw) {
+			t.Errorf("the track carries the raw private number %s", raw)
+		}
+	}
+	// The leg page, which holds one leg, draws the same track.
+	if page := send(t, app, "GET", "/legs/day-1-ridge", "", "", nil).Body.String(); !strings.Contains(page, `"planned_start":true`) {
+		t.Error("the leg page does not carry the track")
+	}
+	// The other legs have no post and no track.
+	for _, l := range rv.Legs[1:] {
+		if _, ok := tracks[l.ID]; ok {
+			t.Errorf("leg %d has a track with no pinned post on it", l.Ord)
+		}
+	}
+
+	// A second pin extends it; the start is still the plan.
+	lat2, lng2 := 41.6, -101.6
+	mustCreate(t, app, &Post{LegID: legs[0].ID, Kind: "photo", TZ: "America/Chicago",
+		OccurredAt: "2030-05-01T20:00:00Z", Lat: &lat2, Lng: &lng2, PinSource: pinEXIF})
+	posts, _ = app.store.Posts(fixtureSlug, 0)
+	if track := legTracks(rv.Legs, posts)[legs[0].ID]; len(track) != 3 || track[0][1] != fixtureStart.Lat || track[2][1] != lat2 {
+		t.Errorf("after a second pin: %v", track)
+	}
+	// Once the origin IS stamped, the same line is evidence end to end.
+	origin := cpByOrd(t, app, 1)
+	if w := postForm(t, app, "/admin/checkpoint/"+strconv.FormatInt(origin.ID, 10)+"/arrive", url.Values{}); w.Code != http.StatusSeeOther {
+		t.Fatalf("arrive: %d", w.Code)
+	}
+	rv, _ = app.loadRide()
+	if planned := plannedStarts(rv.Legs, posts); len(planned) != 0 {
+		t.Errorf("a track whose origin is stamped still says its start is planned: %v", planned)
+	}
+	if track := legTracks(rv.Legs, posts)[legs[0].ID]; len(track) != 3 {
+		t.Errorf("stamping the origin changed the track's length: %v", track)
+	}
+	if geo := send(t, app, "GET", "/route.geojson", "", "", nil).Body.String(); strings.Contains(geo, `"planned_start"`) {
+		t.Error("/route.geojson still marks a planned start after the origin was stamped")
+	}
+}
+
+// A leg later in the ride starts where the leg before it ended, so its first
+// photo draws from that checkpoint — and a hidden post draws nothing.
+func TestFirstPinOnALaterLegStartsAtThePreviousTerminus(t *testing.T) {
+	app := activeTripApp(t)
+	legs := mustLegs(t, app, fixtureSlug)
+	prev := legTerminus(legs[0])
+	lat, lng := 42.6, -102.9
+	mustCreate(t, app, &Post{LegID: legs[1].ID, Kind: "note", TZ: "America/Denver", HideLocation: true,
+		OccurredAt: "2030-05-02T15:00:00Z", Lat: &lat, Lng: &lng, PinSource: pinEXIF})
 	posts, _ := app.store.Posts(fixtureSlug, 0)
 	if tracks := legTracks(legs, posts); len(tracks) != 0 {
-		t.Errorf("one pin made a track: %v", tracks)
+		t.Fatalf("a post with its location hidden drew a track: %v", tracks)
+	}
+	mustCreate(t, app, &Post{LegID: legs[1].ID, Kind: "photo", TZ: "America/Denver",
+		OccurredAt: "2030-05-02T16:00:00Z", Lat: &lat, Lng: &lng, PinSource: pinEXIF})
+	posts, _ = app.store.Posts(fixtureSlug, 0)
+	tracks, planned := legTracks(legs, posts), plannedStarts(legs, posts)
+	track := tracks[legs[1].ID]
+	if len(tracks) != 1 || !planned[legs[1].ID] || len(track) != 2 || track[0][0] != prev.Lng || track[0][1] != prev.Lat {
+		t.Errorf("leg 2's track %v (planned: %v); want it to start at leg 1's terminus %v,%v", track, planned, prev.Lng, prev.Lat)
 	}
 }
 

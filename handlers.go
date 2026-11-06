@@ -76,6 +76,8 @@ func (a *App) funcs() template.FuncMap {
 		},
 		"local": func(utc, tz string) string { return localFmt(utc, tz, fmtLocal) },
 		"clock": func(utc, tz string) string { return localFmt(utc, tz, fmtClock) },
+		// wall is a stored time as a datetime-local input wants it, in its zone.
+		"wall": func(utc, tz string) string { return localFmt(utc, tz, fmtInput) },
 		"day": func(d string) string {
 			t, err := time.Parse("2006-01-02", d)
 			if err != nil {
@@ -130,6 +132,10 @@ func (a *App) routes() http.Handler {
 	// alternative. /plan.json is the same arithmetic as data.
 	mux.HandleFunc("GET /plan", a.planPage)
 	mux.HandleFunc("GET /plan.json", a.planJSON)
+	// The checklist: the active ride's steps and questions. Private text is
+	// read only for a signed-in request; /checklist.json never carries it.
+	mux.HandleFunc("GET /checklist", a.checklistPage)
+	mux.HandleFunc("GET /checklist.json", a.checklistJSON)
 
 	mux.HandleFunc("GET /admin/login", a.loginForm)
 	mux.HandleFunc("POST /admin/login", a.loginSubmit)
@@ -155,6 +161,10 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /admin/ride/active", a.requireAuth(a.rideActivate))
 	mux.Handle("GET /admin/rides.json", a.requireAuth(a.ridesJSON))
 	mux.Handle("POST /admin/plan", a.requireAuth(a.planSave))
+	// The checklist carriage, its signed-in census, and the check-off.
+	mux.Handle("POST /admin/checklist", a.requireAuth(a.checklistPush))
+	mux.Handle("GET /admin/checklist.json", a.requireAuth(a.checklistCensus))
+	mux.Handle("POST /admin/checklist/{kind}/{id}", a.requireAuth(a.checklistMark))
 
 	return logRequests(a.canonicalHost(a.visibility(mux)))
 }
@@ -276,6 +286,8 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		data["Canonical"] = a.siteURL + r.URL.Path
 	}
 	data["SitePrivate"] = a.sitePrivate
+	// Whether the masthead links to /checklist: only for a ride that has one.
+	_, data["HasChecklist"] = a.store.ChecklistSummary(a.activeSlug())
 	data["CreatureName"] = CreatureName
 	data["CreatureTag"] = CreatureTag
 	data["CreatureAlt"] = CreatureAlt
@@ -391,40 +403,75 @@ func followArrivals(legs []Leg) {
 // the plan is intent, this is evidence — so a leg with nothing actual yet has
 // no track at all and the map shows the plan alone.
 //
+// One exception, and it is marked as one (plannedStarts): a leg that has a
+// pinned post but whose origin nobody stamped still starts its track at that
+// origin. A photo from the road says the day began, and the day began where
+// the leg begins; without this the first photo of a morning was a lone pin
+// beside a plan that still looked untravelled. The origin is the checkpoint's
+// PUBLISHED point, the one the store hands out — a snapped cell at a private
+// place — and nothing is stamped arrived on the checkpoint itself.
+//
 // Two points is the floor, and not only because a one-point LineString is
-// invalid GeoJSON: one fix is a pin, not a track.
+// invalid GeoJSON: one fix is a pin, not a track. A leg with no pinned post
+// and no two arrivals still has none.
 //
 // It is keyed by leg ID and computed over the WHOLE ride, because a leg's
 // origin lives on the leg before it — the leg page, which holds one leg, would
 // otherwise lose the point its day started from.
 func legTracks(legs []Leg, posts []Post) map[int64][][]float64 {
+	lines, _ := driven(legs, posts)
+	return lines
+}
+
+// plannedStarts names the legs whose track begins at an origin that was never
+// stamped arrived: the first vertex of such a track is the plan, and every
+// vertex after it is evidence. The map draws that first stretch lighter and
+// the open data says so, so a track never claims more than is known.
+func plannedStarts(legs []Leg, posts []Post) map[int64]bool {
+	_, planned := driven(legs, posts)
+	return planned
+}
+
+func driven(legs []Leg, posts []Post) (lines map[int64][][]float64, planned map[int64]bool) {
 	byLeg := map[int64][]Post{}
 	for _, p := range posts {
 		if p.PinLat != nil {
 			byLeg[p.LegID] = append(byLeg[p.LegID], p)
 		}
 	}
-	out := map[int64][][]float64{}
+	lines, planned = map[int64][][]float64{}, map[int64]bool{}
 	for i := range legs {
 		var pts [][]float64
-		if c := legOrigin(legs, i); c != nil && c.ArrivedAt != "" {
-			pts = append(pts, []float64{c.Lng, c.Lat})
-		}
 		pinned := byLeg[legs[i].ID]
 		sort.SliceStable(pinned, func(x, y int) bool {
 			return pinned[x].OccurredAt < pinned[y].OccurredAt
 		})
+		origin, term := legOrigin(legs, i), legTerminus(legs[i])
+		plannedStart := false
+		switch {
+		case origin == nil:
+		case origin.ArrivedAt != "":
+			pts = append(pts, []float64{origin.Lng, origin.Lat})
+		case len(pinned) > 0 && (term == nil || origin.ID != term.ID):
+			// Unstamped, but the leg has a photo on it. A leg whose only
+			// checkpoint is its own end has no origin to start from.
+			pts = append(pts, []float64{origin.Lng, origin.Lat})
+			plannedStart = true
+		}
 		for _, p := range pinned {
 			pts = append(pts, []float64{*p.PinLng, *p.PinLat})
 		}
-		if c := legTerminus(legs[i]); c != nil && c.ArrivedAt != "" {
-			pts = append(pts, []float64{c.Lng, c.Lat})
+		if term != nil && term.ArrivedAt != "" {
+			pts = append(pts, []float64{term.Lng, term.Lat})
 		}
 		if len(pts) >= 2 {
-			out[legs[i].ID] = pts
+			lines[legs[i].ID] = pts
+			if plannedStart {
+				planned[legs[i].ID] = true
+			}
 		}
 	}
-	return out
+	return lines, planned
 }
 
 // dayInfo is the hero badge. "Today" is judged in the zone each leg starts
@@ -601,6 +648,9 @@ type trackJS struct {
 	Name   string      `json:"name"`
 	Color  string      `json:"color"`
 	Line   [][]float64 `json:"line"`
+	// PlannedStart: the first vertex is the leg's planned origin, not a place
+	// the ride was stamped at. The map draws that first stretch lighter.
+	PlannedStart bool `json:"planned_start,omitempty"`
 }
 
 type mapJS struct {
@@ -613,15 +663,15 @@ type mapJS struct {
 
 // buildMap takes tracks rather than deriving them: they are computed over the
 // whole ride (a leg's origin sits on the leg before it) while this is called
-// with one leg on a leg page.
-func buildMap(legs []Leg, posts []Post, tracks map[int64][][]float64) mapJS {
+// with one leg on a leg page. planned is plannedStarts over the same ride.
+func buildMap(legs []Leg, posts []Post, tracks map[int64][][]float64, planned map[int64]bool) mapJS {
 	m := mapJS{Legs: []legJS{}, Tracks: []trackJS{}, Checkpoints: []cpJS{}, Sights: []sightJS{}, Posts: []postJS{}}
 	for _, l := range legs {
 		m.Legs = append(m.Legs, legJS{ID: l.ID, Ord: l.Ord, Slug: l.Slug, Name: l.Name, Date: l.Date,
 			Color: legColor(l.Ord), Line: l.Line})
 		if pts := tracks[l.ID]; len(pts) > 0 {
 			m.Tracks = append(m.Tracks, trackJS{LegOrd: l.Ord, Slug: l.Slug, Name: l.Name,
-				Color: legColor(l.Ord), Line: pts})
+				Color: legColor(l.Ord), Line: pts, PlannedStart: planned[l.ID]})
 		}
 		for _, c := range l.Checkpoints {
 			planned := ""
@@ -679,9 +729,15 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	if dl := defaultLeg(rv.Legs, di); dl != nil {
 		pageLeg = dl.Slug
 	}
-	a.render(w, r, "index.html", map[string]any{
+	data := map[string]any{
 		"Title": "", "Ride": rv.Ride, "Legs": rv.Legs, "Posts": posts,
-		"Day": di, "Map": buildMap(rv.Legs, posts, legTracks(rv.Legs, posts)), "PageLeg": pageLeg})
+		"Day": di, "PageLeg": pageLeg,
+		"Map": buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts))}
+	// The checklist in one line, n of m done. Counts only.
+	if sum, ok := a.store.ChecklistSummary(rv.Ride.Slug); ok {
+		data["Checklist"] = sum
+	}
+	a.render(w, r, "index.html", data)
 }
 
 func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
@@ -718,7 +774,8 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 		"Posts": posts, "Day": di, "Total": len(rv.Legs),
 		// The tracks are computed over the whole ride so this leg's own track
 		// still begins where the day before it ended.
-		"Map": buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts)), "PageLeg": leg.Slug})
+		"Map":     buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)),
+		"PageLeg": leg.Slug})
 }
 
 // postCard is what the post_card template is called with: the post, plus
@@ -853,16 +910,22 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 	// The actual track, one LineString per leg that has one. It is a separate
 	// feature rather than a replacement for the planned leg: both are true, and
 	// the difference between them is the interesting part.
-	tracks := legTracks(rv.Legs, posts)
+	tracks, planned := driven(rv.Legs, posts)
 	for _, l := range rv.Legs {
 		pts, ok := tracks[l.ID]
 		if !ok {
 			continue
 		}
+		props := map[string]any{"kind": "track", "leg": l.Ord, "slug": l.Slug, "name": l.Name,
+			"date": l.Date, "points": len(pts)}
+		// Say which vertices are evidence: with planned_start the first one is
+		// the leg's planned origin, and the evidence begins at the second.
+		if planned[l.ID] {
+			props["planned_start"] = true
+		}
 		feats = append(feats, feature{Type: "Feature",
 			Geometry: map[string]any{"type": "LineString", "coordinates": pts},
-			Props: map[string]any{"kind": "track", "leg": l.Ord, "slug": l.Slug, "name": l.Name,
-				"date": l.Date, "points": len(pts)}})
+			Props:    props})
 	}
 	for _, l := range rv.Legs {
 		for _, c := range l.Checkpoints {
@@ -918,7 +981,9 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 				"EXIF GPS, the phone's browser fix (accuracy_m), or the nearest checkpoint (near). " +
 				"kind=leg is the plan, and its ends follow any checkpoint stamped made_it; kind=track " +
 				"is what the ride is known to have actually driven — arrived origin, pinned posts in " +
-				"time order, arrived terminus — and exists only for legs that have some of it.",
+				"time order, arrived terminus — and exists only for legs that have some of it. A track " +
+				"with planned_start begins at the leg's planned origin, which was not stamped: its " +
+				"first vertex is the plan and the rest is evidence.",
 		},
 		"features": feats,
 	}
@@ -989,7 +1054,9 @@ func (a *App) postForm(w http.ResponseWriter, r *http.Request) {
 		log.Printf("WARN private overlay: %v", err)
 	}
 	data := map[string]any{
-		"Title": "Post", "Ride": rv.Ride, "Legs": rv.Legs, "Kinds": postKinds, "Private": pd.addressByOrd(),
+		"Title": "Post", "Ride": rv.Ride, "Legs": rv.Legs, "Kinds": postKinds,
+		// This ride's addresses and no other's: an ord means nothing without its ride.
+		"Private":      pd.forRide(rv.Ride.Slug, a.rideSlug).addressByOrd(),
 		"DefaultLegID": dlID, "DefaultLeg": dl, "DefaultTZ": tz, "Zones": zones(rv.Legs, tz),
 		"Day": di, "Error": r.URL.Query().Get("error"),
 		// What the form needs to say, before posting, what will be published:
@@ -1689,15 +1756,16 @@ func (a *App) lodgingForm(w http.ResponseWriter, r *http.Request) {
 	}
 	a.render(w, r, "lodging.html", map[string]any{
 		"Title": "Lodging", "Ride": rv.Ride, "Legs": rv.Legs,
-		"Private": pd.byOrd(),
+		"Private": pd.forRide(rv.Ride.Slug, a.rideSlug).byOrd(),
 		"Error":   r.URL.Query().Get("error"),
 		"Saved":   r.URL.Query().Get("saved") != "",
 	})
 }
 
-// lodgingSave rewrites the overlay from the form. The form carries every
-// checkpoint, so the document it produces is complete: an entry left blank is
-// an entry deleted, which is how a stale address gets removed.
+// lodgingSave rewrites the ACTIVE ride's block of the overlay from the form,
+// and no other ride's. The form carries every checkpoint of that ride, so the
+// block it produces is complete: an entry left blank is an entry deleted,
+// which is how a stale address gets removed.
 func (a *App) lodgingSave(w http.ResponseWriter, r *http.Request) {
 	rv, err := a.loadRide()
 	if err != nil {
@@ -1712,7 +1780,15 @@ func (a *App) lodgingSave(w http.ResponseWriter, r *http.Request) {
 		fail("Could not read the form.")
 		return
 	}
-	pd := privateData{Checkpoints: map[string]privateCheckpoint{}}
+	// The other rides' blocks ride along untouched, so the file has to be read
+	// first — and a file that will not read is not one to overwrite.
+	pd, err := loadPrivate(a.dataDir)
+	if err != nil {
+		log.Printf("WARN private overlay: %v", err)
+		fail("Could not read the overlay that is on the volume, so nothing was saved.")
+		return
+	}
+	block := map[string]privateCheckpoint{}
 	for _, l := range rv.Legs {
 		for _, c := range l.Checkpoints {
 			key := strconv.Itoa(c.Ord)
@@ -1723,9 +1799,10 @@ func (a *App) lodgingSave(w http.ResponseWriter, r *http.Request) {
 			if e.Address == "" && e.Notes == "" {
 				continue // an empty entry is an absent entry
 			}
-			pd.Checkpoints[key] = e
+			block[key] = e
 		}
 	}
+	pd.setRide(rv.Ride.Slug, a.rideSlug, block)
 	if err := savePrivate(a.dataDir, pd); err != nil {
 		fail("Could not save: " + err.Error())
 		return
@@ -1733,12 +1810,12 @@ func (a *App) lodgingSave(w http.ResponseWriter, r *http.Request) {
 	// The count, never the content — this log ships to flyctl logs, and the
 	// whole point of the overlay is that the addresses stay out of surfaces
 	// like it.
-	log.Printf("lodging: overlay saved, %d checkpoint(s) carry detail", len(pd.Checkpoints))
+	log.Printf("lodging: overlay saved for the active ride, %d checkpoint(s) carry detail", len(block))
 	http.Redirect(w, r, "/admin/lodging?saved=1", http.StatusSeeOther)
 }
 
-// privatePush is the data carriage's landing point: the whole overlay as one
-// JSON document, replacing what is on the volume.
+// privatePush is the data carriage's landing point: the overlay as one JSON
+// document.
 //
 // It exists because the overlay is the one piece of volume data that is NOT
 // authored on prod. Posts, photos and arrival stamps are written from the road
@@ -1746,6 +1823,18 @@ func (a *App) lodgingSave(w http.ResponseWriter, r *http.Request) {
 // The overlay is operator-authored config with a canonical copy elsewhere (a
 // repository secret), so it is the one thing that can safely travel upward,
 // and the one thing that has to, because a fresh volume comes up without it.
+//
+// The overlay is keyed by ride, and what a push replaces follows from what it
+// sends:
+//
+//	{"checkpoints": {…}}                 the FIRST ride's block (RIDE_SLUG),
+//	                                     and only that: the shape the carriage
+//	                                     has always sent, meaning what it
+//	                                     always meant
+//	{"checkpoints": {…}}  with ?ride=x   ride x's block, and only that
+//	{"rides": {…}, "checkpoints": {…}}   the whole document
+//
+// So one ride's push never removes another ride's entries.
 func (a *App) privatePush(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxPrivateBytes)
 	raw, err := io.ReadAll(r.Body)
@@ -1753,28 +1842,93 @@ func (a *App) privatePush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read the body (limit "+strconv.Itoa(maxPrivateBytes>>10)+" KB)", 400)
 		return
 	}
-	var pd privateData
-	if err := json.Unmarshal(raw, &pd); err != nil {
+	var in privateData
+	if err := json.Unmarshal(raw, &in); err != nil {
 		http.Error(w, "not valid JSON: "+err.Error(), 400)
 		return
 	}
 	// Keys are checkpoint ords. byOrd drops anything that is not a number, so
 	// a typo'd key would be accepted here and then silently do nothing —
 	// refuse it instead, while the pusher is still watching.
-	for k := range pd.Checkpoints {
-		if _, err := strconv.Atoi(k); err != nil {
-			http.Error(w, "checkpoint key "+strconv.Quote(k)+" is not a checkpoint ord", 400)
+	checkOrds := func(cps map[string]privateCheckpoint) bool {
+		for k := range cps {
+			if _, err := strconv.Atoi(k); err != nil {
+				http.Error(w, "checkpoint key "+strconv.Quote(k)+" is not a checkpoint ord", 400)
+				return false
+			}
+		}
+		return true
+	}
+	if !checkOrds(in.Checkpoints) {
+		return
+	}
+	for slug, block := range in.Rides {
+		if !validSlug(slug) {
+			http.Error(w, "a key under rides is not a ride slug", 400)
+			return
+		}
+		if slug == a.rideSlug && len(in.Checkpoints) > 0 {
+			http.Error(w, "the first ride has two blocks: the top-level checkpoints and one under rides; send one", 400)
+			return
+		}
+		if !checkOrds(block.Checkpoints) {
 			return
 		}
 	}
-	if err := savePrivate(a.dataDir, pd); err != nil {
+	ride := strings.TrimSpace(r.URL.Query().Get("ride"))
+	var out privateData
+	switch {
+	case ride != "":
+		if in.Rides != nil {
+			http.Error(w, "?ride= takes one ride's block, {\"checkpoints\": {…}}, not a document with rides", 400)
+			return
+		}
+		if !validSlug(ride) {
+			http.Error(w, "ride is not a ride slug", 400)
+			return
+		}
+		if _, err := a.store.Ride(ride); err != nil {
+			http.Error(w, "no ride "+strconv.Quote(ride)+" in the database", http.StatusNotFound)
+			return
+		}
+		fallthrough
+	case in.Rides == nil:
+		// One ride's block. Everything else on the volume stays as it is, so
+		// the file has to read cleanly first.
+		if ride == "" {
+			ride = a.rideSlug
+		}
+		out, err = loadPrivate(a.dataDir)
+		if err != nil {
+			log.Printf("private overlay: push refused, the overlay on the volume does not parse: %v", err)
+			http.Error(w, "the overlay on the volume does not parse; push a whole document (with rides) to replace it", http.StatusConflict)
+			return
+		}
+		out.setRide(ride, a.rideSlug, in.Checkpoints)
+	default:
+		out = privateData{}
+		for slug, block := range in.Rides {
+			out.setRide(slug, a.rideSlug, block.Checkpoints)
+		}
+		if len(in.Checkpoints) > 0 {
+			out.setRide(a.rideSlug, a.rideSlug, in.Checkpoints)
+		}
+	}
+	if err := savePrivate(a.dataDir, out); err != nil {
 		log.Printf("private overlay: push failed: %v", err)
 		http.Error(w, "could not write the overlay", 500)
 		return
 	}
-	log.Printf("private overlay: pushed, %d checkpoint(s) carry detail", len(pd.Checkpoints))
+	// checkpoints is the count the carriage compares against what it sent: the
+	// entries in the block it pushed, or in the whole document when it pushed
+	// that.
+	sent := len(in.Checkpoints)
+	for _, block := range in.Rides {
+		sent += len(block.Checkpoints)
+	}
+	log.Printf("private overlay: pushed, %d checkpoint(s) carry detail; the overlay now holds %d", sent, out.entries())
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, "{\"status\":\"ok\",\"checkpoints\":%d}\n", len(pd.Checkpoints))
+	fmt.Fprintf(w, "{\"status\":\"ok\",\"checkpoints\":%d,\"total\":%d}\n", sent, out.entries())
 }
 
 // cpID is a checkpoint's id, or 0 for "no checkpoint" — the store's own
@@ -1826,7 +1980,7 @@ func (a *App) postEditForm(w http.ResponseWriter, r *http.Request) {
 	}
 	data := map[string]any{
 		"Title": "Edit post", "Ride": rv.Ride, "Legs": rv.Legs, "Kinds": postKinds,
-		"Private": pd.addressByOrd(), "Post": post,
+		"Private": pd.forRide(rv.Ride.Slug, a.rideSlug).addressByOrd(), "Post": post,
 		// The picker shows the stored instant read back in the post's OWN
 		// zone, which is the wall clock the driver saw when they posted.
 		"When": localFmt(post.OccurredAt, post.TZ, fmtInput),

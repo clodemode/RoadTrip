@@ -11,14 +11,21 @@ import (
 //
 // A checkpoint's street address (a home, a rented cabin) never enters the
 // repository or the seed. It lives in $DATA_DIR/private.json on the volume,
-// keyed by checkpoint ord within the ride:
+// keyed by RIDE and then by checkpoint ord within that ride:
 //
-//	{"checkpoints": {"3": {"address": "…", "notes": "…"}}}
+//	{"checkpoints": {"3": {"address": "…", "notes": "…"}},
+//	 "rides": {"<slug>": {"checkpoints": {"2": {"address": "…"}}}}}
+//
+// The top-level "checkpoints" block is the shape the file had when the site
+// held one ride, and it still means exactly that: it belongs to the FIRST
+// ride (RIDE_SLUG) and to no other. Every later ride has its own block under
+// "rides". An ord says nothing without its ride, so nothing here hands out an
+// entry without being told which ride is asking (forRide).
 //
 // It is read on each admin request (the file is tiny) and rendered ONLY on
-// admin pages — the post form's checkpoint select. Never on /, /legs,
-// /photos or /route.geojson. A missing file is the normal state for anyone
-// who clones and runs this, not an error.
+// admin pages — the post form's checkpoint select and the lodging screen.
+// Never on /, /legs, /photos or /route.geojson. A missing file is the normal
+// state for anyone who clones and runs this, not an error.
 
 const privateFile = "private.json"
 
@@ -27,8 +34,16 @@ type privateCheckpoint struct {
 	Notes   string `json:"notes"`
 }
 
-type privateData struct {
+// privateRide is one ride's entries, keyed by checkpoint ord.
+type privateRide struct {
 	Checkpoints map[string]privateCheckpoint `json:"checkpoints"`
+}
+
+type privateData struct {
+	// Checkpoints is the first ride's block (see above).
+	Checkpoints map[string]privateCheckpoint `json:"checkpoints"`
+	// Rides holds every other ride's block, by slug.
+	Rides map[string]privateRide `json:"rides,omitempty"`
 }
 
 // loadPrivate returns the overlay, or an empty one when the file is absent.
@@ -42,15 +57,56 @@ func loadPrivate(dataDir string) (privateData, error) {
 		return pd, err
 	}
 	if err := json.Unmarshal(raw, &pd); err != nil {
-		return pd, err
+		return privateData{}, err
 	}
 	return pd, nil
 }
 
-// addressByOrd flattens the overlay to ord → address for the templates.
-func (pd privateData) addressByOrd() map[int]string {
+// forRide returns the entries of ONE ride, and it is the only way to read an
+// entry. firstRide is RIDE_SLUG: the ride the top-level block belongs to. A
+// ride with no block of its own gets nothing — never another ride's.
+func (pd privateData) forRide(slug, firstRide string) privateRide {
+	if r, ok := pd.Rides[slug]; ok {
+		return r
+	}
+	if slug == firstRide {
+		return privateRide{Checkpoints: pd.Checkpoints}
+	}
+	return privateRide{}
+}
+
+// setRide replaces one ride's block and touches no other. The first ride's
+// block stays where it has always been, at the top level, so a site with one
+// ride keeps writing the file it always wrote.
+func (pd *privateData) setRide(slug, firstRide string, cps map[string]privateCheckpoint) {
+	if slug == firstRide {
+		pd.Checkpoints = cps
+		delete(pd.Rides, slug)
+		return
+	}
+	if len(cps) == 0 {
+		delete(pd.Rides, slug)
+		return
+	}
+	if pd.Rides == nil {
+		pd.Rides = map[string]privateRide{}
+	}
+	pd.Rides[slug] = privateRide{Checkpoints: cps}
+}
+
+// entries counts every entry in the overlay, across every ride.
+func (pd privateData) entries() int {
+	n := len(pd.Checkpoints)
+	for _, r := range pd.Rides {
+		n += len(r.Checkpoints)
+	}
+	return n
+}
+
+// addressByOrd flattens one ride's block to ord → address for the templates.
+func (pr privateRide) addressByOrd() map[int]string {
 	out := map[int]string{}
-	for k, v := range pd.Checkpoints {
+	for k, v := range pr.Checkpoints {
 		if ord, err := strconv.Atoi(k); err == nil && v.Address != "" {
 			out[ord] = v.Address
 		}
@@ -58,13 +114,13 @@ func (pd privateData) addressByOrd() map[int]string {
 	return out
 }
 
-// byOrd flattens the overlay to ord → the whole entry, for the one screen that
-// EDITS it. addressByOrd stays what the post form uses: it deliberately
-// exposes the address alone, because that is all that screen has business
-// rendering.
-func (pd privateData) byOrd() map[int]privateCheckpoint {
+// byOrd flattens one ride's block to ord → the whole entry, for the one
+// screen that EDITS it. addressByOrd stays what the post form uses: it
+// deliberately exposes the address alone, because that is all that screen has
+// business rendering.
+func (pr privateRide) byOrd() map[int]privateCheckpoint {
 	out := map[int]privateCheckpoint{}
-	for k, v := range pd.Checkpoints {
+	for k, v := range pr.Checkpoints {
 		if ord, err := strconv.Atoi(k); err == nil {
 			out[ord] = v
 		}

@@ -1,0 +1,38 @@
+{
+  "synthetic": true,
+  "title": "Borrowing a canoe for a weekend",
+  "intro": "An invented checklist for the fixture trip: every place, person and number in it is made up.",
+  "disclaimer": "One paddler's notes, not advice. Ask the boathouse.",
+  "stages": [
+    {
+      "id": "pickup",
+      "title": "Before pickup",
+      "tz": "America/Chicago",
+      "when": "The evening before, at Alder",
+      "steps": [
+        {"id": "call-ahead", "title": "Call the boathouse", "detail": "Confirm the canoe is free and ask what time the gate opens.", "private": "PRIVATE-FIXTURE the keeper is Juniper Quillfeather"},
+        {"id": "roof-straps", "title": "Pack two roof straps", "detail": "Cam straps, not ratchets.", "private": ""},
+        {"id": "deposit", "title": "Bring the deposit", "detail": "Cash, in an envelope.", "private": "PRIVATE-FIXTURE the deposit is 41 acorns"}
+      ]
+    },
+    {
+      "id": "dock",
+      "title": "At the dock",
+      "tz": "America/Denver",
+      "when": "Day 2, mid-morning",
+      "steps": [
+        {"id": "inspect", "title": "Look the hull over", "detail": "Photograph any scratch before it goes on the roof.", "private": "PRIVATE-FIXTURE hull tag CANOE-TAG-0042"},
+        {"id": "sign-out", "title": "Sign the book", "detail": "", "private": ""}
+      ]
+    }
+  ],
+  "questions": [
+    {"id": "q-paddles", "group": "Gear", "ask": "Do the paddles come with it?", "why": "Otherwise two have to be found on the way.", "private": "PRIVATE-FIXTURE ask for Juniper by name"},
+    {"id": "q-late", "group": "Gear", "ask": "Is there a fee for a late return?", "why": "", "private": ""},
+    {"id": "q-roof", "group": "The car", "ask": "Will it fit a short roof?", "why": "The bars are close together.", "private": ""}
+  ],
+  "sources": [
+    {"label": "An invented boathouse handbook", "url": "https://example.org/boathouse/handbook"},
+    {"label": "Roof strap basics", "url": "https://example.com/straps"}
+  ]
+}

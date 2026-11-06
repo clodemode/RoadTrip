@@ -35,6 +35,7 @@
       <span class="mast-links">
         <a href="/">Ride</a>
         <a href="/plan">Plan</a>
+        {{if .HasChecklist}}<a href="/checklist">Checklist</a>{{end}}
         <a href="/photos">Photos</a>
         <a href="/route.geojson">GeoJSON</a>
         {{if .Authed}}

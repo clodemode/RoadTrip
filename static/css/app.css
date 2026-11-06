@@ -324,3 +324,62 @@ fieldset.pin input:disabled + *, fieldset.pin label.check input:disabled { opaci
   font-variant-numeric:tabular-nums; white-space:nowrap; }
 .pill-long { background:#b45309; }
 .plan-foot { margin:.5rem 0 0; }
+
+/* --- checklist (/checklist) --------------------------------------------------
+   Stages of steps, then questions, then sources. Phone first: one column,
+   every control a thumb has to hit is at least 44px tall, and long words and
+   web addresses wrap instead of pushing the page sideways. The edit controls
+   open in place, under the step they belong to. */
+.cl-summary { margin:.1rem 0 .8rem; font-size:.95rem; }
+.cl-summary a { display:inline-block; padding:.65rem 0; font-weight:700; }
+.cl-head h1 { overflow-wrap:anywhere; }
+.cl-head .crumb { margin:0; }
+.cl-head .crumb a { display:inline-block; padding:.7rem 0; }
+.cl-intro { margin:.3rem 0 .6rem; }
+.cl-disclaimer { margin:.6rem 0; padding:.6rem .8rem; border:1px solid var(--line);
+  border-left:5px solid #b45309; border-radius:8px; background:var(--card); font-size:.92rem; }
+.cl-disclaimer.cl-foot { margin-top:1.6rem; }
+.cl-progress { margin:.5rem 0 0; font-size:1.02rem; }
+.cl-stage-head { display:flex; align-items:baseline; justify-content:space-between; gap:.8rem; flex-wrap:wrap; }
+.cl-stage-head h2 { margin-bottom:.2rem; min-width:0; overflow-wrap:anywhere; }
+.cl-count { font-size:.85rem; font-weight:700; color:var(--muted); white-space:nowrap; }
+.cl-count.all { color:var(--ok); }
+.cl-when { margin:0 0 .5rem; }
+.cl-group { margin:1rem 0 .4rem; font-size:.95rem; color:var(--muted); }
+.cl-list { list-style:none; margin:0; padding:0; border:1px solid var(--line); border-radius:10px;
+  background:var(--card); overflow:hidden; }
+.cl-item { display:grid; grid-template-columns:4.6rem minmax(0,1fr); gap:.7rem; align-items:start;
+  padding:.7rem .8rem; border-bottom:1px solid var(--line); border-left:5px solid var(--line); }
+.cl-item:last-child { border-bottom:0; }
+.cl-item.done { border-left-color:var(--ok); }
+.cl-state { display:inline-block; margin-top:.1rem; padding:.15rem .3rem; border:1.5px solid var(--line);
+  border-radius:6px; font-size:.72rem; font-weight:700; text-align:center; color:var(--muted);
+  letter-spacing:.02em; }
+.cl-item.done .cl-state { border-color:var(--ok); background:var(--ok); color:#fff; }
+.cl-main { min-width:0; overflow-wrap:anywhere; }
+.cl-main h3 { margin:0 0 .2rem; font-size:1rem; line-height:1.35; }
+.cl-detail { margin:0 0 .3rem; font-size:.92rem; white-space:pre-line; }
+.cl-stamp { margin:.2rem 0; font-size:.85rem; font-weight:600; color:var(--ok); }
+.cl-outcome { margin:.3rem 0; padding:.45rem .6rem; border-radius:8px; white-space:pre-line;
+  background:color-mix(in srgb, var(--ok) 9%, transparent); font-size:.94rem; }
+.cl-outcome b, .cl-private b { display:block; font-size:.74rem; text-transform:uppercase; letter-spacing:.05em; }
+.cl-outcome b { color:var(--ok); }
+/* Signed-in only: the server does not send this text to anyone else. */
+.cl-private { margin:.3rem 0; padding:.45rem .6rem; border:1px dashed #b45309; border-radius:8px;
+  white-space:pre-line; font-size:.92rem; }
+.cl-private b { color:#b45309; }
+.cl-edit { margin-top:.4rem; }
+.cl-edit summary { display:inline-flex; align-items:center; min-height:44px; padding:0 .9rem;
+  border:1px solid var(--line); border-radius:8px; color:var(--accent); font-weight:600;
+  font-size:.92rem; cursor:pointer; }
+.cl-edit[open] summary { margin-bottom:.2rem; }
+.cl-edit input, .cl-edit textarea { min-height:44px; }
+.cl-go { min-height:44px; min-width:6rem; }
+.cl-undo { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin-top:.6rem; }
+.cl-sources ul { margin:0; padding-left:1.1rem; }
+.cl-sources li { overflow-wrap:anywhere; }
+.cl-sources a { display:inline-block; padding:.7rem 0; }
+@media (max-width:480px) {
+  .cl-item { grid-template-columns:minmax(0,1fr); gap:.3rem; }
+  .cl-state { justify-self:start; }
+}

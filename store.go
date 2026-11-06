@@ -232,6 +232,40 @@ CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS checklists (
+  ride_slug  TEXT PRIMARY KEY REFERENCES rides(slug) ON DELETE CASCADE,
+  title      TEXT NOT NULL DEFAULT '',
+  intro      TEXT NOT NULL DEFAULT '',
+  disclaimer TEXT NOT NULL DEFAULT '',
+  sources    TEXT NOT NULL DEFAULT '[]'
+);
+CREATE TABLE IF NOT EXISTS checklist_stages (
+  id        INTEGER PRIMARY KEY,
+  ride_slug TEXT NOT NULL REFERENCES rides(slug) ON DELETE CASCADE,
+  stage_id  TEXT NOT NULL,
+  ord       INTEGER NOT NULL,
+  title     TEXT NOT NULL DEFAULT '',
+  tz        TEXT NOT NULL,
+  when_text TEXT NOT NULL DEFAULT '',
+  UNIQUE (ride_slug, stage_id)
+);
+CREATE TABLE IF NOT EXISTS checklist_items (
+  id           INTEGER PRIMARY KEY,
+  ride_slug    TEXT NOT NULL REFERENCES rides(slug) ON DELETE CASCADE,
+  kind         TEXT NOT NULL,
+  item_id      TEXT NOT NULL,
+  stage_id     TEXT NOT NULL DEFAULT '',
+  grp          TEXT NOT NULL DEFAULT '',
+  ord          INTEGER NOT NULL,
+  title        TEXT NOT NULL DEFAULT '',
+  detail       TEXT NOT NULL DEFAULT '',
+  private      TEXT NOT NULL DEFAULT '',
+  done_at      TEXT NOT NULL DEFAULT '',
+  done_tz      TEXT NOT NULL DEFAULT '',
+  outcome      TEXT NOT NULL DEFAULT '',
+  private_note TEXT NOT NULL DEFAULT '',
+  UNIQUE (ride_slug, kind, item_id)
+);
 `
 
 type Store struct{ db *sql.DB }

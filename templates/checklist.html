@@ -1,0 +1,136 @@
+{{template "head" .}}
+<section class="page-head cl-head">
+  <p class="crumb"><a href="/">&larr; {{.Ride.Name}}</a></p>
+  {{if .CL}}
+  <h1>{{.CL.Title}}</h1>
+  {{with .CL.Intro}}<p class="cl-intro">{{.}}</p>{{end}}
+  <p class="cl-disclaimer" role="note">{{.CL.Disclaimer}}</p>
+  <p class="cl-progress">
+    <b>{{.CL.Summary.Done}} of {{.CL.Summary.Total}} done</b>
+    {{if .CL.Summary.Questions}}<span class="muted">&middot; {{.CL.Summary.Answered}} of {{.CL.Summary.Questions}} questions answered</span>{{end}}
+  </p>
+  {{else}}
+  <h1>Checklist</h1>
+  <p class="muted">This trip has no checklist.</p>
+  {{end}}
+  {{if .Error}}<p class="error" role="alert">Not saved: {{.Error}}.</p>{{end}}
+</section>
+
+{{if .CL}}
+{{range $stage := .CL.Stages}}
+<section class="cl-stage" id="stage-{{$stage.ID}}">
+  <div class="cl-stage-head">
+    <h2>{{$stage.Title}}</h2>
+    <span class="cl-count{{if and $stage.Total (eq $stage.Done $stage.Total)}} all{{end}}">{{$stage.Done}} of {{$stage.Total}} done</span>
+  </div>
+  {{with $stage.When}}<p class="cl-when muted small">{{.}}</p>{{end}}
+  <ol class="cl-list">
+    {{range $stage.Steps}}
+    <li class="cl-item{{if .Done}} done{{end}}" id="step-{{.ID}}">
+      <span class="cl-state">{{if .Done}}Done{{else}}To do{{end}}</span>
+      <div class="cl-main">
+        <h3>{{.Title}}</h3>
+        {{with .Detail}}<p class="cl-detail">{{.}}</p>{{end}}
+        {{if .Done}}<p class="cl-stamp">Done <time datetime="{{.DoneAt}}">{{local .DoneAt .DoneTZ}}</time></p>{{end}}
+        {{if and .Done .Outcome}}<p class="cl-outcome"><b>What happened</b> {{.Outcome}}</p>{{end}}
+        {{with .Private}}<p class="cl-private"><b>Private note</b> {{.}}</p>{{end}}
+        {{with .PrivateNote}}<p class="cl-private"><b>Private note, after</b> {{.}}</p>{{end}}
+        {{if $.Authed}}
+        <details class="cl-edit">
+          <summary>{{if .Done}}Edit{{else}}Mark done{{end}}</summary>
+          <form method="post" action="/admin/checklist/step/{{.ID}}" class="stack">
+            <label>When
+              <input type="datetime-local" name="at" value="{{if .Done}}{{wall .DoneAt .DoneTZ}}{{end}}">
+              <span class="small">Leave empty for now. The time is read in {{.FormTZ}}.</span>
+            </label>
+            <label>What happened
+              <textarea name="outcome" rows="3" maxlength="2000">{{.Outcome}}</textarea>
+              <span class="small">Public. What actually happened, for the next person.</span>
+            </label>
+            <label>Private note
+              <textarea name="private_note" rows="2" maxlength="2000">{{.PrivateNote}}</textarea>
+              <span class="small">Only you see this.</span>
+            </label>
+            <button type="submit" class="cl-go">{{if .Done}}Save{{else}}Done{{end}}</button>
+          </form>
+          {{if .Done}}
+          <form method="post" action="/admin/checklist/step/{{.ID}}" class="cl-undo">
+            <input type="hidden" name="clear" value="1">
+            <button type="submit" class="ghost cl-go">Undo</button>
+            <span class="muted small">Clears the time. The notes are kept.</span>
+          </form>
+          {{end}}
+        </details>
+        {{end}}
+      </div>
+    </li>
+    {{end}}
+  </ol>
+</section>
+{{end}}
+
+{{if .CL.Groups}}
+<section class="cl-questions">
+  <div class="cl-stage-head">
+    <h2>Questions</h2>
+    <span class="cl-count{{if eq .CL.Summary.Answered .CL.Summary.Questions}} all{{end}}">{{.CL.Summary.Answered}} of {{.CL.Summary.Questions}} answered</span>
+  </div>
+  {{range .CL.Groups}}
+  {{with .Name}}<h3 class="cl-group">{{.}}</h3>{{end}}
+  <ol class="cl-list">
+    {{range .Questions}}
+    <li class="cl-item{{if .Done}} done{{end}}" id="question-{{.ID}}">
+      <span class="cl-state">{{if .Done}}Answered{{else}}Open{{end}}</span>
+      <div class="cl-main">
+        <h3>{{.Title}}</h3>
+        {{with .Detail}}<p class="cl-detail">{{.}}</p>{{end}}
+        {{if .Done}}<p class="cl-stamp">Answered <time datetime="{{.DoneAt}}">{{local .DoneAt .DoneTZ}}</time></p>{{end}}
+        {{if and .Done .Outcome}}<p class="cl-outcome"><b>Answer</b> {{.Outcome}}</p>{{end}}
+        {{with .Private}}<p class="cl-private"><b>Private note</b> {{.}}</p>{{end}}
+        {{with .PrivateNote}}<p class="cl-private"><b>Private note, after</b> {{.}}</p>{{end}}
+        {{if $.Authed}}
+        <details class="cl-edit">
+          <summary>{{if .Done}}Edit{{else}}Answer{{end}}</summary>
+          <form method="post" action="/admin/checklist/question/{{.ID}}" class="stack">
+            <label>Answer
+              <textarea name="outcome" rows="3" maxlength="2000">{{.Outcome}}</textarea>
+              <span class="small">Public. What you were told, for the next person.</span>
+            </label>
+            <label>Private note
+              <textarea name="private_note" rows="2" maxlength="2000">{{.PrivateNote}}</textarea>
+              <span class="small">Only you see this.</span>
+            </label>
+            <label>When
+              <input type="datetime-local" name="at" value="{{if .Done}}{{wall .DoneAt .DoneTZ}}{{end}}">
+              <span class="small">Leave empty for now. The time is read in {{if .Done}}{{.DoneTZ}}{{else}}{{$.QuestionTZ}}{{end}}.</span>
+            </label>
+            <button type="submit" class="cl-go">{{if .Done}}Save{{else}}Answered{{end}}</button>
+          </form>
+          {{if .Done}}
+          <form method="post" action="/admin/checklist/question/{{.ID}}" class="cl-undo">
+            <input type="hidden" name="clear" value="1">
+            <button type="submit" class="ghost cl-go">Undo</button>
+            <span class="muted small">Clears the time. The notes are kept.</span>
+          </form>
+          {{end}}
+        </details>
+        {{end}}
+      </div>
+    </li>
+    {{end}}
+  </ol>
+  {{end}}
+</section>
+{{end}}
+
+{{if .CL.Sources}}
+<section class="cl-sources">
+  <h2>Sources</h2>
+  <ul>
+    {{range .CL.Sources}}<li><a href="{{.URL}}" rel="noopener">{{.Label}}</a></li>{{end}}
+  </ul>
+</section>
+{{end}}
+<p class="cl-disclaimer cl-foot" role="note">{{.CL.Disclaimer}}</p>
+{{end}}
+{{template "foot" .}}
