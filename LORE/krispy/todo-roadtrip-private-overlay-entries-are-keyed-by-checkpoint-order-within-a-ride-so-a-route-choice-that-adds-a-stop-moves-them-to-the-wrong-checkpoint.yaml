@@ -1,0 +1,43 @@
+entries:
+- slug: todo-roadtrip-private-overlay-entries-are-keyed-by-checkpoint-order-within-a-ride-so-a-route-choice-that-adds-a-stop-moves-them-to-the-wrong-checkpoint
+  title: 'roadtrip: within one ride the private overlay is still keyed by checkpoint order, so on a trip
+    with options a saved choice that adds or removes a stop renumbers the checkpoints after it and an
+    address then shows against the wrong stop'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: data
+  character_slug: krispy
+  tags:
+  - private-overlay
+  - options
+  - lodging
+  - 2026-11
+  status: design
+  description: 'Split off 2026-11-06 from todo-roadtrip-private-overlay-is-keyed-by-checkpoint-order-with-no-ride-so-one-rides-addresses-show-against-another-rides-checkpoints
+    when that row''s main defect was fixed: the overlay ($DATA_DIR/private.json, private.go) is now keyed
+    by ride, read only through privateData.forRide, and one ride''s entries are never shown against or
+    overwritten by another''s. What is left is the second wrinkle that row named. Inside a ride''s block
+    the key is still the checkpoint order. A trip file may carry options (spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06),
+    and a choice that adds an overnight stop inserts a checkpoint and renumbers every checkpoint after
+    it. Saving such a selection (POST /admin/plan) leaves the overlay untouched, so an address written
+    for order 4 before the change is shown beside whatever checkpoint is order 4 after it, on the signed-in
+    post form and lodging screen. Nothing reaches an anonymous page; the trip-keeper is shown a wrong
+    address, and the next lodging save files it under the wrong stop for good.'
+  dont: DONT move the overlay into the trip document or the repository. DONT renumber overlay entries
+    silently on a plan save without a test that a renumbering keeps each address with its own stop. DONT
+    log an address or a note.
+  do_this: 'DO key an entry inside a ride''s block by something that survives a renumbering: a stable
+    id carried on the checkpoint feature of the trip file, falling back to the order for a ride whose
+    checkpoints carry none (the embedded first ride, whose block is the top-level one the data carriage
+    pushes and must keep reading). Either re-key on a saved selection inside Store.ApplyPlan''s caller,
+    or resolve at read time in privateData.forRide. Tests on the synthetic trip fixture: write an address
+    for the stop after the optional overnight, save the choice that adds the overnight, and the address
+    is still beside the same named stop on /admin/lodging and /admin/post; saving the lodging form after
+    the change does not move it.'
+  do_also: Until this lands, after saving a route choice that adds or removes a stop, open the lodging
+    screen and check each address is beside the right stop before saving it.
+  effort: S
+  impact: medium
+  triaged_at: '2026-11-06T20:20:01.810380+00:00'
+  triaged_by: krispy

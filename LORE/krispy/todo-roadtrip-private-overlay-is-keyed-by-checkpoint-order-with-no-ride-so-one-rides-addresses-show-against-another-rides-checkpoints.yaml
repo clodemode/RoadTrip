@@ -13,7 +13,7 @@ entries:
   - active-ride
   - lodging
   - 2026-11
-  status: design
+  status: shipped
   description: 'Found 2026-11-06 while building spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06.
     $DATA_DIR/private.json is {"checkpoints": {"<order>": {"address", "notes"}}} (private.go). The key
     is a checkpoint order and nothing says which ride it belongs to: it was written when the site had
@@ -42,3 +42,5 @@ entries:
   impact: high
   triaged_at: '2026-11-06T19:54:05.833415+00:00'
   triaged_by: krispy
+  closed_by_actor: codi-roadtrip-trip-checklist-2026-11-06
+  closed_at: '2026-11-06T20:20:22.734914+00:00'

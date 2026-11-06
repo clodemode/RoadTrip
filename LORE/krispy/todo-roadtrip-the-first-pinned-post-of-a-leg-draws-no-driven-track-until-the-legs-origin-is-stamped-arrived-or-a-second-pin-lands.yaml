@@ -12,7 +12,7 @@ entries:
   - map
   - posts
   - 2026-11
-  status: design
+  status: shipped
   description: 'Found 2026-11-06 while proving the driven-track behaviour on a trip loaded from the volume
     (spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06;
     tests TestVolumeTripPinnedPostDrawsTheTrack and TestVolumeTripOnePinAloneIsNotATrack in trip_test.go).
@@ -41,3 +41,5 @@ entries:
   impact: medium
   triaged_at: '2026-11-06T19:54:17.527334+00:00'
   triaged_by: krispy
+  closed_by_actor: codi-roadtrip-trip-checklist-2026-11-06
+  closed_at: '2026-11-06T20:20:24.986805+00:00'
