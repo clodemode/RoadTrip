@@ -1,0 +1,32 @@
+entries:
+- slug: todo-roadtrip-the-stylesheet-still-carries-a-dark-colour-scheme-block-so-every-page-turns-dark-on-a-phone-set-to-dark-though-the-ruling-is-one-light-theme
+  title: 'roadtrip: static/css/app.css still carries a prefers-color-scheme dark block, so every page
+    (the new checklist included) turns dark on a phone set to dark, though the ruling is one light theme'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: style
+  character_slug: scout
+  tags:
+  - css
+  - light-theme
+  - 2026-11
+  status: design
+  description: 'Found 2026-11-06 while building the checklist page (spec-roadtrip-a-trip-carries-a-public-checklist-of-steps-checked-off-with-a-time-and-an-outcome-note-while-identifying-details-stay-signed-in-only-first-use-a-cross-border-car-import).
+    The first rule block of static/css/app.css redefines the page colour variables under @media (prefers-color-scheme:
+    dark). Every page reads those variables, so a visitor whose phone is set to dark gets a dark site:
+    the masthead and the hero stay light by design, the cards and the text below them go dark. The checklist
+    page was built on the same variables and was not given its own override, because restyling existing
+    pages was out of scope for that wave and a page that ignored the scheme while its neighbours followed
+    it would be worse than either. The operator ruling for the platform is a single light theme.'
+  dont: 'DONT fix it for one page only. DONT restyle anything else in the same change: this is removing
+    one media block, and the design-system restyle is its own wave.'
+  do_this: DO remove the prefers-color-scheme dark block from static/css/app.css (and any color-scheme
+    meta or property that invites the browser to darken form controls), then look at /, /plan, /checklist,
+    /photos, a leg page and the signed-in forms at 390px with the browser set to dark and confirm each
+    is the light page.
+  do_also: Fold it into the design-system restyle if that lands first.
+  effort: S
+  impact: low
+  triaged_at: '2026-11-06T20:20:18.400695+00:00'
+  triaged_by: scout

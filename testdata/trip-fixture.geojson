@@ -1,0 +1,79 @@
+{
+  "type": "FeatureCollection",
+  "synthetic": true,
+  "name": "Alder to Elm, a fixture trip with invented places",
+  "ride": {
+    "slug": "fixture-trip",
+    "name": "Alder to Elm",
+    "start_date": "2030-05-01",
+    "mode": "CAR"
+  },
+  "avg_mph": 60,
+  "long_day_hours": 9.5,
+  "options": [
+    {
+      "id": "day1",
+      "title": "Day 1 route",
+      "default": "ridge",
+      "choices": [
+        {"id": "ridge", "label": "Ridge road", "detail": "the long way round"},
+        {"id": "valley", "label": "Valley road", "detail": "shorter"}
+      ]
+    },
+    {
+      "id": "finish",
+      "title": "Finish",
+      "default": "direct",
+      "choices": [
+        {"id": "direct", "label": "Direct", "detail": "in one day"},
+        {"id": "stopover", "label": "Via a stopover", "detail": "adds a night and a day"}
+      ]
+    }
+  ],
+  "features": [
+    {"type": "Feature",
+     "properties": {"leg": 1, "day": 1, "slug": "day-1-ridge", "name": "Alder → Cedar Camp", "est_miles": 600, "route_hint": "over the ridge", "option": "day1", "choice": "ridge"},
+     "geometry": {"type": "LineString", "coordinates": [[-100.4321, 40.1234], [-100.44, 40.13], [-100.6, 40.5], [-101.0, 41.0], [-101.6, 41.6], [-102.0, 42.0]]}},
+    {"type": "Feature",
+     "properties": {"leg": 1, "day": 1, "slug": "day-1-valley", "name": "Alder → Cedar Camp", "est_miles": 540, "route_hint": "along the valley", "option": "day1", "choice": "valley"},
+     "geometry": {"type": "LineString", "coordinates": [[-100.4321, 40.1234], [-100.42, 40.14], [-100.9, 40.4], [-101.0, 41.0], [-101.9, 41.5], [-102.0, 42.0]]}},
+    {"type": "Feature",
+     "properties": {"leg": 2, "day": 2, "slug": "day-2", "name": "Cedar Camp → Dogwood", "est_miles": 300, "route_hint": "the only road"},
+     "geometry": {"type": "LineString", "coordinates": [[-102.0, 42.0], [-103.0, 42.5], [-104.0, 43.0]]}},
+    {"type": "Feature",
+     "properties": {"leg": 3, "day": 3, "slug": "day-3-direct", "name": "Dogwood → Elm", "est_miles": 420, "option": "finish", "choice": "direct"},
+     "geometry": {"type": "LineString", "coordinates": [[-104.0, 43.0], [-105.0, 43.6], [-106.26, 44.31], [-106.2789, 44.3217]]}},
+    {"type": "Feature",
+     "properties": {"leg": 3, "day": 3, "slug": "day-3-stopover", "name": "Dogwood → Fir Hollow", "est_miles": 200, "option": "finish", "choice": "stopover"},
+     "geometry": {"type": "LineString", "coordinates": [[-104.0, 43.0], [-104.6, 43.4], [-105.2, 43.8]]}},
+    {"type": "Feature",
+     "properties": {"leg": 4, "day": 4, "slug": "day-4-stopover", "name": "Fir Hollow → Elm", "est_miles": 180, "option": "finish", "choice": "stopover"},
+     "geometry": {"type": "LineString", "coordinates": [[-105.2, 43.8], [-106.0, 44.2], [-106.27, 44.32], [-106.2789, 44.3217]]}},
+
+    {"type": "Feature",
+     "properties": {"kind": "checkpoint", "order": 1, "leg": 1, "name": "Alder", "label": "Start", "tz": "America/Chicago", "precision": "fuzzed", "is_terminal": true},
+     "geometry": {"type": "Point", "coordinates": [-100.4321, 40.1234]}},
+    {"type": "Feature",
+     "properties": {"kind": "checkpoint", "order": 2, "leg": 1, "name": "Birch Gate", "label": "Waypoint", "tz": "America/Chicago", "precision": "approx"},
+     "geometry": {"type": "Point", "coordinates": [-101.0, 41.0]}},
+    {"type": "Feature",
+     "properties": {"kind": "checkpoint", "order": 3, "leg": 1, "name": "Cedar Camp", "label": "Night 1", "tz": "America/Chicago", "precision": "approx", "is_terminal": true},
+     "geometry": {"type": "Point", "coordinates": [-102.0, 42.0]}},
+    {"type": "Feature",
+     "properties": {"kind": "checkpoint", "order": 4, "leg": 2, "name": "Dogwood", "label": "Night 2", "tz": "America/Denver", "precision": "approx", "is_terminal": true},
+     "geometry": {"type": "Point", "coordinates": [-104.0, 43.0]}},
+    {"type": "Feature",
+     "properties": {"kind": "checkpoint", "order": 5, "leg": 3, "name": "Elm", "label": "Finish", "tz": "America/Denver", "precision": "fuzzed", "is_terminal": true, "option": "finish", "choice": "direct"},
+     "geometry": {"type": "Point", "coordinates": [-106.2789, 44.3217]}},
+    {"type": "Feature",
+     "properties": {"kind": "checkpoint", "order": 5, "leg": 3, "name": "Fir Hollow", "label": "Night 3", "tz": "America/Denver", "precision": "approx", "is_terminal": true, "option": "finish", "choice": "stopover"},
+     "geometry": {"type": "Point", "coordinates": [-105.2, 43.8]}},
+    {"type": "Feature",
+     "properties": {"kind": "checkpoint", "order": 6, "leg": 4, "name": "Elm", "label": "Finish", "tz": "America/Denver", "precision": "fuzzed", "is_terminal": true, "option": "finish", "choice": "stopover"},
+     "geometry": {"type": "Point", "coordinates": [-106.2789, 44.3217]}},
+
+    {"type": "Feature",
+     "properties": {"kind": "candidate", "sight_kind": "SIGHT", "leg": 2, "name": "Gumtree Lookout", "why": "an invented view"},
+     "geometry": {"type": "Point", "coordinates": [-103.0, 42.6]}}
+  ]
+}

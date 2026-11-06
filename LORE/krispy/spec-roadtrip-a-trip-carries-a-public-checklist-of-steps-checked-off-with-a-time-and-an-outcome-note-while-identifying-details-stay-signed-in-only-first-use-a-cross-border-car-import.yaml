@@ -1,0 +1,47 @@
+entries:
+- slug: spec-roadtrip-a-trip-carries-a-public-checklist-of-steps-checked-off-with-a-time-and-an-outcome-note-while-identifying-details-stay-signed-in-only-first-use-a-cross-border-car-import
+  title: 'roadtrip: a trip may carry a checklist, staged steps and questions the trip-keeper checks off
+    as they succeed, each stamped with a time and a public outcome note; the page is public and written
+    to help the next person, and anything identifying (a VIN, a plate, a name, an insurer, a value) is
+    private text shown only when signed in; first use is importing a car across the border'
+  domain: lore
+  lore_type: spec
+  app_scope: roadtrip
+  lair: all
+  character_slug: krispy
+  tags:
+  - checklist
+  - steps
+  - private-overlay
+  - public-content
+  - car-import
+  - 2026-11
+  status: design
+  description: |-
+    Kris, 2026-11-06: the car import is a big part of the trip, its plan would help someone later, and personal details such as the VIN must never reach the public site. Written as if public.
+
+    A. THE DOCUMENT. A checklist document belongs to one ride and lives on the volume beside its trip file ($DATA_DIR/trips/<slug>.checklist.json), pushed whole by POST /admin/checklist (session or PUSH_TOKEN, the trip-push conventions: parse fully, write atomically, apply at once). Shape: title, intro, disclaimer, stages [{id, title, tz, when, steps [{id, title, detail, private}]}], questions [{id, group, ask, why, private}], sources [{label, url}]. It never enters the repo; fixtures are synthetic.
+
+    B. PUBLIC AND PRIVATE. title, detail, ask, why and the outcome notes are public. private is text for the signed-in trip-keeper only: it is rendered on no anonymous page and appears in no open endpoint. A push is REFUSED when a public field holds a 17-character VIN-shaped token; the refusal names the field, never the value.
+
+    C. CHECKING OFF. The signed-in trip-keeper marks a step done in place (no modal): the time defaults to now and may be set after the fact, stored as UTC plus the stage's IANA zone; an optional public outcome note says what actually happened (the part that helps the next person) and an optional private note holds the rest. A question is answered the same way: a public answer and a private note. Undo clears the stamp. A done step or an answered question is never overwritten by a later push of the document: text refreshes only while it is open, the rule planning data already follows; a step missing from a later push is kept if done and dropped if open.
+
+    D. THE PAGE. GET /checklist (linked from the masthead and summarised on the front page as n of m done): stages in order, each with its progress, steps with their stamp and outcome note, then the questions and sources. The disclaimer is always shown: one traveller's notes, not advice, confirm with the agencies. Phone first: 44px targets, no sideways scroll at 390px, light theme.
+
+    E. THE PRIVATE OVERLAY IS PER RIDE. The existing private overlay is keyed by checkpoint ord alone, so once the active ride changes, an earlier ride's addresses attach to the new ride's checkpoints. Key the overlay by ride, keep reading the old shape as belonging to the first ride, and prove with a test that one ride's private text never renders on another.
+  dont: DONT render private text to an anonymous visitor or in any open endpoint. DONT accept a VIN-shaped
+    token in a public field, and DONT echo it in the refusal or a log. DONT overwrite a done step or an
+    answered question on a re-push. DONT put a real checklist in the repo, a fixture, a commit message
+    or a LORE row. DONT invite photos of documents onto a step.
+  do_this: Build on the trip-file branch as its own commits, tests on a synthetic checklist, one RED control
+    on the anonymous-render guard. The real document is authored by the orchestrator from Kris's private
+    plan and pushed by token.
+  do_also: 'Later: link a stage to a checkpoint so the map pin shows its progress; let Chester read the
+    public checklist as context.'
+  depends_on:
+  - pattern-go-microvm-private-overlay-json-on-data-volume-never-in-repo
+  - spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06
+  effort: M
+  impact: high
+  triaged_at: '2026-11-06T19:35:11.770620+00:00'
+  triaged_by: krispy

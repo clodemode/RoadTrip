@@ -1,0 +1,36 @@
+# APP_PROFILE.yaml — RoadTrip's venue paths and identity. SOURCE OF TRUTH.
+#
+# This file is where RoadTrip says where it lives: its Fly app, its code and
+# data paths. ABOUT (the CLODE harness) READS it — from
+# /app/fleet/roadtrip/APP_PROFILE.yaml inside about-intent-1, through the
+# app_profile MCP tool — and never hardcodes these values. A change that moves
+# a path changes it HERE, in the same commit. Spec: spec-clode-every-target-
+# app-declares-its-own-venue-paths-in-an-app-profile-at-its-repo-root-and-
+# about-reads-them-never-hardcodes-them.
+#
+# Platform path standard: /app is code, /data is persistent data. RoadTrip
+# follows it. The code is one static Go binary at /app/roadtrip (the image's
+# entrypoint and its WORKDIR is /app); there is no interpreter, no manage.py
+# and so no code_dir to run a command from. The Fly volume roadtrip_data is
+# mounted at /data and holds everything that is not the binary: the SQLite
+# database, the photos under /data/media, the private overlay
+# /data/private.json and the trip files under /data/trips.
+#
+# RoadTrip is not a Django app and has no container in the ABOUT compose, so
+# there is no local: or test: section. It is built and tested with the Go
+# toolchain at the repo root (see CLAUDE.md).
+#
+# Committed code metadata: never a secret, token, password, address or trip.
+# The schema is closed (ABOUT refuses an unknown key).
+
+profile_version: 1
+app: roadtrip
+repo: clodemode/RoadTrip
+
+fly:
+  app: roadtrip-clodemode
+  region: dfw
+  data_dir: /data                    # the Fly volume's mount point
+  sqlite_file: /data/roadtrip.sqlite3
+  media_root: /data/media
+  volume: roadtrip_data

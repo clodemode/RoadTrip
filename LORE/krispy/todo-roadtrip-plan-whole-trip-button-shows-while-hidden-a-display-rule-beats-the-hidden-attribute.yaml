@@ -1,0 +1,37 @@
+entries:
+- slug: todo-roadtrip-plan-whole-trip-button-shows-while-hidden-a-display-rule-beats-the-hidden-attribute
+  title: 'roadtrip /plan: the "Whole trip" button is visible while its hidden attribute is set, because
+    a display rule on buttons beats the attribute'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: style
+  character_slug: krispy
+  tags:
+  - roadtrip
+  - plan
+  - css
+  - hidden
+  - ui
+  status: design
+  description: 'Seen 2026-11-06 20:49 UTC on the local container (image built from roadtrip commit d91dbf3,
+    the trip planner branch), at a 375 px viewport, on /plan with no day in focus. plan.js sets hidden
+    on the button with id plan-all whenever no day is zoomed, and the element reports hidden=true, yet
+    its computed display is block, so "Whole trip" is drawn beside the Days heading when there is nothing
+    to zoom out of. The button rule in static/css/app.css gives every button a display value, and an author
+    display rule wins over the browser''s own rule for the hidden attribute. Not caused by the review-fix
+    commit: that commit added one margin rule for the result line and nothing that touches this button.
+    Out of scope for the six review fixes, so filed here.'
+  dont: DONT fix it by removing the hidden attribute handling in plan.js or by restyling the button. DONT
+    add a per-element inline style.
+  do_this: Add one rule to static/css/app.css so the hidden attribute always wins ([hidden] { display:none
+    !important; }), then check in a browser at phone width that "Whole trip" is absent on load, appears
+    after a day row is tapped, and goes again after it is pressed. Check the same rule does not hide anything
+    else that relies on hidden being overridden (grep templates and static/js for hidden).
+  do_also: The result line under the Save button (class plan-msg) is hidden the same way when a choice
+    changes; it is a paragraph with no display rule, so it works today, and the rule above keeps it working
+    if that ever changes.
+  effort: S
+  impact: low
+  triaged_at: '2026-11-06T20:50:19.909515+00:00'
+  triaged_by: krispy

@@ -1,0 +1,80 @@
+{{template "head" .}}
+<section class="page-head plan-head">
+  <p class="crumb"><a href="/">&larr; {{.Ride.Name}}</a></p>
+  <h1>Plan</h1>
+  <p class="plan-totals" id="plan-totals">
+    <b id="plan-miles">{{.Sum.TotalMilesShown}} mi</b>
+    over <b id="plan-daycount">{{.Sum.DayCount}} {{if eq .Sum.DayCount 1}}day{{else}}days{{end}}</b>
+    <span class="muted" id="plan-hours">&middot; about {{hr .Sum.TotalHours}} h of driving</span>
+  </p>
+</section>
+
+<div id="map" data-mode="plan"></div>
+{{if .Opts}}<p class="plan-maphint muted small">Solid line: the route this plan takes. Dashed grey: the other choices. Tap a dashed line to switch to it.</p>{{end}}
+
+<form id="plan-form" class="plan-form" method="get" action="/plan">
+  {{range $o := .Opts}}
+  <fieldset class="plan-opt">
+    <legend>{{$o.Title}}</legend>
+    <div class="plan-choices">
+      {{range $o.Choices}}
+      <label class="plan-choice">
+        <input type="radio" name="opt-{{$o.ID}}" value="{{.ID}}"{{if .Checked}} checked{{end}}>
+        <span class="plan-choice-text">
+          <b>{{.Label}}</b>
+          {{if .Detail}}<span class="muted">{{.Detail}}</span>{{end}}
+          {{if .Note}}<span class="muted">{{.Note}}</span>{{end}}
+        </span>
+      </label>
+      {{end}}
+    </div>
+  </fieldset>
+  {{end}}
+  {{if .HasFile}}
+  <label class="plan-start">Departure day
+    <input type="date" name="start" value="{{.Start}}">
+  </label>
+  <div class="plan-actions">
+    <button type="submit" class="ghost plan-update">Show this plan</button>
+    {{if .Authed}}
+    <button type="submit" formmethod="post" formaction="/admin/plan">Save this plan</button>
+    <span class="muted small">Saving makes it the plan every visitor sees.</span>
+    {{else}}
+    <span class="muted small">Switching here changes only what you see.</span>
+    {{end}}
+  </div>
+  {{end}}
+  {{if .Error}}<p class="error plan-msg" id="plan-result" role="alert">Not saved: {{.Error}}.</p>
+  {{else if .Notice}}<p class="plan-saved plan-msg" id="plan-result" role="status">{{.Notice}}</p>{{end}}
+</form>
+
+<section class="plan-days">
+  <div class="section-head">
+    <h2>Days</h2>
+    <button type="button" class="ghost plan-all" id="plan-all" hidden>Whole trip</button>
+  </div>
+  <ol class="day-list" id="plan-days">
+    {{range .Sum.Days}}
+    <li>
+      <button type="button" class="day-row" data-day="{{.Day}}" style="--leg:{{.Color}}">
+        <span class="day-n">{{.Day}}</span>
+        <span class="day-main">
+          <span class="day-name">{{.Name}}</span>
+          <span class="day-date muted">{{day .Date}}</span>
+        </span>
+        <span class="day-nums">
+          <span class="day-miles">{{mi .Miles}} mi</span>
+          <span class="day-hours muted">{{hr .Hours}} h</span>
+          {{if .Long}}<span class="pill pill-long">Long day</span>{{end}}
+        </span>
+      </button>
+    </li>
+    {{end}}
+  </ol>
+  {{if .Sum.AvgMPH}}<p class="muted small plan-foot">Hours are the miles at a steady {{num .Sum.AvgMPH}} mph, not a promise.
+     {{if .Sum.LongDayHours}}A day over {{num .Sum.LongDayHours}} h is flagged as a long day.{{end}}</p>{{end}}
+</section>
+
+<script>window.PLAN = {{json .Plan}};</script>
+<script defer src="/static/js/plan.js?v={{.V}}"></script>
+{{template "foot" .}}

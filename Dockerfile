@@ -16,11 +16,16 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /roadtrip .
 RUN printf 'root:x:0:0:root:/:/sbin/nologin\n' > /tmp/passwd && printf 'root:x:0:\n' > /tmp/group
 
 FROM scratch
-COPY --from=build /roadtrip /roadtrip
+# Platform path standard: code under /app, persistent data under /data. The
+# binary is the whole of the code, so /app holds exactly one file. The data
+# dir is the volume: the database, the photos, the private overlay and the
+# trip files (/data/trips) — none of which is ever in this image.
+WORKDIR /app
+COPY --from=build /roadtrip /app/roadtrip
 # TLS roots, for outbound HTTPS if it is ever needed.
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /tmp/passwd /etc/passwd
 COPY --from=build /tmp/group /etc/group
 ENV DATA_DIR=/data PORT=8080
 EXPOSE 8080
-ENTRYPOINT ["/roadtrip"]
+ENTRYPOINT ["/app/roadtrip"]

@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -230,6 +231,40 @@ CREATE INDEX IF NOT EXISTS posts_occurred ON posts(occurred_at);
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS checklists (
+  ride_slug  TEXT PRIMARY KEY REFERENCES rides(slug) ON DELETE CASCADE,
+  title      TEXT NOT NULL DEFAULT '',
+  intro      TEXT NOT NULL DEFAULT '',
+  disclaimer TEXT NOT NULL DEFAULT '',
+  sources    TEXT NOT NULL DEFAULT '[]'
+);
+CREATE TABLE IF NOT EXISTS checklist_stages (
+  id        INTEGER PRIMARY KEY,
+  ride_slug TEXT NOT NULL REFERENCES rides(slug) ON DELETE CASCADE,
+  stage_id  TEXT NOT NULL,
+  ord       INTEGER NOT NULL,
+  title     TEXT NOT NULL DEFAULT '',
+  tz        TEXT NOT NULL,
+  when_text TEXT NOT NULL DEFAULT '',
+  UNIQUE (ride_slug, stage_id)
+);
+CREATE TABLE IF NOT EXISTS checklist_items (
+  id           INTEGER PRIMARY KEY,
+  ride_slug    TEXT NOT NULL REFERENCES rides(slug) ON DELETE CASCADE,
+  kind         TEXT NOT NULL,
+  item_id      TEXT NOT NULL,
+  stage_id     TEXT NOT NULL DEFAULT '',
+  grp          TEXT NOT NULL DEFAULT '',
+  ord          INTEGER NOT NULL,
+  title        TEXT NOT NULL DEFAULT '',
+  detail       TEXT NOT NULL DEFAULT '',
+  private      TEXT NOT NULL DEFAULT '',
+  done_at      TEXT NOT NULL DEFAULT '',
+  done_tz      TEXT NOT NULL DEFAULT '',
+  outcome      TEXT NOT NULL DEFAULT '',
+  private_note TEXT NOT NULL DEFAULT '',
+  UNIQUE (ride_slug, kind, item_id)
 );
 `
 
@@ -549,6 +584,82 @@ func rideCheckpoints(legs []Leg) []Checkpoint {
 	return out
 }
 
+// lineMaskKm is how far around a private place a polyline is not drawn. The
+// snapped point is the centre of a 0.05° cell and the real place can sit in
+// its corner, about 3.7 km out, so a radius the size of the cell would still
+// let a line walk up to the door from the far side. 8 km leaves every drawn
+// vertex at least ~4 km from anywhere the real place can be.
+const lineMaskKm = 8.0
+
+// fuzzedOf picks the private places out of a checkpoint list. The list must
+// have come through scanCheckpoint or Checkpoint.fuzz, so each is already its
+// snapped point.
+func fuzzedOf(cps []Checkpoint) []Checkpoint {
+	var out []Checkpoint
+	for _, c := range cps {
+		if c.Precision == precisionFuzzed {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// inPrivateZone reports whether a raw vertex is too close to a private place
+// to be drawn: in its cell, or within lineMaskKm of the cell point.
+func inPrivateZone(lat, lng float64, c Checkpoint) bool {
+	if snap(lat) == c.Lat && snap(lng) == c.Lng {
+		return true
+	}
+	return haversineKm(lat, lng, c.Lat, c.Lng) < lineMaskKm
+}
+
+// maskLine is the polyline half of the fuzz seam. Every run of vertices
+// inside a private place's zone collapses to that place's snapped point, so
+// the line still reaches the pin (no gap on the map) and never draws the road
+// to the door. A routed line is the worst case: its last vertices ARE the
+// driveway. A line that cannot be read comes back empty rather than raw.
+func maskLine(line json.RawMessage, fuzzed []Checkpoint) json.RawMessage {
+	if len(fuzzed) == 0 {
+		return line
+	}
+	var pts [][]float64
+	if err := json.Unmarshal(line, &pts); err != nil {
+		return json.RawMessage("[]")
+	}
+	out := make([][]float64, 0, len(pts))
+	run := -1 // the private place the current run of masked vertices belongs to
+	for _, p := range pts {
+		if len(p) < 2 {
+			continue
+		}
+		hit := -1
+		for i := range fuzzed {
+			if inPrivateZone(p[1], p[0], fuzzed[i]) {
+				hit = i
+				break
+			}
+		}
+		if hit < 0 {
+			out = append(out, []float64{p[0], p[1]})
+			run = -1
+			continue
+		}
+		if hit != run {
+			out = append(out, []float64{fuzzed[hit].Lng, fuzzed[hit].Lat})
+			run = hit
+		}
+	}
+	// One point is a pin, not a line; say it twice so it stays a LineString.
+	if len(out) == 1 {
+		out = append(out, out[0])
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return json.RawMessage("[]")
+	}
+	return b
+}
+
 // --- rides / legs / checkpoints / sights -------------------------------------
 
 func (s *Store) Ride(slug string) (*Ride, error) {
@@ -618,24 +729,32 @@ func (s *Store) Legs(rideSlug string) ([]Leg, error) {
 		}
 		out[i].Sights = sights
 	}
+	// The polylines leave through the same seam the checkpoints do: a vertex
+	// inside a private place's zone is replaced by that place's snapped point,
+	// so a leg line cannot hand back the coordinate the checkpoint fuzz just
+	// removed. Done here, over the whole ride, because a leg's origin is a
+	// checkpoint of the leg before it.
+	fuzzed := fuzzedOf(rideCheckpoints(out))
+	for i := range out {
+		out[i].Line = maskLine(out[i].Line, fuzzed)
+	}
 	return out, nil
 }
 
+// LegBySlug reads one leg THROUGH Legs, not beside it: the line mask needs the
+// whole ride's private places, and a second read path is a second place to
+// forget it.
 func (s *Store) LegBySlug(rideSlug, slug string) (*Leg, error) {
-	l, err := scanLeg(s.db.QueryRow(`SELECT `+legCols+` FROM legs WHERE ride_slug=? AND slug=?`, rideSlug, slug))
+	legs, err := s.Legs(rideSlug)
 	if err != nil {
 		return nil, err
 	}
-	if l.Checkpoints, err = s.CheckpointsByLeg(l.ID); err != nil {
-		return nil, err
+	for i := range legs {
+		if legs[i].Slug == slug {
+			return &legs[i], nil
+		}
 	}
-	if len(l.Checkpoints) > 0 {
-		l.TZ = l.Checkpoints[0].TZ
-	}
-	if l.Sights, err = s.SightsByLeg(l.ID); err != nil {
-		return nil, err
-	}
-	return &l, nil
+	return nil, sql.ErrNoRows
 }
 
 const cpCols = `id,leg_id,ord,name,label,lat,lng,tz,precision,is_terminal,planned_arrive,planned_depart,arrived_at`
@@ -930,6 +1049,11 @@ func (s *Store) Post(id int64) (*Post, error) {
 // sight (kind=candidate). An optional top-level "ride" block names the ride;
 // without it the ride is derived from the legs. Private text (addresses)
 // is NOT a seed property — see private.go.
+//
+// A trip document is the same shape plus three optional top-level keys:
+// "options" (groups of route choices), "avg_mph" and "long_day_hours". A
+// feature that carries "option" and "choice" belongs to that choice only; a
+// feature without them is part of every plan. See trip.go.
 type seedFile struct {
 	Name string `json:"name"`
 	Ride *struct {
@@ -941,7 +1065,10 @@ type seedFile struct {
 		OriginLabel   string `json:"origin_label"`
 		TerminusLabel string `json:"terminus_label"`
 	} `json:"ride"`
-	Features []struct {
+	Options      []tripOption `json:"options"`
+	AvgMPH       float64      `json:"avg_mph"`
+	LongDayHours float64      `json:"long_day_hours"`
+	Features     []struct {
 		Properties map[string]any `json:"properties"`
 		Geometry   struct {
 			Type        string          `json:"type"`
@@ -950,11 +1077,41 @@ type seedFile struct {
 	} `json:"features"`
 }
 
+// tripOption is one group of alternatives — "which road on day 2" — and
+// tripChoice one alternative in it. Default names the choice a fresh plan
+// takes; empty means the first.
+type tripOption struct {
+	ID      string       `json:"id"`
+	Title   string       `json:"title"`
+	Default string       `json:"default"`
+	Choices []tripChoice `json:"choices"`
+}
+
+type tripChoice struct {
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// Selection is which choice each option group takes, plus the day the ride
+// starts. The start date lives here, not on each leg, so a departure that
+// slips a day is one saved field: a leg that carries a "day" and no "date"
+// is dated from it.
+type Selection struct {
+	StartDate string            `json:"start_date,omitempty"`
+	Choices   map[string]string `json:"choices,omitempty"`
+}
+
 type seedLeg struct {
 	Ord                int
+	Day                int
 	Slug, Name, Date   string
 	EstMiles, EstHours float64
 	RouteHint, Line    string
+	Option, Choice     string
+	// DateFixed: the feature carried its own date. Otherwise Date was derived
+	// from the start date and the leg's day, and moves when the start does.
+	DateFixed bool
 }
 
 type seedCP struct {
@@ -964,6 +1121,7 @@ type seedCP struct {
 	TZ, Precision                string
 	IsTerminal                   bool
 	PlannedArrive, PlannedDepart string
+	Option, Choice               string
 }
 
 type seedSight struct {
@@ -974,12 +1132,23 @@ type seedSight struct {
 }
 
 // seedData is a parsed seed: what the planning side of the database should
-// look like.
+// look like under one selection.
 type seedData struct {
 	Ride        Ride
 	Legs        []seedLeg
 	Checkpoints []seedCP
 	Sights      []seedSight
+	// Options is what the document offers; Selection is what this parse took,
+	// fully resolved — every option answered and the start date filled in.
+	Options      []tripOption
+	Selection    Selection
+	AvgMPH       float64
+	LongDayHours float64
+	// DocStartDate is the start date the document itself gives, whatever the
+	// selection says. Once a ride has a saved selection that selection's start
+	// date wins (Selection.StartDate is the one in force), and a caller that
+	// re-applies a document compares the two to say so out loud.
+	DocStartDate string
 }
 
 func pstr(m map[string]any, k string) string {
@@ -1016,16 +1185,89 @@ func toUTC(s string) string {
 	return utcString(t)
 }
 
+const dateLayout = "2006-01-02"
+
+// round1 keeps one decimal: what a mileage or an hour count is worth.
+func round1(v float64) float64 { return math.Round(v*10) / 10 }
+
+// checkOptions validates the option groups of a document and returns each
+// group's valid choice ids. A document with a malformed group is refused
+// whole: a half-understood option is a plan nobody chose.
+func checkOptions(opts []tripOption) (map[string]map[string]bool, error) {
+	valid := map[string]map[string]bool{}
+	for i := range opts {
+		o := &opts[i]
+		if o.ID == "" {
+			return nil, fmt.Errorf("option %d has no id", i+1)
+		}
+		if valid[o.ID] != nil {
+			return nil, fmt.Errorf("option %q is declared twice", o.ID)
+		}
+		if len(o.Choices) == 0 {
+			return nil, fmt.Errorf("option %q has no choices", o.ID)
+		}
+		ids := map[string]bool{}
+		for _, c := range o.Choices {
+			if c.ID == "" {
+				return nil, fmt.Errorf("option %q has a choice with no id", o.ID)
+			}
+			if ids[c.ID] {
+				return nil, fmt.Errorf("option %q declares choice %q twice", o.ID, c.ID)
+			}
+			ids[c.ID] = true
+		}
+		if o.Default == "" {
+			o.Default = o.Choices[0].ID
+		}
+		if !ids[o.Default] {
+			return nil, fmt.Errorf("option %q: default %q is not one of its choices", o.ID, o.Default)
+		}
+		valid[o.ID] = ids
+	}
+	return valid, nil
+}
+
 func parseSeed(path, defaultSlug string) (*seedData, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+	return parseSeedBytes(raw, defaultSlug, nil)
+}
+
+// parseSeedBytes reads a seed or trip document under one selection. sel nil
+// (or an option it does not answer, or answers with a choice the document no
+// longer has) takes the document's default for that option, and an empty
+// start date takes the document's — so a stored selection survives a
+// re-pushed document that dropped one of its choices.
+//
+// A selection's start date WINS over the document's, the same way its choices
+// do: the trip-keeper moved the departure with POST /admin/plan, and a
+// document pushed again afterwards must not quietly move it back. The
+// document's own start is kept in DocStartDate so the push can report that it
+// was not applied.
+func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, error) {
 	var sf seedFile
 	if err := json.Unmarshal(raw, &sf); err != nil {
 		return nil, err
 	}
-	sd := &seedData{Ride: Ride{Slug: defaultSlug, Name: sf.Name, Mode: "CAR"}}
+	valid, err := checkOptions(sf.Options)
+	if err != nil {
+		return nil, err
+	}
+	sd := &seedData{Ride: Ride{Slug: defaultSlug, Name: sf.Name, Mode: "CAR"},
+		Options: sf.Options, AvgMPH: sf.AvgMPH, LongDayHours: sf.LongDayHours,
+		Selection: Selection{Choices: map[string]string{}}}
+	if sf.AvgMPH < 0 || sf.LongDayHours < 0 {
+		return nil, fmt.Errorf("avg_mph and long_day_hours cannot be negative")
+	}
+	for _, o := range sf.Options {
+		c := o.Default
+		if sel != nil && valid[o.ID][sel.Choices[o.ID]] {
+			c = sel.Choices[o.ID]
+		}
+		sd.Selection.Choices[o.ID] = c
+	}
 	if sf.Ride != nil {
 		if sf.Ride.Slug != "" {
 			sd.Ride.Slug = sf.Ride.Slug
@@ -1039,28 +1281,98 @@ func parseSeed(path, defaultSlug string) (*seedData, error) {
 		}
 		sd.Ride.OriginLabel, sd.Ride.TerminusLabel = sf.Ride.OriginLabel, sf.Ride.TerminusLabel
 	}
+	sd.DocStartDate = sd.Ride.StartDate
+	if sel != nil && sel.StartDate != "" {
+		sd.Ride.StartDate = sel.StartDate
+	}
+	var start time.Time
+	if sd.Ride.StartDate != "" {
+		if start, err = time.Parse(dateLayout, sd.Ride.StartDate); err != nil {
+			return nil, fmt.Errorf("start date %q is not YYYY-MM-DD", sd.Ride.StartDate)
+		}
+	}
+	// taken reports whether a feature is part of this plan, and refuses one
+	// that names an option or choice the document never declared — a typo
+	// there would otherwise drop a road off every plan in silence.
+	taken := func(p map[string]any) (bool, string, string, error) {
+		opt, ch := pstr(p, "option"), pstr(p, "choice")
+		if opt == "" && ch == "" {
+			return true, "", "", nil
+		}
+		if valid[opt] == nil {
+			return false, "", "", fmt.Errorf("feature %q names option %q, which the document does not declare", pstr(p, "name"), opt)
+		}
+		if !valid[opt][ch] {
+			return false, "", "", fmt.Errorf("feature %q names choice %q, which option %q does not have", pstr(p, "name"), ch, opt)
+		}
+		return sd.Selection.Choices[opt] == ch, opt, ch, nil
+	}
+
 	legOrds := map[int]bool{}
+	derived := false
+	firstFixed := "" // the earliest date a leg carries itself
 	for _, f := range sf.Features {
 		if f.Geometry.Type != "LineString" {
 			continue
 		}
 		p := f.Properties
+		in, opt, ch, err := taken(p)
+		if err != nil {
+			return nil, err
+		}
+		if !in {
+			continue
+		}
 		ord := int(pnum(p, "leg"))
 		if ord == 0 {
 			ord = len(sd.Legs) + 1
 		}
+		if legOrds[ord] {
+			return nil, fmt.Errorf("leg %d appears twice in one plan (two roads for one leg need an option and a choice each)", ord)
+		}
 		slug := pstr(p, "slug")
 		if slug == "" {
 			slug = "leg-" + strconv.Itoa(ord)
+			if ch != "" {
+				// Two alternatives for one leg must not share a slug: the slug is
+				// how the store tells which road a leg row currently holds.
+				slug += "-" + ch
+			}
+		}
+		day := int(pnum(p, "day"))
+		if day < 1 {
+			day = ord
+		}
+		date := pstr(p, "date")
+		fixed := date != ""
+		if fixed && (firstFixed == "" || date < firstFixed) {
+			firstFixed = date
+		}
+		if date == "" && !start.IsZero() {
+			date = start.AddDate(0, 0, day-1).Format(dateLayout)
+			derived = true
+		}
+		miles := pnum(p, "est_miles")
+		hours := pnum(p, "est_drive_hours")
+		if hours == 0 && sf.AvgMPH > 0 {
+			hours = round1(miles / sf.AvgMPH)
 		}
 		line, _ := json.Marshal(map[string]any{"type": "LineString", "coordinates": f.Geometry.Coordinates})
-		sd.Legs = append(sd.Legs, seedLeg{Ord: ord, Slug: slug, Name: pstr(p, "name"), Date: pstr(p, "date"),
-			EstMiles: pnum(p, "est_miles"), EstHours: pnum(p, "est_drive_hours"),
-			RouteHint: pstr(p, "route_hint"), Line: string(line)})
+		sd.Legs = append(sd.Legs, seedLeg{Ord: ord, Day: day, Slug: slug, Name: pstr(p, "name"), Date: date,
+			EstMiles: miles, EstHours: hours,
+			RouteHint: pstr(p, "route_hint"), Line: string(line), Option: opt, Choice: ch, DateFixed: fixed})
 		legOrds[ord] = true
 	}
 	if len(sd.Legs) == 0 {
-		return nil, fmt.Errorf("seed %s: no LineString legs", path)
+		return nil, fmt.Errorf("no LineString legs")
+	}
+	sort.SliceStable(sd.Legs, func(i, j int) bool { return sd.Legs[i].Ord < sd.Legs[j].Ord })
+	slugs := map[string]bool{}
+	for _, l := range sd.Legs {
+		if slugs[l.Slug] {
+			return nil, fmt.Errorf("leg slug %q appears twice in one plan", l.Slug)
+		}
+		slugs[l.Slug] = true
 	}
 	var firstCP, lastCP *seedCP
 	firstDate, lastDate := "", ""
@@ -1075,11 +1387,19 @@ func parseSeed(path, defaultSlug string) (*seedData, error) {
 			lastDate = l.Date
 		}
 	}
+	cpOrds := map[int]bool{}
 	for _, f := range sf.Features {
 		if f.Geometry.Type != "Point" {
 			continue
 		}
 		p := f.Properties
+		in, opt, ch, err := taken(p)
+		if err != nil {
+			return nil, err
+		}
+		if !in {
+			continue
+		}
 		var xy []float64
 		if err := json.Unmarshal(f.Geometry.Coordinates, &xy); err != nil || len(xy) < 2 {
 			continue
@@ -1093,13 +1413,21 @@ func parseSeed(path, defaultSlug string) (*seedData, error) {
 			c := seedCP{LegOrd: legOrd, Ord: int(pnum(p, "order")), Name: pstr(p, "name"),
 				Label: pstr(p, "label"), Lat: xy[1], Lng: xy[0], TZ: pstr(p, "tz"),
 				Precision: pstr(p, "precision"), IsTerminal: pbool(p, "is_terminal"),
-				PlannedArrive: toUTC(pstr(p, "planned_arrive")), PlannedDepart: toUTC(pstr(p, "planned_depart"))}
+				PlannedArrive: toUTC(pstr(p, "planned_arrive")), PlannedDepart: toUTC(pstr(p, "planned_depart")),
+				Option: opt, Choice: ch}
 			if c.Precision == "" {
 				c.Precision = precisionApprox
 			}
 			if c.TZ == "" {
 				return nil, fmt.Errorf("seed checkpoint %q: tz is required (per-checkpoint, never ride-wide)", c.Name)
 			}
+			if _, err := time.LoadLocation(c.TZ); err != nil {
+				return nil, fmt.Errorf("seed checkpoint %q: tz %q is not an IANA zone", c.Name, c.TZ)
+			}
+			if cpOrds[c.Ord] {
+				return nil, fmt.Errorf("checkpoint order %d appears twice in one plan", c.Ord)
+			}
+			cpOrds[c.Ord] = true
 			sd.Checkpoints = append(sd.Checkpoints, c)
 			cc := c
 			if firstCP == nil || cc.Ord < firstCP.Ord {
@@ -1117,11 +1445,14 @@ func parseSeed(path, defaultSlug string) (*seedData, error) {
 				Lat: xy[1], Lng: xy[0], Kind: kind})
 		}
 	}
-	// Derive what the ride block did not say.
+	sort.SliceStable(sd.Checkpoints, func(i, j int) bool { return sd.Checkpoints[i].Ord < sd.Checkpoints[j].Ord })
+	// Derive what the ride block did not say. A plan whose dates were derived
+	// from the start date ends when its last leg does, whatever the block
+	// says: a choice that adds a day moves the end.
 	if sd.Ride.StartDate == "" {
 		sd.Ride.StartDate = firstDate
 	}
-	if sd.Ride.EndDate == "" {
+	if sd.Ride.EndDate == "" || derived {
 		sd.Ride.EndDate = lastDate
 	}
 	if sd.Ride.OriginLabel == "" && firstCP != nil {
@@ -1129,6 +1460,11 @@ func parseSeed(path, defaultSlug string) (*seedData, error) {
 	}
 	if sd.Ride.TerminusLabel == "" && lastCP != nil {
 		sd.Ride.TerminusLabel = strings.TrimSpace(lastCP.Name)
+	}
+	sd.Selection.StartDate = sd.Ride.StartDate
+	if sd.DocStartDate == "" {
+		// No ride.start_date: the document starts on its earliest dated leg.
+		sd.DocStartDate = firstFixed
 	}
 	return sd, nil
 }
@@ -1139,21 +1475,28 @@ func parseSeed(path, defaultSlug string) (*seedData, error) {
 func (s *Store) Seed(path, defaultSlug string) (slug string, created bool, err error) {
 	sd, err := parseSeed(path, defaultSlug)
 	if err != nil {
-		return "", false, err
+		return "", false, fmt.Errorf("seed %s: %w", path, err)
 	}
 	if _, err := s.Ride(sd.Ride.Slug); err == nil {
 		return sd.Ride.Slug, false, nil
 	}
+	return sd.Ride.Slug, true, s.seedPlan(sd, nil)
+}
+
+// seedPlan inserts a ride that is not in the database yet. after, when given,
+// runs inside the same transaction — the selection that produced the plan is
+// stored with it or not at all.
+func (s *Store) seedPlan(sd *seedData, after func(*sql.Tx) error) error {
 	tx, err := s.db.Begin()
 	if err != nil {
-		return "", false, err
+		return err
 	}
 	defer tx.Rollback()
 	r := sd.Ride
 	if _, err := tx.Exec(`INSERT INTO rides (slug,name,start_date,end_date,mode,origin_label,terminus_label)
 	  VALUES (?,?,?,?,?,?,?)`,
 		r.Slug, r.Name, r.StartDate, r.EndDate, r.Mode, r.OriginLabel, r.TerminusLabel); err != nil {
-		return "", false, fmt.Errorf("seed ride: %w", err)
+		return fmt.Errorf("seed ride: %w", err)
 	}
 	legIDs := map[int]int64{}
 	for _, l := range sd.Legs {
@@ -1161,7 +1504,7 @@ func (s *Store) Seed(path, defaultSlug string) (slug string, created bool, err e
 		  VALUES (?,?,?,?,?,?,?,?,?)`,
 			r.Slug, l.Ord, l.Slug, l.Name, l.Date, l.EstMiles, l.EstHours, l.RouteHint, l.Line)
 		if err != nil {
-			return "", false, fmt.Errorf("seed leg %d: %w", l.Ord, err)
+			return fmt.Errorf("seed leg %d: %w", l.Ord, err)
 		}
 		legIDs[l.Ord], _ = res.LastInsertId()
 	}
@@ -1171,26 +1514,38 @@ func (s *Store) Seed(path, defaultSlug string) (slug string, created bool, err e
 		  VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 			legIDs[c.LegOrd], c.Ord, c.Name, c.Label, c.Lat, c.Lng, c.TZ, c.Precision, c.IsTerminal,
 			c.PlannedArrive, c.PlannedDepart); err != nil {
-			return "", false, fmt.Errorf("seed checkpoint %q: %w", c.Name, err)
+			return fmt.Errorf("seed checkpoint %q: %w", c.Name, err)
 		}
 	}
 	for _, x := range sd.Sights {
 		if _, err := tx.Exec(`INSERT INTO sights (leg_id,name,why,lat,lng,kind) VALUES (?,?,?,?,?,?)`,
 			legIDs[x.LegOrd], x.Name, x.Why, x.Lat, x.Lng, x.Kind); err != nil {
-			return "", false, fmt.Errorf("seed sight %q: %w", x.Name, err)
+			return fmt.Errorf("seed sight %q: %w", x.Name, err)
 		}
 	}
-	return r.Slug, true, tx.Commit()
+	if after != nil {
+		if err := after(tx); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // RefreshCounts is the one-line boot summary of RefreshPlanning.
 type RefreshCounts struct {
 	Legs, LegsNew, CPs, CPsNew, CPsKept, Sights int
+	// Pruned rows exist only for a trip with options: the legs and checkpoints
+	// the plan no longer has after a choice changed.
+	LegsPruned, CPsPruned int
 }
 
 func (c RefreshCounts) String() string {
-	return fmt.Sprintf("legs %d refreshed (%d new), checkpoints %d refreshed, %d kept (arrived), %d new, sights %d replaced",
+	s := fmt.Sprintf("legs %d refreshed (%d new), checkpoints %d refreshed, %d kept (arrived), %d new, sights %d replaced",
 		c.Legs, c.LegsNew, c.CPs, c.CPsKept, c.CPsNew, c.Sights)
+	if c.LegsPruned > 0 || c.CPsPruned > 0 {
+		s += fmt.Sprintf(", %d leg(s) and %d checkpoint(s) dropped with the choice that had them", c.LegsPruned, c.CPsPruned)
+	}
+	return s
 }
 
 // RefreshPlanning makes planning data seed-owned until actualized, the
@@ -1205,11 +1560,111 @@ func (c RefreshCounts) String() string {
 // It runs on every boot, which is deploy-coupled work: a seed edit reaches
 // the site on the next deploy and never on a suspend/resume.
 func (s *Store) RefreshPlanning(path, defaultSlug string) (RefreshCounts, error) {
-	var n RefreshCounts
 	sd, err := parseSeed(path, defaultSlug)
 	if err != nil {
-		return n, err
+		return RefreshCounts{}, fmt.Errorf("seed %s: %w", path, err)
 	}
+	return s.refreshPlan(sd, false, nil)
+}
+
+// PlanConflictError is a plan change refused because it would reach something
+// the road has already made real: an arrived checkpoint, or a leg or
+// checkpoint that holds posts. Nothing was written.
+type PlanConflictError struct{ Reasons []string }
+
+func (e *PlanConflictError) Error() string {
+	return "the plan cannot change that way: " + strings.Join(e.Reasons, "; ")
+}
+
+// planConflicts is the guard on a plan that can drop or replace rows — a trip
+// with options. It compares what the database holds with what the new plan
+// wants, and names every row the change would reach that is no longer the
+// plan's to move:
+//
+//   - a leg that holds posts must stay, on the same road (same slug). Posts
+//     cascade with their leg, so dropping it would delete them.
+//   - a checkpoint that is arrived or holds posts must stay what it is: same
+//     order, same name, same leg. A choice that adds a stop renumbers every
+//     checkpoint after it, and an arrived checkpoint cannot be renumbered.
+//
+// Dates are not identity: moving the start date re-dates every leg and is
+// never a conflict.
+func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
+	var reasons []string
+	planLegs := map[int]seedLeg{}
+	for _, l := range sd.Legs {
+		planLegs[l.Ord] = l
+	}
+	planCPs := map[int]seedCP{}
+	for _, c := range sd.Checkpoints {
+		planCPs[c.Ord] = c
+	}
+	rows, err := tx.Query(`SELECT l.ord, l.slug, (SELECT COUNT(*) FROM posts p WHERE p.leg_id=l.id)
+	  FROM legs l WHERE l.ride_slug=? ORDER BY l.ord`, sd.Ride.Slug)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var ord, posts int
+		var slug string
+		if err := rows.Scan(&ord, &slug, &posts); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if posts == 0 {
+			continue
+		}
+		pl, ok := planLegs[ord]
+		switch {
+		case !ok:
+			reasons = append(reasons, fmt.Sprintf("leg %d holds %d post(s) and the new plan has no leg %d", ord, posts, ord))
+		case pl.Slug != slug:
+			reasons = append(reasons, fmt.Sprintf("leg %d holds %d post(s) and the new plan takes a different road for it", ord, posts))
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows, err = tx.Query(`SELECT c.ord, c.name, l.ord, c.arrived_at,
+	    (SELECT COUNT(*) FROM posts p WHERE p.checkpoint_id=c.id)
+	  FROM checkpoints c JOIN legs l ON l.id=c.leg_id WHERE l.ride_slug=? ORDER BY c.ord`, sd.Ride.Slug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ord, legOrd, posts int
+		var name, arrived string
+		if err := rows.Scan(&ord, &name, &legOrd, &arrived, &posts); err != nil {
+			return nil, err
+		}
+		if arrived == "" && posts == 0 {
+			continue
+		}
+		why := "is arrived"
+		if arrived == "" {
+			why = fmt.Sprintf("holds %d post(s)", posts)
+		}
+		pc, ok := planCPs[ord]
+		switch {
+		case !ok:
+			reasons = append(reasons, fmt.Sprintf("checkpoint %d %s and the new plan has no checkpoint %d", ord, why, ord))
+		case pc.Name != name || pc.LegOrd != legOrd:
+			reasons = append(reasons, fmt.Sprintf("checkpoint %d %s and the new plan would put a different stop at %d", ord, why, ord))
+		}
+	}
+	return reasons, rows.Err()
+}
+
+// refreshPlan writes a parsed plan over an existing ride. prune is the
+// difference between a seed and a trip with options: a seed only ever adds
+// and refreshes, while a changed choice has to take away the legs and
+// checkpoints the plan no longer has. Pruning is guarded by planConflicts
+// first, inside the same transaction, so it can only ever remove rows that
+// are still pure plan. after runs in the transaction too.
+func (s *Store) refreshPlan(sd *seedData, prune bool, after func(*sql.Tx) error) (RefreshCounts, error) {
+	var n RefreshCounts
 	r := sd.Ride
 	if _, err := s.Ride(r.Slug); err != nil {
 		return n, fmt.Errorf("ride %s not present", r.Slug)
@@ -1220,9 +1675,52 @@ func (s *Store) RefreshPlanning(path, defaultSlug string) (RefreshCounts, error)
 	}
 	defer tx.Rollback()
 
+	if prune {
+		reasons, err := planConflicts(tx, sd)
+		if err != nil {
+			return n, err
+		}
+		if len(reasons) > 0 {
+			return n, &PlanConflictError{Reasons: reasons}
+		}
+	}
+
 	if _, err := tx.Exec(`UPDATE rides SET name=?,start_date=?,end_date=?,mode=?,origin_label=?,terminus_label=? WHERE slug=?`,
 		r.Name, r.StartDate, r.EndDate, r.Mode, r.OriginLabel, r.TerminusLabel, r.Slug); err != nil {
 		return n, err
+	}
+
+	if prune {
+		// Legs first, and before the refresh: a leg row's slug is unique per
+		// ride, and the row being dropped may hold the slug a kept row is about
+		// to take. Its checkpoints go with it (cascade); the guard above has
+		// already established none of them is arrived or holds a post.
+		keepLegs := map[int]bool{}
+		for _, l := range sd.Legs {
+			keepLegs[l.Ord] = true
+		}
+		ords, err := queryInts(tx, `SELECT ord FROM legs WHERE ride_slug=?`, r.Slug)
+		if err != nil {
+			return n, err
+		}
+		for _, ord := range ords {
+			if keepLegs[ord] {
+				continue
+			}
+			var cps int
+			_ = tx.QueryRow(`SELECT COUNT(*) FROM checkpoints c JOIN legs l ON l.id=c.leg_id
+			  WHERE l.ride_slug=? AND l.ord=?`, r.Slug, ord).Scan(&cps)
+			if _, err := tx.Exec(`DELETE FROM legs WHERE ride_slug=? AND ord=?`, r.Slug, ord); err != nil {
+				return n, fmt.Errorf("drop leg %d: %w", ord, err)
+			}
+			n.LegsPruned++
+			n.CPsPruned += cps
+		}
+		// Park the surviving slugs out of the way so two legs can trade roads
+		// without tripping the unique index mid-update.
+		if _, err := tx.Exec(`UPDATE legs SET slug='~'||ord WHERE ride_slug=?`, r.Slug); err != nil {
+			return n, err
+		}
 	}
 
 	legIDs := map[int]int64{}
@@ -1290,6 +1788,28 @@ func (s *Store) RefreshPlanning(path, defaultSlug string) (RefreshCounts, error)
 		n.CPsNew++
 	}
 
+	if prune {
+		keepCPs := map[int]bool{}
+		for _, c := range sd.Checkpoints {
+			keepCPs[c.Ord] = true
+		}
+		ords, err := queryInts(tx, `SELECT c.ord FROM checkpoints c JOIN legs l ON l.id=c.leg_id WHERE l.ride_slug=?`, r.Slug)
+		if err != nil {
+			return n, err
+		}
+		for _, ord := range ords {
+			if keepCPs[ord] {
+				continue
+			}
+			if _, err := tx.Exec(`DELETE FROM checkpoints WHERE id IN (
+			    SELECT c.id FROM checkpoints c JOIN legs l ON l.id=c.leg_id WHERE l.ride_slug=? AND c.ord=?)`,
+				r.Slug, ord); err != nil {
+				return n, fmt.Errorf("drop checkpoint %d: %w", ord, err)
+			}
+			n.CPsPruned++
+		}
+	}
+
 	if _, err := tx.Exec(`DELETE FROM sights WHERE leg_id IN (SELECT id FROM legs WHERE ride_slug=?)`, r.Slug); err != nil {
 		return n, err
 	}
@@ -1300,5 +1820,127 @@ func (s *Store) RefreshPlanning(path, defaultSlug string) (RefreshCounts, error)
 		}
 		n.Sights++
 	}
+	if after != nil {
+		if err := after(tx); err != nil {
+			return n, err
+		}
+	}
 	return n, tx.Commit()
+}
+
+func queryInts(tx *sql.Tx, q string, args ...any) ([]int, error) {
+	rows, err := tx.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int
+	for rows.Next() {
+		var v int
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// --- meta: the active ride and each trip's stored selection ---------------------
+
+// metaActiveRide names the ride the site shows. It is data, not config: the
+// trip-keeper sets it with one authenticated call and it is read per request,
+// so it takes effect on a machine that has not booted in months. Absent, the
+// site shows RIDE_SLUG.
+const metaActiveRide = "active_ride"
+
+func metaSelectionKey(slug string) string { return "selection:" + slug }
+
+// Meta reads one meta value; ok is false when the key is absent.
+func (s *Store) Meta(key string) (string, bool) {
+	var v string
+	if err := s.db.QueryRow(`SELECT value FROM meta WHERE key=?`, key).Scan(&v); err != nil {
+		return "", false
+	}
+	return v, true
+}
+
+func (s *Store) SetMeta(key, value string) error {
+	_, err := s.db.Exec(`INSERT INTO meta (key,value) VALUES (?,?)
+	  ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
+	return err
+}
+
+func (s *Store) DeleteMeta(key string) error {
+	_, err := s.db.Exec(`DELETE FROM meta WHERE key=?`, key)
+	return err
+}
+
+// StoredSelection is the selection last saved for a trip, or nil when none
+// has been — in which case the document's own defaults stand.
+func (s *Store) StoredSelection(slug string) *Selection {
+	v, ok := s.Meta(metaSelectionKey(slug))
+	if !ok {
+		return nil
+	}
+	var sel Selection
+	if json.Unmarshal([]byte(v), &sel) != nil {
+		return nil
+	}
+	return &sel
+}
+
+// ApplyPlan is how a trip with options reaches the database: it creates the
+// ride, or refreshes it under the guard, and records the selection that
+// produced the plan in the same transaction. A refused change returns a
+// *PlanConflictError and writes nothing.
+func (s *Store) ApplyPlan(sd *seedData) (created bool, n RefreshCounts, err error) {
+	selJSON, err := json.Marshal(sd.Selection)
+	if err != nil {
+		return false, n, err
+	}
+	saveSel := func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO meta (key,value) VALUES (?,?)
+		  ON CONFLICT(key) DO UPDATE SET value=excluded.value`, metaSelectionKey(sd.Ride.Slug), string(selJSON))
+		return err
+	}
+	if _, err := s.Ride(sd.Ride.Slug); err != nil {
+		return true, n, s.seedPlan(sd, saveSel)
+	}
+	n, err = s.refreshPlan(sd, true, saveSel)
+	return false, n, err
+}
+
+// RideCensus is one ride's row counts: what is in the database for it,
+// whichever ride the site is showing.
+type RideCensus struct {
+	Slug        string `json:"slug"`
+	Name        string `json:"name"`
+	StartDate   string `json:"start_date"`
+	EndDate     string `json:"end_date"`
+	Legs        int    `json:"legs"`
+	Checkpoints int    `json:"checkpoints"`
+	Arrived     int    `json:"arrived"`
+	Posts       int    `json:"posts"`
+}
+
+func (s *Store) Rides() ([]RideCensus, error) {
+	rows, err := s.db.Query(`SELECT r.slug, r.name, r.start_date, r.end_date,
+	    (SELECT COUNT(*) FROM legs l WHERE l.ride_slug=r.slug),
+	    (SELECT COUNT(*) FROM checkpoints c JOIN legs l ON l.id=c.leg_id WHERE l.ride_slug=r.slug),
+	    (SELECT COUNT(*) FROM checkpoints c JOIN legs l ON l.id=c.leg_id WHERE l.ride_slug=r.slug AND c.arrived_at<>''),
+	    (SELECT COUNT(*) FROM posts p JOIN legs l ON l.id=p.leg_id WHERE l.ride_slug=r.slug)
+	  FROM rides r ORDER BY r.start_date, r.slug`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []RideCensus{}
+	for rows.Next() {
+		var c RideCensus
+		if err := rows.Scan(&c.Slug, &c.Name, &c.StartDate, &c.EndDate, &c.Legs, &c.Checkpoints, &c.Arrived, &c.Posts); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }

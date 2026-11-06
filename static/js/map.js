@@ -66,10 +66,22 @@
   (data.tracks || []).forEach(function (t) {
     var pts = (t.line || []).map(function (c) { return [c[1], c[0]]; });
     if (pts.length < 2) return;
-    var line = L.polyline(pts, { color: t.color, weight: 5, opacity: 0.95 }).addTo(trackLayer);
-    line.bindPopup('<div class="popup"><h3>Leg ' + t.leg + ' &middot; driven</h3><p>' + esc(t.name) +
+    /* planned_start: the first vertex is where the leg was planned to begin,
+       not a place the ride was stamped at. That first stretch is drawn lighter
+       and dashed, so the line never claims more than is known. */
+    var solid = pts, popup = '<div class="popup"><h3>Leg ' + t.leg + ' &middot; driven</h3><p>' + esc(t.name) +
       '</p><p class="muted">the actual track</p><p><a href="/legs/' + esc(t.slug) +
-      '">Open leg &rarr;</a></p></div>');
+      '">Open leg &rarr;</a></p></div>';
+    if (t.planned_start) {
+      L.polyline([pts[0], pts[1]], { color: t.color, weight: 5, opacity: 0.6, dashArray: '2,9' })
+        .addTo(trackLayer)
+        .bindPopup('<div class="popup"><h3>Leg ' + t.leg + '</h3><p>' + esc(t.name) +
+          '</p><p class="muted">from the planned start to the first photo</p></div>');
+      solid = pts.slice(1);
+    }
+    if (solid.length >= 2) {
+      L.polyline(solid, { color: t.color, weight: 5, opacity: 0.95 }).addTo(trackLayer).bindPopup(popup);
+    }
     all = all.concat(pts);
   });
 

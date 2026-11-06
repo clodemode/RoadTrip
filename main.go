@@ -101,6 +101,12 @@ const (
 
 func main() {
 	hash := flag.String("hash", "", "print a bcrypt hash for the given password and exit")
+	convert := flag.String("convert", "", "convert a planning-tool route document (schema roadtrip-route/0.1) at this path into a trip file and exit")
+	cSlug := flag.String("slug", "", "with -convert: the ride slug (lowercase letters, digits, dashes)")
+	cStart := flag.String("start", "", "with -convert: the day the ride starts, YYYY-MM-DD")
+	cName := flag.String("name", "", "with -convert: the ride name; default is the route document's own")
+	cZones := flag.String("zones", "", "with -convert: IANA zones for stops that carry no tz, as stop=Zone,stop=Zone")
+	cOut := flag.String("out", "", "with -convert: where to write; default $DATA_DIR/trips/<slug>.geojson")
 	flag.Parse()
 	if *hash != "" {
 		h, err := HashPassword(*hash)
@@ -108,6 +114,15 @@ func main() {
 			log.Fatal(err)
 		}
 		fmt.Println(h)
+		return
+	}
+	if *convert != "" {
+		out, err := runConvert(*convert, *cOut, env("DATA_DIR", "/data"),
+			convertOptions{Slug: *cSlug, Start: *cStart, Name: *cName, Zones: *cZones})
+		if err != nil {
+			log.Fatalf("convert: %v", err)
+		}
+		fmt.Println(out)
 		return
 	}
 
@@ -181,6 +196,21 @@ func main() {
 		os.Remove(tmp)
 	}
 
+	// Then the trips on the volume, through the same create-or-refresh path.
+	// These are the trips that are not in the image: the repository is public
+	// and a trip's places and dates are not. A push applies a trip the moment
+	// it lands (handlers: tripPush), so this boot pass is only what makes a
+	// fresh machine or a restored volume come up whole — it is deploy-coupled
+	// like everything above it, and nothing here depends on it re-running.
+	if loaded, failed := loadVolumeTrips(store, dataDir); loaded+failed > 0 {
+		log.Printf("volume trips: %d loaded, %d not loaded", loaded, failed)
+	}
+	// And each trip's checklist, after its trip: open steps take the file's
+	// text, done ones are never written.
+	if loaded, failed := loadVolumeChecklists(store, dataDir); loaded+failed > 0 {
+		log.Printf("volume checklists: %d loaded, %d not loaded", loaded, failed)
+	}
+
 	app := &App{
 		store:    store,
 		auth:     NewAuth(),
@@ -231,11 +261,14 @@ func main() {
 	// normal and silent-by-design; a malformed file is worth a warning.
 	if pd, err := loadPrivate(dataDir); err != nil {
 		log.Printf("WARN private overlay: %v", err)
-	} else if n := len(pd.addressByOrd()); n > 0 {
-		log.Printf("private overlay: %d checkpoint address(es) (admin pages only)", n)
+	} else if n := pd.entries(); n > 0 {
+		log.Printf("private overlay: %d checkpoint entr(ies) across %d ride(s) (admin pages only)", n, len(pd.Rides)+1)
 	}
 	if _, err := store.Ride(rideSlug); err != nil {
 		log.Printf("WARN RIDE_SLUG=%s is not in the database — / will 404 until it is seeded", rideSlug)
+	}
+	if active := app.activeSlug(); active != rideSlug {
+		log.Printf("active ride: %s (set by the trip-keeper; RIDE_SLUG=%s is the fallback)", active, rideSlug)
 	}
 
 	srv := &http.Server{
@@ -249,7 +282,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("roadtrip listening on %s (ride %s)", addr, rideSlug)
+		log.Printf("roadtrip listening on %s (ride %s)", addr, app.activeSlug())
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen: %v", err)
 		}

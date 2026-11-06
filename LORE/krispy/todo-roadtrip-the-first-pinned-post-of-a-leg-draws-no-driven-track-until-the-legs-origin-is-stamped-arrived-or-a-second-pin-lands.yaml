@@ -1,0 +1,45 @@
+entries:
+- slug: todo-roadtrip-the-first-pinned-post-of-a-leg-draws-no-driven-track-until-the-legs-origin-is-stamped-arrived-or-a-second-pin-lands
+  title: 'roadtrip: the first pinned photo of a leg does not replace the plan on the map, because a driven
+    track needs two points and the leg''s origin only counts once it is stamped arrived'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: krispy
+  tags:
+  - driven-track
+  - map
+  - posts
+  - 2026-11
+  status: shipped
+  description: 'Found 2026-11-06 while proving the driven-track behaviour on a trip loaded from the volume
+    (spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06;
+    tests TestVolumeTripPinnedPostDrawsTheTrack and TestVolumeTripOnePinAloneIsNotATrack in trip_test.go).
+    legTracks (handlers.go) builds a leg''s track from the ARRIVED origin, the leg''s pinned posts in
+    time order, and the ARRIVED terminus, and needs at least two points. So a photo from the road does
+    turn the planned leg dashed and draw the actual line, but only when the day''s starting checkpoint
+    was stamped arrived, or a second pinned post exists on that leg. On a morning when nobody tapped Arrived
+    the night before (or on day 1, where the origin is the start and is rarely stamped), the first photo
+    of the day appears as a pin and the plan stays solid: the map does not yet say "this is where the
+    car really is". The two-point floor itself is right (one fix is a pin, not a line). The gap is that
+    the origin is ignored unless stamped.'
+  dont: 'DONT lower the floor to one point: a one-point LineString is invalid GeoJSON and a line from
+    nowhere is a guess. DONT draw a track from a private origin''s raw point: the origin a track starts
+    from is the published point out of the store, a snapped cell for a fuzzed checkpoint. DONT stamp a
+    checkpoint arrived as a side effect of a post.'
+  do_this: 'DO let a leg''s first pinned post start a track from the leg''s origin checkpoint when that
+    leg (or a later one) has evidence the day began: the origin''s published point is used as the track''s
+    first vertex once any pinned post exists on the leg, marked in the payload as planned rather than
+    arrived so the map can draw that first stretch lighter. Keep kind=track in /route.geojson honest by
+    carrying a property that says which vertices are evidence. Tests on the synthetic fixture: one pinned
+    post on a leg with an unstamped origin yields a two-point track that starts at the origin''s published
+    point; a leg with no pinned post still has no track.'
+  do_also: 'The cheaper alternative, if the rule above reads as guessing: leave legTracks alone and have
+    the post form offer "stamp the last stop as arrived" when the first post of a leg is made.'
+  effort: S
+  impact: medium
+  triaged_at: '2026-11-06T19:54:17.527334+00:00'
+  triaged_by: krispy
+  closed_by_actor: codi-roadtrip-trip-checklist-2026-11-06
+  closed_at: '2026-11-06T20:20:24.986805+00:00'

@@ -10,6 +10,9 @@ primary_region = "dfw"   # Dallas — the ride departs from Austin
 [env]
   DATA_DIR = "/data"
   PORT = "8080"
+  # The FALLBACK ride. The ride the site shows is set by the trip-keeper
+  # (POST /admin/ride/active) and read per request, so a new trip pushed to
+  # the volume goes live without a deploy; this is what shows when none is set.
   RIDE_SLUG = "atx-sjc-2026-09"
   # The one public origin: canonical + og:url on every page, and every other
   # host the app answers on (roadtrip-clodemode.fly.dev included) 301s here,
