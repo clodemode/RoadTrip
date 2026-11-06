@@ -62,7 +62,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 
 ```bash
 docker build -t roadtrip .
-docker run -p 8080:8080 -e COOKIE_SECURE=0 -v "$PWD/data:/data" roadtrip
+docker run -p 8080:8080 --env-file .env -v "$PWD/data:/data" roadtrip   # .env from .env.example; gitignored
 ```
 
 First boot seeds from `seed/*.geojson`; after that the volume is the source of truth and a redeploy never clobbers rows edited through the UI. With no `ADMIN_PASSWORD_HASH` the site is read-only. Generate one with `docker run --rm roadtrip -hash 'your-password'`.

@@ -16,9 +16,9 @@ import (
 // The repository is public and a trip is not. Four things keep a trip out of
 // it, and this file is the test that they are all still there:
 //
-//  1. .gitignore and .dockerignore each carry a line for the data dir and one
-//     for the planning-handoff folder, so neither can be staged by accident
-//     nor copied into an image build.
+//  1. .gitignore and .dockerignore each carry a line for the data dir, one for
+//     the planning-handoff folder and one for .env (the local secrets file),
+//     so none can be staged by accident nor copied into an image build.
 //  2. No file git knows about — tracked, or untracked and not ignored — is a
 //     trip document, except the one seed the image has always carried and the
 //     fixtures under testdata/.
@@ -40,8 +40,8 @@ var seedAllowlist = map[string]bool{
 
 // guardLines is what each ignore file must contain, as whole lines.
 var guardLines = map[string][]string{
-	".gitignore":    {"data/", "coWork_input/"},
-	".dockerignore": {"data/", "coWork_input/"},
+	".gitignore":    {"data/", "coWork_input/", ".env"},
+	".dockerignore": {"data/", "coWork_input/", "/.env"},
 }
 
 // privateDirs may hold nothing git knows about.
@@ -296,8 +296,9 @@ func TestRepoGuardFires(t *testing.T) {
 	if bytes.Equal(unmarkedChecklist, checklist) {
 		t.Fatal("the checklist fixture has no synthetic marker to remove")
 	}
-	ignore := "data/\ncoWork_input/\n"
-	clean := map[string]string{".gitignore": ignore, ".dockerignore": ignore, "main.go": "package main\n",
+	ignore := "data/\ncoWork_input/\n.env\n"
+	dockerIgnore := "data/\ncoWork_input/\n/.env\n"
+	clean := map[string]string{".gitignore": ignore, ".dockerignore": dockerIgnore, "main.go": "package main\n",
 		"seed/atx-sjc-2026-09.geojson": string(trip), "testdata/trip-fixture.geojson": string(trip),
 		"testdata/route-fixture.json": string(route), "notes.json": `{"features": []}`,
 		"testdata/checklist-fixture.json": string(checklist), "testdata/other.checklist.json": string(checklist),
@@ -321,10 +322,12 @@ func TestRepoGuardFires(t *testing.T) {
 		{"a fixture that does not say it is synthetic", func(m map[string]string) { m["testdata/real.geojson"] = string(unmarked) }, "testdata/real.geojson is a trip document under testdata/"},
 		{"anything under data/", func(m map[string]string) { m["data/private.json"] = "{}" }, "data/private.json is under data/"},
 		{"anything under the handoff folder", func(m map[string]string) { m["coWork_input/readme.md"] = "x" }, "coWork_input/readme.md is under coWork_input/"},
-		{"no handoff line in .gitignore", func(m map[string]string) { m[".gitignore"] = "data/\n" }, `.gitignore has no "coWork_input/" line`},
-		{"no data line in .gitignore", func(m map[string]string) { m[".gitignore"] = "coWork_input/\n" }, `.gitignore has no "data/" line`},
-		{"a commented-out guard line", func(m map[string]string) { m[".gitignore"] = "data/\n# coWork_input/\n" }, `.gitignore has no "coWork_input/" line`},
-		{"no handoff line in .dockerignore", func(m map[string]string) { m[".dockerignore"] = "data/\n" }, `.dockerignore has no "coWork_input/" line`},
+		{"no handoff line in .gitignore", func(m map[string]string) { m[".gitignore"] = "data/\n.env\n" }, `.gitignore has no "coWork_input/" line`},
+		{"no data line in .gitignore", func(m map[string]string) { m[".gitignore"] = "coWork_input/\n.env\n" }, `.gitignore has no "data/" line`},
+		{"a commented-out guard line", func(m map[string]string) { m[".gitignore"] = "data/\n# coWork_input/\n.env\n" }, `.gitignore has no "coWork_input/" line`},
+		{"no handoff line in .dockerignore", func(m map[string]string) { m[".dockerignore"] = "data/\n/.env\n" }, `.dockerignore has no "coWork_input/" line`},
+		{"no secrets-file line in .gitignore", func(m map[string]string) { m[".gitignore"] = "data/\ncoWork_input/\n" }, `.gitignore has no ".env" line`},
+		{"no secrets-file line in .dockerignore", func(m map[string]string) { m[".dockerignore"] = "data/\ncoWork_input/\n" }, `.dockerignore has no "/.env" line`},
 		{"no .gitignore at all", func(m map[string]string) { delete(m, ".gitignore") }, ".gitignore is missing"},
 		{"a checklist at the root", func(m map[string]string) { m["my-trip.checklist.json"] = string(checklist) }, "my-trip.checklist.json is a checklist document outside testdata/"},
 		{"a checklist beside the code under another name", func(m map[string]string) { m["docs/steps.txt"] = string(checklist) }, "docs/steps.txt is a checklist document outside testdata/"},
@@ -375,7 +378,7 @@ func TestRepoGuardFires(t *testing.T) {
 	// And a guard handed nothing to check says so rather than passing.
 	root := t.TempDir()
 	_ = os.WriteFile(filepath.Join(root, ".gitignore"), []byte(ignore), 0o644)
-	_ = os.WriteFile(filepath.Join(root, ".dockerignore"), []byte(ignore), 0o644)
+	_ = os.WriteFile(filepath.Join(root, ".dockerignore"), []byte(dockerIgnore), 0o644)
 	if _, err := repoGuard(root, nil); err == nil {
 		t.Error("a guard with no files to check reported no error")
 	}

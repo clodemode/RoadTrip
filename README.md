@@ -52,9 +52,20 @@ So a seed edit reaches the site on the next deploy.
 
 ## Running it
 
+Local settings and secrets live in `.env`, which git and the image build both
+ignore. The tracked `.env.example` lists every variable; copy it once and fill
+in the blanks (`-n` never overwrites a `.env` you already have):
+
+```bash
+cp -n .env.example .env
+```
+
 ```bash
 docker build -t roadtrip .
-docker run -p 8080:8080 -v "$PWD/data:/data" roadtrip
+```
+
+```bash
+docker run -p 8080:8080 --env-file .env -v "$PWD/data:/data" roadtrip
 ```
 
 Then open http://localhost:8080. On first boot it seeds itself from
@@ -87,7 +98,7 @@ session cookie will never come back.
 | `SITE_URL` | the canonical origin, e.g. `https://roadtrip.opeongo.net`; unset (the local default) ⇒ no redirect and no canonical/og tags |
 | `SITE_VISIBILITY` | `public` (default in code) or `private`; **private puts the whole site behind the one admin password** — see below |
 | `PIN_PRECISION` | `snap` (default) or `exact`; decides only whether the post form's **Fuzz location** toggle starts ticked at a private place |
-| `ANTHROPIC_API_KEY` | the key Chester asks the Claude API with. **A secret, set by the operator on the host and never in a file here**; unset ⇒ Chester is off, its page says so and boot logs `chester: disabled`. See "Chester" |
+| `ANTHROPIC_API_KEY` | the key Chester asks the Claude API with. **A secret: a Fly secret on the live site, the gitignored `.env` for a local run, never a tracked file**; unset ⇒ Chester is off, its page says so and boot logs `chester: disabled`. See "Chester" |
 | `CHESTER_MODEL_QUICK`, `CHESTER_MODEL_PLAN` | the model each mode asks; both default `claude-opus-5-5`. It must be a model the web search tool in use (`web_search_20260209`) is documented for: `claude-opus-5-5`, `claude-opus-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-5-5`, `claude-sonnet-5` or `claude-sonnet-4-6`. Any other leaves Chester off, and boot logs why |
 | `CHESTER_EFFORT_QUICK`, `CHESTER_EFFORT_PLAN` | `low`, `medium`, `high`, `xhigh` or `max`; default `low` for quick and `medium` for plan |
 | `CHESTER_DAILY_USD` | the most Chester may spend in one UTC day, in dollars; default `5`. Above zero and no more than `100`: anything else (a typo such as `1e308` included) leaves Chester off, and boot logs why |
@@ -390,7 +401,9 @@ town is in the question's own message instead, after the cached part.
 
 **The key.** Chester needs an API key for the Claude API. The operator sets it
 as a Fly secret named `ANTHROPIC_API_KEY`, by hand, with their own key; it is
-not in this repository, not in `fly.toml`, and not in any log. Setting a secret
+not in this repository, not in `fly.toml`, and not in any log. For a local run
+it goes in `.env`, which git and the image build ignore and the repo guard test
+requires them to. Setting a secret
 restarts the machine, and that restart is the only thing switching Chester on
 takes. With no key the feature is absent: the
 masthead has no link, `/chester` says Chester is not set up, and boot logs

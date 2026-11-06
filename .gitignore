@@ -10,3 +10,6 @@ data/
 # A planning handoff is trip input: real places and dates. It stays local,
 # like data/. The repo guard test fails closed if this line goes missing.
 coWork_input/
+# Local secrets and settings. .env is never tracked (the fleet standard): copy
+# .env.example to .env and fill it in. The repo guard test requires this line.
+.env
