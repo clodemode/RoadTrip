@@ -54,7 +54,9 @@ const (
 	// chesterPromptVersion is stored on every row. Change the system prompt,
 	// the context block or the tool and this changes with it, so two rows are
 	// only ever compared when they were asked the same way.
-	chesterPromptVersion = "chester-rt-3"
+	// (chester-rt-3 was two wordings tried against the live API in one
+	// sitting and is not used again: rows carrying it are not all alike.)
+	chesterPromptVersion = "chester-rt-4"
 
 	maxChesterQuestion = 1000
 )
