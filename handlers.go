@@ -93,6 +93,18 @@ func (a *App) funcs() template.FuncMap {
 		// mi and hr write a planner figure to one decimal, always.
 		"mi": fmtMiles,
 		"hr": fmtMiles,
+		// Chester's log: dollars to four places, a duration in seconds, a
+		// figure that may be absent, a percentage.
+		"usd":  usd4,
+		"usd2": usd2,
+		"secs": func(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', 1, 64) + " s" },
+		"opt": func(f *float64) string {
+			if f == nil {
+				return ""
+			}
+			return strconv.FormatFloat(*f, 'f', -1, 64)
+		},
+		"pct": func(f float64) string { return strconv.FormatFloat(f, 'f', 1, 64) + "%" },
 	}
 }
 
@@ -165,6 +177,13 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /admin/checklist", a.requireAuth(a.checklistPush))
 	mux.Handle("GET /admin/checklist.json", a.requireAuth(a.checklistCensus))
 	mux.Handle("POST /admin/checklist/{kind}/{id}", a.requireAuth(a.checklistMark))
+	// Chester, the en-route helper, and its log. Signed in only, every one:
+	// a question spends money and the log is the trip-keeper's own.
+	mux.Handle("GET /chester", a.requireAuth(a.chesterPage))
+	mux.Handle("POST /chester/ask", a.requireAuth(a.chesterAsk))
+	mux.Handle("GET /admin/chester/log", a.requireAuth(a.chesterLog))
+	mux.Handle("GET /admin/chester/log.json", a.requireAuth(a.chesterLogJSON))
+	mux.Handle("POST /admin/chester/log/{id}", a.requireAuth(a.chesterVerdict))
 
 	return logRequests(a.canonicalHost(a.visibility(mux)))
 }
@@ -270,8 +289,46 @@ func (a *App) requireAuth(next http.HandlerFunc) http.Handler {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
+		// A write that rides on the cookie must come from this site's own
+		// pages. The cookie is SameSite=Lax, which stops another site's form
+		// but not a page on a sibling host of the same site: the browser
+		// sends the cookie with that page's POST, and here that could write
+		// to the trip or spend Chester's money. The push token is not a
+		// cookie and no browser attaches it, so that path is left alone.
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !a.auth.pushAuthed(r) && !a.ownOrigin(r) {
+			log.Printf("refused: a signed-in %s %s came from another origin", r.Method, r.URL.Path)
+			http.Error(w, "this request came from another site", http.StatusForbidden)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ownOrigin reports whether a request may have come from one of this site's
+// own pages, by its Origin header. A browser sends Origin with every POST a
+// page makes, form or fetch, and a page cannot forge it. When the header is
+// there its host must be the host the request was sent to or SITE_URL's host;
+// anything else, "null" included, is another origin. A request with no
+// Origin header is not a browser's cross-origin write and passes unchanged.
+func (a *App) ownOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Host)
+	if host == strings.ToLower(r.Host) {
+		return true
+	}
+	if a.siteURL != "" {
+		if site, err := url.Parse(a.siteURL); err == nil && site.Host != "" && host == strings.ToLower(site.Host) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data map[string]any) {
@@ -299,6 +356,8 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	data["SitePrivate"] = a.sitePrivate
 	// Whether the masthead links to /checklist: only for a ride that has one.
 	_, data["HasChecklist"] = a.store.ChecklistSummary(a.activeSlug())
+	// Whether the masthead links to Chester: signed in, and switched on.
+	data["ChesterOn"] = authed && a.chester != nil
 	data["CreatureName"] = CreatureName
 	data["CreatureTag"] = CreatureTag
 	data["CreatureAlt"] = CreatureAlt

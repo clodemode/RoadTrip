@@ -8,3 +8,7 @@ README.md
 /roadtrip
 .claude/
 coWork_input/
+# The local secrets file stays out of the build context: a secret is never
+# baked into an image. Anchored on purpose, so it excludes this one file and
+# not env files as a class.
+/.env

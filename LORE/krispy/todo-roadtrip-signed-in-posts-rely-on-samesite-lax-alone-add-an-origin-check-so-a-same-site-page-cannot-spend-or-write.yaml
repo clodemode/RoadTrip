@@ -1,0 +1,34 @@
+entries:
+- slug: todo-roadtrip-signed-in-posts-rely-on-samesite-lax-alone-add-an-origin-check-so-a-same-site-page-cannot-spend-or-write
+  title: 'roadtrip: signed-in POST routes (admin writes and now /chester/ask, which spends money) rely
+    on the SameSite=Lax session cookie alone; add an Origin or Sec-Fetch-Site check so a page on a sibling
+    subdomain of the same site cannot submit them with the trip-keeper''s cookie'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: krispy
+  tags:
+  - csrf
+  - auth
+  - chester
+  - security
+  - 2026-11
+  status: shipped
+  description: Found in the cold review of the Chester branch, 2026-11-06. requireAuth accepts the session
+    cookie or the push token; there is no CSRF token and no Origin check on any POST. SameSite=Lax stops
+    a cross-site form post, but a page served from another host under the same registrable domain is same-site,
+    so the browser sends the cookie with its POST. Before Chester this could write admin data; /chester/ask
+    also spends API money (bounded by the daily cap). Inferred from auth.go and the routes, not reproduced
+    from a sibling host.
+  dont: DONT apply the check to requests carrying the push token (curl has no Origin). DONT break the
+    plain HTML form posts the pages make.
+  do_this: In requireAuth, for a cookie-authenticated non-GET request, refuse unless Sec-Fetch-Site is
+    same-origin or none, or Origin matches the canonical host. Add a test that a POST with a foreign Origin
+    and a valid cookie is refused and that a push-token POST is not.
+  effort: S
+  impact: medium
+  triaged_at: '2026-11-06T21:38:25.482824+00:00'
+  triaged_by: krispy
+  closed_by_actor: codi-roadtrip-chester-review-fixes-2026-11-06
+  closed_at: '2026-11-06T21:52:43.512950+00:00'

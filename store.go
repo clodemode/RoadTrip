@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -266,6 +267,48 @@ CREATE TABLE IF NOT EXISTS checklist_items (
   private_note TEXT NOT NULL DEFAULT '',
   UNIQUE (ride_slug, kind, item_id)
 );
+CREATE TABLE IF NOT EXISTS chester_queries (
+  id              INTEGER PRIMARY KEY,
+  ride_slug       TEXT NOT NULL DEFAULT '',
+  asked_at        TEXT NOT NULL,
+  tz              TEXT NOT NULL DEFAULT 'UTC',
+  mode            TEXT NOT NULL,
+  preset          TEXT NOT NULL DEFAULT '',
+  question        TEXT NOT NULL,
+  prompt_version  TEXT NOT NULL DEFAULT '',
+  model           TEXT NOT NULL,
+  served_model    TEXT NOT NULL DEFAULT '',
+  effort          TEXT NOT NULL DEFAULT '',
+  first_ms        INTEGER,
+  total_ms        INTEGER NOT NULL DEFAULT 0,
+  tokens_in       INTEGER NOT NULL DEFAULT 0,
+  tokens_out      INTEGER NOT NULL DEFAULT 0,
+  cache_read      INTEGER NOT NULL DEFAULT 0,
+  cache_write     INTEGER NOT NULL DEFAULT 0,
+  searches        INTEGER NOT NULL DEFAULT 0,
+  usd             REAL NOT NULL DEFAULT 0,
+  answer          TEXT NOT NULL DEFAULT '',
+  places          TEXT NOT NULL DEFAULT '[]',
+  stop_reason     TEXT NOT NULL DEFAULT '',
+  error           TEXT NOT NULL DEFAULT '',
+  note            TEXT NOT NULL DEFAULT '',
+  pos_lat         REAL,
+  pos_lng         REAL,
+  pos_source      TEXT NOT NULL DEFAULT 'none',
+  pos_label       TEXT NOT NULL DEFAULT '',
+  verdict         TEXT NOT NULL DEFAULT '',
+  checked_against TEXT NOT NULL DEFAULT '',
+  verdict_note    TEXT NOT NULL DEFAULT '',
+  chester_value   REAL,
+  reference_value REAL,
+  value_unit      TEXT NOT NULL DEFAULT '',
+  verdict_at      TEXT NOT NULL DEFAULT '',
+  partial         TEXT NOT NULL DEFAULT '',
+  usd_estimated   INTEGER NOT NULL DEFAULT 0,
+  answer_synth    INTEGER NOT NULL DEFAULT 0,
+  usage_json      TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS chester_asked ON chester_queries(asked_at);
 `
 
 type Store struct{ db *sql.DB }
@@ -300,6 +343,15 @@ func (s *Store) migrate() error {
 		"lat REAL", "lng REAL", "pin_source TEXT NOT NULL DEFAULT 'none'", "accuracy_m REAL",
 		"pin_fuzzed INTEGER NOT NULL DEFAULT 0",
 	}); err != nil {
+		return err
+	}
+	if err := s.addColumns("chester_queries", []string{
+		"partial TEXT NOT NULL DEFAULT ''", "usd_estimated INTEGER NOT NULL DEFAULT 0",
+		"answer_synth INTEGER NOT NULL DEFAULT 0", "usage_json TEXT NOT NULL DEFAULT '[]'",
+	}); err != nil {
+		return err
+	}
+	if err := s.chesterFirstWordNullable(); err != nil {
 		return err
 	}
 	if err := s.once("pins_backfilled_v1", s.backfillPins); err != nil {
@@ -339,6 +391,42 @@ func (s *Store) addColumns(table string, defs []string) error {
 		}
 		log.Printf("migrate: added column %s.%s", table, name)
 	}
+	return nil
+}
+
+// chesterFirstWordNullable lets chester_queries.first_ms be empty. The column
+// was first made NOT NULL DEFAULT 0, which wrote a wait of zero milliseconds
+// for an answer that had no words at all. A table of that shape is given a
+// column that can be empty, and its zeros, which never meant a time, become
+// empty. A table that already has the new shape is left alone.
+func (s *Store) chesterFirstWordNullable() error {
+	var notNull int
+	err := s.db.QueryRow(`SELECT "notnull" FROM pragma_table_info('chester_queries') WHERE name='first_ms'`).Scan(&notNull)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && notNull == 0) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		`ALTER TABLE chester_queries RENAME COLUMN first_ms TO first_ms_v1`,
+		`ALTER TABLE chester_queries ADD COLUMN first_ms INTEGER`,
+		`UPDATE chester_queries SET first_ms = NULLIF(first_ms_v1, 0)`,
+		`ALTER TABLE chester_queries DROP COLUMN first_ms_v1`,
+	} {
+		if _, err := tx.Exec(q); err != nil {
+			return fmt.Errorf("chester_queries.first_ms: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	log.Printf("migrate: chester_queries.first_ms can now be empty")
 	return nil
 }
 
@@ -573,6 +661,36 @@ func nearPrivate(lat, lng float64, cps []Checkpoint) *Checkpoint {
 		}
 	}
 	return best
+}
+
+// publishPosition is the fuzz seam for a position that is about to leave the
+// site by a road other than a post: the en-route helper sends one to an API.
+// A point that belongs to a private place is replaced by that place's snapped
+// point, exactly as a post's pin is (nearPrivate), and the test is widened to
+// the line mask's radius, because this point goes to a third party and a
+// vertex of a leg line is held to that radius already. Anywhere else the
+// point is published to three decimals, about a hundred metres: enough to
+// find the next fuel stop, and no finer than that needs. The checkpoints
+// must be the store's own, already snapped.
+func publishPosition(lat, lng float64, cps []Checkpoint) (LatLng, *Checkpoint) {
+	if pc := nearPrivate(lat, lng, cps); pc != nil {
+		return LatLng{Lat: pc.Lat, Lng: pc.Lng}, pc
+	}
+	var best *Checkpoint
+	bestKm := math.Inf(1)
+	for i := range cps {
+		c := &cps[i]
+		if c.Precision != precisionFuzzed || !inPrivateZone(lat, lng, *c) {
+			continue
+		}
+		if km := haversineKm(lat, lng, c.Lat, c.Lng); km < bestKm {
+			best, bestKm = c, km
+		}
+	}
+	if best != nil {
+		return LatLng{Lat: best.Lat, Lng: best.Lng}, best
+	}
+	return LatLng{Lat: math.Round(lat*1000) / 1000, Lng: math.Round(lng*1000) / 1000}, nil
 }
 
 // rideCheckpoints flattens a ride's legs into one checkpoint slice.
