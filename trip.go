@@ -96,10 +96,21 @@ func stageTrip(dataDir, slug string, raw []byte) (commit func() error, discard f
 	return commit, discard, nil
 }
 
+// maxLineEndKm is how far a leg line's first or last point may sit from the
+// checkpoint at that end of the leg. A routed line ends at its checkpoint, so
+// 50 km is generous on purpose: it is not a judgement about the road, only
+// the difference between "the line belongs to this leg" and "the line is
+// somewhere else on the planet", which is what a line written [lat, lng]
+// looks like. At longitudes inside ±90 such a line passes the range check
+// below, and this is the only thing that stops it.
+const maxLineEndKm = 50
+
 // checkPlan is what one plan must satisfy before it is allowed near the
 // database: legs numbered 1..n with a drawable line each, checkpoints
-// numbered 1..m. The pages index both by order.
+// numbered 1..m, and every line starting and ending near the checkpoints its
+// leg starts and ends at. The pages index both by order.
 func checkPlan(sd *seedData) error {
+	lineEnds := map[int][2][]float64{} // per leg: the line's first and last point
 	for i, l := range sd.Legs {
 		if l.Ord != i+1 {
 			return fmt.Errorf("legs must be numbered 1..%d without gaps; found leg %d in place %d", len(sd.Legs), l.Ord, i+1)
@@ -118,6 +129,7 @@ func checkPlan(sd *seedData) error {
 		if l.EstMiles < 0 {
 			return fmt.Errorf("leg %d has negative miles", l.Ord)
 		}
+		lineEnds[l.Ord] = [2][]float64{g.Coordinates[0], g.Coordinates[len(g.Coordinates)-1]}
 	}
 	if len(sd.Checkpoints) == 0 {
 		return fmt.Errorf("a trip needs at least one checkpoint")
@@ -128,6 +140,51 @@ func checkPlan(sd *seedData) error {
 		}
 		if math.Abs(c.Lng) > 180 || math.Abs(c.Lat) > 90 {
 			return fmt.Errorf("checkpoint %d is not at a [lng, lat]", c.Ord)
+		}
+	}
+	return checkLineEnds(sd, lineEnds)
+}
+
+// checkLineEnds holds every leg line to the checkpoints at its two ends. A
+// leg ends at the last checkpoint filed on it, and starts where the leg
+// before it ended; the first leg starts at its own first checkpoint. An end
+// that has no checkpoint is not measured, but a leg with none at either end
+// is refused: a line nothing can place is not a line this check passed.
+//
+// The refusal names the leg and the end. It never carries a coordinate: the
+// message goes back to whoever pushed, and into a log.
+func checkLineEnds(sd *seedData, lineEnds map[int][2][]float64) error {
+	onLeg := map[int][]seedCP{}
+	for _, c := range sd.Checkpoints { // already in order
+		onLeg[c.LegOrd] = append(onLeg[c.LegOrd], c)
+	}
+	far := func(p []float64, c seedCP) bool {
+		return haversineKm(p[1], p[0], c.Lat, c.Lng) > maxLineEndKm
+	}
+	for i, l := range sd.Legs {
+		var start, end *seedCP
+		if own := onLeg[l.Ord]; len(own) > 0 {
+			end = &own[len(own)-1]
+			if i == 0 && len(own) > 1 {
+				start = &own[0]
+			}
+		}
+		if i > 0 {
+			if before := onLeg[sd.Legs[i-1].Ord]; len(before) > 0 {
+				start = &before[len(before)-1]
+			}
+		}
+		if start == nil && end == nil {
+			return fmt.Errorf("leg %d has no checkpoint at either end, so its line cannot be placed", l.Ord)
+		}
+		first, last := lineEnds[l.Ord][0], lineEnds[l.Ord][1]
+		if start != nil && far(first, *start) {
+			return fmt.Errorf("leg %d: its line starts more than %d km from the checkpoint the leg starts at; "+
+				"check that its points are [lng, lat]", l.Ord, maxLineEndKm)
+		}
+		if end != nil && far(last, *end) {
+			return fmt.Errorf("leg %d: its line ends more than %d km from the checkpoint the leg ends at; "+
+				"check that its points are [lng, lat]", l.Ord, maxLineEndKm)
 		}
 	}
 	return nil
@@ -191,6 +248,18 @@ func embeddedRideSlugs() map[string]bool {
 	return out
 }
 
+// startNotApplied is the sentence a push carries when the document's start
+// date lost to the saved selection's. The rule is deliberate; staying silent
+// about it was the defect.
+const startNotApplied = "the document's start date was not applied: this ride has a saved selection and its " +
+	"start date stays in force. Move the start with POST /admin/plan (start=YYYY-MM-DD)"
+
+// startOverridden reports whether the plan was dated from a saved selection
+// instead of from the document that was just read.
+func (sd *seedData) startOverridden() bool {
+	return sd.DocStartDate != "" && sd.DocStartDate != sd.Selection.StartDate
+}
+
 // applyTrip puts a trip document into the database under its stored
 // selection: created when the ride is new, refreshed under the guard when it
 // is not.
@@ -237,7 +306,7 @@ func loadVolumeTrips(store *Store, dataDir string) (loaded, failed int) {
 			fail(err)
 			continue
 		}
-		created, n, _, err := applyTrip(store, raw, slug)
+		created, n, sd, err := applyTrip(store, raw, slug)
 		if err != nil {
 			fail(err)
 			continue
@@ -247,6 +316,10 @@ func loadVolumeTrips(store *Store, dataDir string) (loaded, failed int) {
 			log.Printf("trip %s created from the volume", slug)
 		} else {
 			log.Printf("trip %s refreshed from the volume: %s", slug, n)
+		}
+		if sd.startOverridden() {
+			// That it happened, never the dates.
+			log.Printf("trip %s: the file's start date was not applied, the saved selection's stays in force", slug)
 		}
 	}
 	return loaded, failed

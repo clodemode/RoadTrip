@@ -287,6 +287,7 @@ fieldset.pin input:disabled + *, fieldset.pin label.check input:disabled { opaci
 .plan-totals { margin:.2rem 0 .5rem; font-size:1.02rem; }
 .plan-totals b { font-size:1.2rem; }
 .plan-saved { color:var(--ok); font-weight:600; font-size:.92rem; }
+.plan-form .plan-msg { margin:0; scroll-margin-top:5rem; }
 .plan-maphint { margin:.45rem 0 0; }
 #map[data-mode="plan"] .leaflet-bar a { width:44px; height:44px; line-height:44px; font-size:1.4rem; }
 .plan-form { margin-top:.9rem; display:flex; flex-direction:column; gap:.8rem; }

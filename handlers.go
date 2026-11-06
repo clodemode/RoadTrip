@@ -276,7 +276,18 @@ func (a *App) requireAuth(next http.HandlerFunc) http.Handler {
 
 func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data map[string]any) {
 	data["V"] = a.assetV
-	data["Authed"] = a.auth.IsAuthed(r)
+	authed := a.auth.IsAuthed(r)
+	data["Authed"] = authed
+	if authed {
+		// Every page goes through here, and this is where the session is known.
+		// A signed-in page is served on the SAME address a visitor uses and can
+		// carry what a visitor must never see (a private note, an address, the
+		// controls), so no cache may keep it or hand it to anyone else. Set
+		// once, here, so a new page cannot forget it. The anonymous response is
+		// left exactly as it was.
+		w.Header().Set("Cache-Control", "private, no-store")
+		w.Header().Add("Vary", "Cookie")
+	}
 	// SiteURL/Canonical drive <link rel=canonical> and the og:* tags; both are
 	// empty (and the tags absent) when SITE_URL is unset. Canonical is the
 	// page's own address on the public host — path only, no query.

@@ -7,8 +7,6 @@
     over <b id="plan-daycount">{{.Sum.DayCount}} {{if eq .Sum.DayCount 1}}day{{else}}days{{end}}</b>
     <span class="muted" id="plan-hours">&middot; about {{hr .Sum.TotalHours}} h of driving</span>
   </p>
-  {{if .Error}}<p class="error plan-msg" role="alert">Not saved: {{.Error}}.</p>{{end}}
-  {{if .Saved}}<p class="plan-saved plan-msg" role="status">Plan saved. This is what every visitor sees now.</p>{{end}}
 </section>
 
 <div id="map" data-mode="plan"></div>
@@ -46,6 +44,8 @@
     {{end}}
   </div>
   {{end}}
+  {{if .Error}}<p class="error plan-msg" id="plan-result" role="alert">Not saved: {{.Error}}.</p>
+  {{else if .Notice}}<p class="plan-saved plan-msg" id="plan-result" role="status">{{.Notice}}</p>{{end}}
 </form>
 
 <section class="plan-days">

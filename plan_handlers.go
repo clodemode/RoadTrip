@@ -109,6 +109,48 @@ func (st *planState) savedStart() string {
 
 const optParam = "opt-"
 
+// What /plan may say about a save. A browser's save is answered with a
+// redirect back to the page, and the redirect carries a CODE, never words:
+// /plan is a public page and a query string is something anyone can write,
+// so free text in ?error= would let a stranger put a sentence of their
+// choosing on this site with a link. Every sentence the page can print is in
+// these two tables, and a code that is in neither prints nothing.
+//
+// curl is not answered with a code: it gets the status and the full reason
+// in the JSON body, which only the caller reads.
+const (
+	planErrUnreadable = "unreadable"
+	planErrNoFile     = "no-file"
+	planErrChoice     = "choice"
+	planErrStart      = "start"
+	planErrDocument   = "document"
+	planErrConflict   = "conflict"
+	planErrFailed     = "failed"
+
+	planOKSaved = "saved"
+)
+
+var planRefusals = map[string]string{
+	planErrUnreadable: "the plan could not be read",
+	planErrNoFile:     "this ride has no trip file, so it has nothing to choose",
+	planErrChoice:     "one of those choices is not one this trip offers",
+	planErrStart:      "the departure day is not a date",
+	planErrDocument:   "the trip file does not pass its checks under that selection",
+	planErrConflict: "that plan would move a checkpoint that is already arrived, " +
+		"or a leg or checkpoint that holds posts",
+	planErrFailed: "the plan could not be saved",
+}
+
+var planNotices = map[string]string{
+	planOKSaved: "Saved.",
+}
+
+// planAskError is a selection that cannot be read, with the code the page
+// prints for it.
+type planAskError struct{ code, msg string }
+
+func (e *planAskError) Error() string { return e.msg }
+
 // requested reads a selection off a query string or a form: opt-<option> for
 // each group, start for the day the ride begins. strict makes an unknown
 // option, an unknown choice or an unreadable date an error; a page view is
@@ -122,7 +164,7 @@ func (st *planState) requested(v url.Values, strict bool) (map[string]string, st
 		opt, choice := strings.TrimPrefix(key, optParam), vals[0]
 		if !st.Doc.hasChoice(opt, choice) {
 			if strict {
-				return nil, "", fmt.Errorf("option %q has no choice %q", opt, choice)
+				return nil, "", &planAskError{planErrChoice, fmt.Sprintf("option %q has no choice %q", opt, choice)}
 			}
 			continue
 		}
@@ -132,7 +174,7 @@ func (st *planState) requested(v url.Values, strict bool) (map[string]string, st
 	if s := strings.TrimSpace(v.Get("start")); s != "" && st.HasFile {
 		if _, err := time.Parse(dateLayout, s); err != nil {
 			if strict {
-				return nil, "", fmt.Errorf("start %q is not a date (YYYY-MM-DD)", s)
+				return nil, "", &planAskError{planErrStart, fmt.Sprintf("start %q is not a date (YYYY-MM-DD)", s)}
 			}
 		} else {
 			start = s
@@ -178,6 +220,10 @@ func (st *planState) optViews(choices map[string]string) []planOptView {
 	return out
 }
 
+// planResultAnchor is where the page says what a save did: the line under
+// the Save button, so the answer is where the thumb already is.
+const planResultAnchor = "#plan-result"
+
 // fmtMiles writes a mileage to one decimal, always: 400.4, 600.0.
 func fmtMiles(v float64) string { return strconv.FormatFloat(v, 'f', 1, 64) }
 
@@ -201,7 +247,8 @@ func (a *App) planPage(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "plan.html", map[string]any{
 		"Title": "Plan", "Ride": st.Ride, "Sum": sum, "Opts": st.optViews(choices),
 		"Start": start, "HasFile": st.HasFile, "Plan": page, "PageLeg": pageLeg,
-		"Error": r.URL.Query().Get("error"), "Saved": r.URL.Query().Get("saved") != "",
+		// Codes in, fixed sentences out; an unknown code is the empty string.
+		"Error": planRefusals[r.URL.Query().Get("error")], "Notice": planNotices[r.URL.Query().Get("ok")],
 	})
 }
 
@@ -239,15 +286,17 @@ func (a *App) planSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read the form", http.StatusBadRequest)
 		return
 	}
-	refuse := func(status int, msg string) {
+	// A browser goes back to the page, to the line beside the button it
+	// pressed, with a code; curl gets the status and the reason in full.
+	refuse := func(status int, code, msg string) {
 		if html {
-			q := url.Values{"error": {msg}}
+			q := url.Values{"error": {code}}
 			for k, v := range r.PostForm {
 				if (strings.HasPrefix(k, optParam) || k == "start") && len(v) > 0 {
 					q.Set(k, v[0])
 				}
 			}
-			http.Redirect(w, r, "/plan?"+q.Encode(), http.StatusSeeOther)
+			http.Redirect(w, r, "/plan?"+q.Encode()+planResultAnchor, http.StatusSeeOther)
 			return
 		}
 		writeJSON(w, status, map[string]any{"status": "refused", "error": msg})
@@ -255,16 +304,21 @@ func (a *App) planSave(w http.ResponseWriter, r *http.Request) {
 	st, err := a.loadPlan()
 	if err != nil {
 		log.Printf("ERROR plan: %v", err)
-		refuse(http.StatusInternalServerError, "the plan could not be read")
+		refuse(http.StatusInternalServerError, planErrUnreadable, planRefusals[planErrUnreadable])
 		return
 	}
 	if !st.HasFile {
-		refuse(http.StatusConflict, "this ride has no trip file, so it has nothing to choose")
+		refuse(http.StatusConflict, planErrNoFile, planRefusals[planErrNoFile])
 		return
 	}
 	choices, start, err := st.requested(r.PostForm, true)
 	if err != nil {
-		refuse(http.StatusBadRequest, err.Error())
+		code := planErrChoice
+		var ask *planAskError
+		if errors.As(err, &ask) {
+			code = ask.code
+		}
+		refuse(http.StatusBadRequest, code, err.Error())
 		return
 	}
 	sel := &Selection{StartDate: start, Choices: choices}
@@ -273,7 +327,7 @@ func (a *App) planSave(w http.ResponseWriter, r *http.Request) {
 		err = checkPlan(sd)
 	}
 	if err != nil {
-		refuse(http.StatusBadRequest, err.Error())
+		refuse(http.StatusBadRequest, planErrDocument, err.Error())
 		return
 	}
 	_, n, err := a.store.ApplyPlan(sd)
@@ -281,17 +335,17 @@ func (a *App) planSave(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.As(err, &conflict):
 		log.Printf("plan: selection refused, %d conflict(s)", len(conflict.Reasons))
-		refuse(http.StatusConflict, conflict.Error())
+		refuse(http.StatusConflict, planErrConflict, conflict.Error())
 		return
 	case err != nil:
 		log.Printf("ERROR plan save: %v", err)
-		refuse(http.StatusInternalServerError, "could not save the plan")
+		refuse(http.StatusInternalServerError, planErrFailed, "could not save the plan")
 		return
 	}
 	// Counts, never a place or a date.
 	log.Printf("plan: selection saved for the active ride: %s", n)
 	if html {
-		http.Redirect(w, r, "/plan?saved=1", http.StatusSeeOther)
+		http.Redirect(w, r, "/plan?ok="+planOKSaved+planResultAnchor, http.StatusSeeOther)
 		return
 	}
 	doc, err := publishPlan(st.Raw)
@@ -379,11 +433,22 @@ func (a *App) tripPush(w http.ResponseWriter, r *http.Request) {
 	} else {
 		log.Printf("trip push: %s refreshed: %s", slug, n)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	body := map[string]any{
 		"status": "ok", "ride": slug, "created": created,
 		"legs": len(sd.Legs), "checkpoints": len(sd.Checkpoints), "options": len(sd.Options),
 		"selection": sd.Selection, "active": a.activeSlug() == slug, "activated": activated,
-	})
+		// The start date the ride is on now, whichever source it came from.
+		"start_date": sd.Selection.StartDate,
+	}
+	if sd.startOverridden() {
+		// The saved selection's start date wins over a re-pushed document's, like
+		// its choices do. The push still succeeds, so it has to say so: the
+		// pusher who edited ride.start_date would otherwise believe it landed.
+		body["document_start_date"] = sd.DocStartDate
+		body["start_date_not_applied"] = startNotApplied
+		log.Printf("trip push: %s: the document's start date was not applied, the saved selection's stays in force", slug)
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // rideActivate sets which ride the site shows: slug=<ride> for a ride that is

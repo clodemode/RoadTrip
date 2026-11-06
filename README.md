@@ -209,6 +209,18 @@ same path, so a fresh machine or a restored volume comes up whole; a file that
 will not load is logged and skipped, never fatal. The slug is `[a-z0-9-]` and
 becomes the file name; a slug that belongs to an embedded ride is refused.
 
+**A leg line has to be where its leg is.** A pushed or volume-loaded document
+is refused when a leg line's first or last point is more than **50 km** from
+the checkpoint at that end of the leg (a leg ends at the last checkpoint filed
+on it and starts where the leg before it ended; the first leg starts at its own
+first checkpoint). A routed line ends at its checkpoint, so the margin is
+generous on purpose: what it catches is a line written `[lat, lng]`, which at
+longitudes inside ±90 passes the range check and draws on the wrong side of the
+planet. The refusal names the leg and never a coordinate. A leg with no
+checkpoint at either end is refused too, because nothing could place its line.
+The same check runs on a saved selection. The embedded September seed passes
+it (a test holds that), though boot does not run it on an embedded seed.
+
 **The active ride** is a row in the `meta` table, read per request. Setting it
 moves every page, the post form and `/route.geojson` together. The ride that
 stops being shown is not touched: it stays in the database whole.
@@ -255,6 +267,13 @@ and so is a public note; the refusal names the field and never the value, and
 nothing logs it. That check is a shape, not a promise: a name or a plate in a
 public field is not something it can see.
 
+**A signed-in page is never cached.** `/checklist`, like every page, is one
+address for the visitor and the trip-keeper. Every HTML response to a signed-in
+request (the session cookie or the push token) is sent with
+`Cache-Control: private, no-store` and `Vary: Cookie`, set once where the pages
+are rendered, so no cache keeps a page that carries private text or hands it to
+the next visitor. The anonymous response carries neither header.
+
 **A re-push never reaches what is done.** An open step or question takes the
 later document's text; a done step or an answered question is not written at
 all, and one the later document no longer has is kept if done and dropped if
@@ -285,6 +304,17 @@ departure that slips a day is one saved field, not an edit to every leg. With
 `avg_mph` set, a leg's hours are its miles at that speed, and a day over
 `long_day_hours` is flagged.
 
+**Once a ride exists, the saved start date wins over the document's.** The
+first push of a trip takes `ride.start_date` from the document. After that the
+start date in force is the saved selection's, exactly like the saved choices,
+and a document pushed again with a different `ride.start_date` does **not**
+move it: the start moves through `POST /admin/plan` (`start=YYYY-MM-DD`) and
+nowhere else. The push still succeeds, and says so. Its answer always carries
+`start_date`, the date in force, and when the document's differs it also
+carries `document_start_date` and `start_date_not_applied`, a sentence saying
+the document's start was not applied and where the start is moved. The boot
+pass logs the same fact, without the dates.
+
 The database holds one plan: the document under the stored selection. The
 alternatives stay in the file. `/plan` shows them all; switching there is local
 to the visitor's browser, and only the signed-in trip-keeper's **Save this
@@ -297,6 +327,15 @@ whole — and says why — if the new plan would drop or re-route a leg that hol
 posts, or drop, renumber or replace a checkpoint that is arrived or holds
 posts. Moving the start date is never refused: it moves dates and nothing else.
 A re-pushed document is held to the same rule.
+
+**What a page says about a save is a fixed sentence.** After **Save this
+plan** the page comes back to the line under the button: `Saved.`, or
+`Not saved:` and why. The redirect carries a short code (`/plan?ok=saved`,
+`/plan?error=conflict`, `/checklist?error=future`), never words, and each page
+maps the codes it knows to its own sentences; a code it does not know prints
+nothing. `/plan` and `/checklist` are public pages, and free text in a query
+string would let anyone put a sentence of their choosing on the site with a
+link. curl is unaffected: it gets the status and the full reason as JSON.
 
 **Every coordinate on `/plan` has been through the store's fuzz seam**, the
 roads not taken included: a `precision: "fuzzed"` checkpoint is its 0.05° cell,

@@ -1144,6 +1144,11 @@ type seedData struct {
 	Selection    Selection
 	AvgMPH       float64
 	LongDayHours float64
+	// DocStartDate is the start date the document itself gives, whatever the
+	// selection says. Once a ride has a saved selection that selection's start
+	// date wins (Selection.StartDate is the one in force), and a caller that
+	// re-applies a document compares the two to say so out loud.
+	DocStartDate string
 }
 
 func pstr(m map[string]any, k string) string {
@@ -1235,6 +1240,12 @@ func parseSeed(path, defaultSlug string) (*seedData, error) {
 // longer has) takes the document's default for that option, and an empty
 // start date takes the document's — so a stored selection survives a
 // re-pushed document that dropped one of its choices.
+//
+// A selection's start date WINS over the document's, the same way its choices
+// do: the trip-keeper moved the departure with POST /admin/plan, and a
+// document pushed again afterwards must not quietly move it back. The
+// document's own start is kept in DocStartDate so the push can report that it
+// was not applied.
 func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, error) {
 	var sf seedFile
 	if err := json.Unmarshal(raw, &sf); err != nil {
@@ -1270,6 +1281,7 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 		}
 		sd.Ride.OriginLabel, sd.Ride.TerminusLabel = sf.Ride.OriginLabel, sf.Ride.TerminusLabel
 	}
+	sd.DocStartDate = sd.Ride.StartDate
 	if sel != nil && sel.StartDate != "" {
 		sd.Ride.StartDate = sel.StartDate
 	}
@@ -1298,6 +1310,7 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 
 	legOrds := map[int]bool{}
 	derived := false
+	firstFixed := "" // the earliest date a leg carries itself
 	for _, f := range sf.Features {
 		if f.Geometry.Type != "LineString" {
 			continue
@@ -1332,6 +1345,9 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 		}
 		date := pstr(p, "date")
 		fixed := date != ""
+		if fixed && (firstFixed == "" || date < firstFixed) {
+			firstFixed = date
+		}
 		if date == "" && !start.IsZero() {
 			date = start.AddDate(0, 0, day-1).Format(dateLayout)
 			derived = true
@@ -1446,6 +1462,10 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 		sd.Ride.TerminusLabel = strings.TrimSpace(lastCP.Name)
 	}
 	sd.Selection.StartDate = sd.Ride.StartDate
+	if sd.DocStartDate == "" {
+		// No ride.start_date: the document starts on its earliest dated leg.
+		sd.DocStartDate = firstFixed
+	}
 	return sd, nil
 }
 

@@ -132,7 +132,9 @@
       if (on) { x.line.bringToFront(); }
       x.hit.bringToFront();
       x.hit.unbindTooltip();
-      x.hit.bindTooltip(on ? ('Day ' + x.leg.day + ': ' + x.leg.name)
+      /* Leaflet renders a string tooltip as HTML, and a leg name is text from
+         the trip document: it goes through esc() like every popup below. */
+      x.hit.bindTooltip(on ? ('Day ' + x.leg.day + ': ' + esc(x.leg.name))
         : ('Switch to this route: ' + fixed1(x.leg.miles) + ' mi'), { sticky: true });
     });
     cpLayer.clearLayers();

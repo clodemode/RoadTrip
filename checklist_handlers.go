@@ -118,8 +118,41 @@ func (a *App) checklistPage(w http.ResponseWriter, r *http.Request) {
 	}
 	a.render(w, r, "checklist.html", map[string]any{
 		"Title": "Checklist", "CL": cl, "QuestionTZ": a.rideZone(slug),
-		"Error": r.URL.Query().Get("error"),
+		// A code in, a fixed sentence out; an unknown code is the empty string.
+		"Error": checklistRefusals[r.URL.Query().Get("error")],
 	})
+}
+
+// What /checklist may say about a refused check-off. The page is public and
+// the redirect after a browser's form carries a CODE, never words, for the
+// reason /plan's does (see planRefusals): free text in ?error= is a sentence
+// of a stranger's choosing on this site. A code that is not here prints
+// nothing. curl still gets the full reason in its JSON body.
+const (
+	clErrForm     = "form"
+	clErrRide     = "ride"
+	clErrMissing  = "missing"
+	clErrNoteLong = "note-long"
+	clErrVIN      = "vin"
+	clErrAtClear  = "at-clear"
+	clErrTZ       = "tz"
+	clErrTime     = "time"
+	clErrFuture   = "future"
+	clErrFailed   = "failed"
+)
+
+var checklistRefusals = map[string]string{
+	clErrForm:     "the form could not be read",
+	clErrRide:     "that is not a ride",
+	clErrMissing:  "this checklist has no such step or question",
+	clErrNoteLong: "a note is longer than " + strconv.Itoa(maxChecklistNote) + " bytes",
+	clErrVIN: "the public note holds a 17-character token shaped like a vehicle identification number; " +
+		"that belongs in the private note",
+	clErrAtClear: "a time and Undo contradict each other: one stamps a time, the other removes it",
+	clErrTZ:      "the zone is not an IANA zone",
+	clErrTime:    "the time must be a local date and time",
+	clErrFuture:  "the time is in the future",
+	clErrFailed:  "the change could not be saved",
 }
 
 // checklistJSON is the checklist as open data: exactly what the public page
@@ -204,29 +237,29 @@ func (a *App) checklistMark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	html := wantsHTML(r)
-	refuse := func(status int, msg string) {
+	refuse := func(status int, code, msg string) {
 		if html {
-			http.Redirect(w, r, "/checklist?error="+url.QueryEscape(msg)+"#"+kind+"-"+id, http.StatusSeeOther)
+			http.Redirect(w, r, "/checklist?error="+url.QueryEscape(code)+"#"+kind+"-"+id, http.StatusSeeOther)
 			return
 		}
 		writeJSON(w, status, map[string]any{"status": "refused", "error": msg})
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := r.ParseForm(); err != nil {
-		refuse(http.StatusBadRequest, "could not read the form")
+		refuse(http.StatusBadRequest, clErrForm, "could not read the form")
 		return
 	}
 	slug := a.activeSlug()
 	if v := strings.TrimSpace(r.PostFormValue("ride")); v != "" {
 		if !validSlug(v) {
-			refuse(http.StatusBadRequest, "ride is not a ride slug")
+			refuse(http.StatusBadRequest, clErrRide, "ride is not a ride slug")
 			return
 		}
 		slug = v
 	}
 	row, err := a.store.checklistRow(slug, kind, id)
 	if err != nil {
-		refuse(http.StatusNotFound, "this checklist has no "+kind+" with that id")
+		refuse(http.StatusNotFound, clErrMissing, "this checklist has no "+kind+" with that id")
 		return
 	}
 
@@ -243,14 +276,14 @@ func (a *App) checklistMark(w http.ResponseWriter, r *http.Request) {
 		private = strings.TrimSpace(r.PostFormValue("private_note"))
 	}
 	if len(outcome) > maxChecklistNote || len(private) > maxChecklistNote {
-		refuse(http.StatusBadRequest, "a note is longer than "+strconv.Itoa(maxChecklistNote)+" bytes")
+		refuse(http.StatusBadRequest, clErrNoteLong, "a note is longer than "+strconv.Itoa(maxChecklistNote)+" bytes")
 		return
 	}
 	if hasVINShape(outcome) {
 		// The field, never the value: this message goes into a redirect, a
 		// response body and nowhere else, and the log line below says less.
 		log.Printf("checklist: a public note was refused (VIN-shaped token)")
-		refuse(http.StatusBadRequest, vinRefusal(publicName).Error())
+		refuse(http.StatusBadRequest, clErrVIN, vinRefusal(publicName).Error())
 		return
 	}
 
@@ -259,7 +292,7 @@ func (a *App) checklistMark(w http.ResponseWriter, r *http.Request) {
 	doneAt, doneTZ := row.DoneAt, row.DoneTZ
 	switch {
 	case clearing && at != "":
-		refuse(http.StatusBadRequest, "at and clear contradict each other: one stamps a time, the other removes it")
+		refuse(http.StatusBadRequest, clErrAtClear, "at and clear contradict each other: one stamps a time, the other removes it")
 		return
 	case clearing:
 		doneAt, doneTZ = "", ""
@@ -272,7 +305,7 @@ func (a *App) checklistMark(w http.ResponseWriter, r *http.Request) {
 			}
 			if v := strings.TrimSpace(r.PostFormValue("tz")); v != "" {
 				if _, err := time.LoadLocation(v); err != nil || v == "Local" {
-					refuse(http.StatusBadRequest, "tz is not an IANA zone")
+					refuse(http.StatusBadRequest, clErrTZ, "tz is not an IANA zone")
 					return
 				}
 				tz = v
@@ -286,16 +319,16 @@ func (a *App) checklistMark(w http.ResponseWriter, r *http.Request) {
 		case at != "":
 			t, err := parseStamp(at, loc)
 			if err != nil {
-				refuse(http.StatusBadRequest, err.Error())
+				refuse(http.StatusBadRequest, clErrTime, err.Error())
 				return
 			}
 			if t.IsZero() {
-				refuse(http.StatusBadRequest, "the time is the zero time")
+				refuse(http.StatusBadRequest, clErrTime, "the time is the zero time")
 				return
 			}
 			// The same tolerance an arrival stamp has: clock skew, nothing more.
 			if t.After(time.Now().Add(2 * time.Minute)) {
-				refuse(http.StatusBadRequest, "the time is in the future")
+				refuse(http.StatusBadRequest, clErrFuture, "the time is in the future")
 				return
 			}
 			// The page's own form posts the stored stamp back to the minute. That
@@ -311,7 +344,7 @@ func (a *App) checklistMark(w http.ResponseWriter, r *http.Request) {
 
 	if err := a.store.SetChecklistItem(row.RowID, doneAt, doneTZ, outcome, private); err != nil {
 		log.Printf("ERROR checklist mark: %v", err)
-		refuse(http.StatusInternalServerError, "could not save")
+		refuse(http.StatusInternalServerError, clErrFailed, "could not save")
 		return
 	}
 	sum, _ := a.store.ChecklistSummary(slug)
