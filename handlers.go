@@ -93,6 +93,18 @@ func (a *App) funcs() template.FuncMap {
 		// mi and hr write a planner figure to one decimal, always.
 		"mi": fmtMiles,
 		"hr": fmtMiles,
+		// Chester's log: dollars to four places, a duration in seconds, a
+		// figure that may be absent, a percentage.
+		"usd":  usd4,
+		"usd2": usd2,
+		"secs": func(ms int64) string { return strconv.FormatFloat(float64(ms)/1000, 'f', 1, 64) + " s" },
+		"opt": func(f *float64) string {
+			if f == nil {
+				return ""
+			}
+			return strconv.FormatFloat(*f, 'f', -1, 64)
+		},
+		"pct": func(f float64) string { return strconv.FormatFloat(f, 'f', 1, 64) + "%" },
 	}
 }
 
@@ -165,6 +177,13 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /admin/checklist", a.requireAuth(a.checklistPush))
 	mux.Handle("GET /admin/checklist.json", a.requireAuth(a.checklistCensus))
 	mux.Handle("POST /admin/checklist/{kind}/{id}", a.requireAuth(a.checklistMark))
+	// Chester, the en-route helper, and its log. Signed in only, every one:
+	// a question spends money and the log is the trip-keeper's own.
+	mux.Handle("GET /chester", a.requireAuth(a.chesterPage))
+	mux.Handle("POST /chester/ask", a.requireAuth(a.chesterAsk))
+	mux.Handle("GET /admin/chester/log", a.requireAuth(a.chesterLog))
+	mux.Handle("GET /admin/chester/log.json", a.requireAuth(a.chesterLogJSON))
+	mux.Handle("POST /admin/chester/log/{id}", a.requireAuth(a.chesterVerdict))
 
 	return logRequests(a.canonicalHost(a.visibility(mux)))
 }
@@ -299,6 +318,8 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	data["SitePrivate"] = a.sitePrivate
 	// Whether the masthead links to /checklist: only for a ride that has one.
 	_, data["HasChecklist"] = a.store.ChecklistSummary(a.activeSlug())
+	// Whether the masthead links to Chester: signed in, and switched on.
+	data["ChesterOn"] = authed && a.chester != nil
 	data["CreatureName"] = CreatureName
 	data["CreatureTag"] = CreatureTag
 	data["CreatureAlt"] = CreatureAlt

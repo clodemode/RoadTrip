@@ -36,7 +36,9 @@ a { color: var(--accent); }
 .mast-tag b { color:#ffffff; font-weight:650; }
 
 .mast-nav { display:flex; align-items:center; gap:1.1rem; flex-wrap:wrap; }
-.mast-links { display:flex; align-items:center; gap:1rem; font-size:.92rem; }
+/* The links wrap: signed in there are more of them than a phone is wide, and
+   the page clips what overflows, so a link that did not wrap could not be reached. */
+.mast-links { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem 1rem; font-size:.92rem; }
 .mast-links a, .mast-links .linkish { color:#f3e6d0; text-decoration:none; }
 .mast-links a:hover, .mast-links .linkish:hover { color:#fff; text-decoration:underline; }
 .mast-links .post-link { font-weight:700; }
@@ -384,3 +386,79 @@ fieldset.pin input:disabled + *, fieldset.pin label.check input:disabled { opaci
   .cl-item { grid-template-columns:minmax(0,1fr); gap:.3rem; }
   .cl-state { justify-self:start; }
 }
+
+/* --- Chester: the en-route helper and its log -------------------------------
+   Read in a moving car by the passenger, so the answer is large, every target
+   is at least 44px, and nothing scrolls sideways at phone width. One light
+   theme: no dark rules here. */
+.ch-limits { margin:.4rem 0 0; padding:.6rem .8rem; border-left:4px solid #b45309;
+  background:#fff7ed; color:#7c2d12; border-radius:0 8px 8px 0; font-size:.95rem; }
+.ch-form { display:flex; flex-direction:column; gap:1rem; margin-top:.6rem; }
+.ch-form fieldset { margin:0; padding:0; border:0; min-width:0; }
+.ch-form legend { padding:0; margin-bottom:.4rem; font-size:.85rem; color:var(--muted); }
+.ch-presets { display:flex; flex-wrap:wrap; gap:.5rem; }
+.ch-presets legend { flex:0 0 100%; }
+.ch-preset { min-height:48px; padding:.5rem .9rem; font-size:1rem; background:var(--card);
+  color:var(--fg); border:1px solid var(--line); }
+.ch-preset:hover { border-color:var(--accent); }
+.ch-ask textarea { min-height:5.5rem; font-size:1.05rem; }
+.ch-modes { display:flex; flex-wrap:wrap; gap:.5rem; }
+.ch-modes legend { flex:0 0 100%; }
+.ch-mode { flex:1 1 15rem; flex-direction:row; align-items:center; gap:.6rem; min-height:48px;
+  padding:.5rem .8rem; background:var(--card); border:1px solid var(--line); border-radius:8px;
+  color:var(--fg); font-size:1rem; cursor:pointer; }
+.ch-mode input { width:1.3rem; height:1.3rem; flex:0 0 auto; }
+.ch-mode:has(input:checked) { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+.ch-row { display:flex; flex-wrap:wrap; align-items:center; gap:.7rem; }
+.ch-tap { min-height:48px; display:inline-flex; align-items:center; }
+label.check.ch-tap input { width:1.3rem; height:1.3rem; }
+#ch-send { min-width:8rem; justify-content:center; }
+.ch-result { margin-top:1.2rem; }
+.ch-status { font-size:1.1rem; }
+.ch-error { font-size:1.05rem; padding:.6rem .8rem; border:1px solid var(--danger); border-radius:8px; background:#fef2f2; }
+.ch-answer { font-size:1.35rem; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere;
+  padding:.9rem 1rem; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+.ch-places { list-style:none; margin:.8rem 0 0; padding:0; display:grid; gap:.6rem;
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr)); }
+.ch-place { padding:.8rem .9rem; background:var(--card); border:1px solid var(--line);
+  border-left:5px solid var(--accent); border-radius:10px; min-width:0; overflow-wrap:anywhere; }
+.ch-kind { display:block; font-size:.74rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.ch-place-name { display:block; font-size:1.15rem; }
+.ch-why { margin:.3rem 0 0; }
+.ch-links { display:flex; flex-wrap:wrap; gap:.5rem; margin:.6rem 0 0; }
+.ch-link { display:inline-flex; align-items:center; min-height:44px; padding:0 .9rem;
+  border:1px solid var(--accent); border-radius:8px; text-decoration:none; font-weight:600; }
+.ch-foot { margin-top:1.6rem; }
+.ch-foot .button { text-decoration:none; }
+.ch-off { max-width:36rem; }
+
+.ch-sum-list { list-style:none; margin:.4rem 0; padding:0; display:grid; gap:.5rem;
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,15rem),1fr)); }
+.ch-sum { display:flex; flex-direction:column; gap:.1rem; padding:.6rem .8rem; background:var(--card);
+  border:1px solid var(--line); border-radius:10px; font-size:.92rem; }
+.ch-q { margin:.8rem 0; padding:.9rem 1rem; background:var(--card); border:1px solid var(--line);
+  border-left:5px solid var(--line); border-radius:10px; scroll-margin-top:1rem; min-width:0; }
+.ch-q.ruled-right { border-left-color:var(--ok); }
+.ch-q.ruled-partly { border-left-color:#b45309; }
+.ch-q.ruled-wrong { border-left-color:#374151; }
+.ch-q-head { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; font-size:.9rem; }
+.ch-pill-quick { background:#0891b2; } .ch-pill-plan { background:#7c3aed; }
+.ch-verdict { margin-left:auto; padding:.1rem .6rem; border:1px solid var(--line); border-radius:999px;
+  font-size:.8rem; font-weight:600; }
+.ch-v-right { border-color:var(--ok); color:var(--ok); }
+.ch-v-partly { border-color:#b45309; color:#b45309; }
+.ch-v-wrong { border-color:#374151; color:#374151; }
+.ch-question { margin:.5rem 0; font-weight:600; overflow-wrap:anywhere; }
+.ch-answer-log { font-size:1rem; padding:.6rem .8rem; }
+.ch-facts { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,8.5rem),1fr));
+  gap:.4rem .9rem; margin:.7rem 0; font-size:.85rem; }
+.ch-facts div { min-width:0; }
+.ch-facts dt { color:var(--muted); font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; }
+.ch-facts dd { margin:0; overflow-wrap:anywhere; }
+.ch-rule { display:flex; flex-direction:column; gap:.5rem; }
+.ch-rule select, .ch-rule input, .ch-rule textarea { min-height:44px; }
+.ch-pair { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr)); gap:.6rem; }
+.ch-rule-buttons { display:flex; flex-wrap:wrap; gap:.5rem; }
+.ch-vb { flex:1 1 6.5rem; justify-content:center; background:var(--card); color:var(--fg);
+  border:1px solid var(--line); font-size:1rem; }
+.ch-vb.on { background:var(--accent); color:#fff; border-color:var(--accent); }

@@ -87,6 +87,12 @@ session cookie will never come back.
 | `SITE_URL` | the canonical origin, e.g. `https://roadtrip.opeongo.net`; unset (the local default) ⇒ no redirect and no canonical/og tags |
 | `SITE_VISIBILITY` | `public` (default in code) or `private`; **private puts the whole site behind the one admin password** — see below |
 | `PIN_PRECISION` | `snap` (default) or `exact`; decides only whether the post form's **Fuzz location** toggle starts ticked at a private place |
+| `ANTHROPIC_API_KEY` | the key Chester asks the Claude API with. **A secret, set by the operator on the host and never in a file here**; unset ⇒ Chester is off, its page says so and boot logs `chester: disabled`. See "Chester" |
+| `CHESTER_MODEL_QUICK`, `CHESTER_MODEL_PLAN` | the model each mode asks; both default `claude-opus-5-5` |
+| `CHESTER_EFFORT_QUICK`, `CHESTER_EFFORT_PLAN` | `low`, `medium`, `high`, `xhigh` or `max`; default `low` for quick and `medium` for plan |
+| `CHESTER_DAILY_USD` | the most Chester may spend in one UTC day, in dollars; default `5` |
+| `CHESTER_FALLBACK` | `default` (the default) or `off`; whether a question the API's safety classifiers decline is re-run on the model the API recommends for that case |
+| `ANTHROPIC_BASE_URL` | optional; sends Chester's questions to another address. For a local stub only: the key goes wherever this points |
 | `PORT` | default `8080` |
 | `COOKIE_SECURE` | default `1`; set `0` only for plain-HTTP local runs |
 
@@ -281,6 +287,95 @@ open. A time is stored as UTC plus the stage's IANA zone (a question takes the
 zone the ride is in), and a wall-clock time typed after the fact is read in
 that zone. The disclaimer is always shown; a document without one gets a
 default.
+
+### Chester
+
+Chester is a helper for the road. The signed-in trip-keeper asks it about
+fuel, food, a rest stop, coffee, tonight's lodging, something worth a stop,
+the weather and roads ahead, or how far it is to tonight, in one tap or in
+their own words, and the site asks the Claude API and streams the answer back
+in large type. It is for the passenger, or for when the car is parked.
+
+It is also an experiment. Every question is a row in a log, and the
+trip-keeper rules on each answer after checking it against a navigation app, a
+booking site, a map or the place itself. The log is what says how far such an
+answer can be trusted.
+
+**What it cannot do, and says so.** Chester has no live traffic and no
+routing. A drive time is an estimate from the plan's own miles; turn-by-turn
+stays with a navigation app. It can search the web for what is there now
+(lodging, hours, weather, closures), and it is told to say when it could not
+confirm something rather than guess.
+
+**Two modes.** *Quick* is a short answer with at most three places, stopped
+after 60 seconds. *Plan* is the evening question about tomorrow: longer, more
+searching, up to six places, stopped after 180 seconds. Each mode has its own
+model and effort setting; neither is fixed in the code.
+
+**Every place is a card.** A place Chester names arrives as a card with its
+name, kind, town and one line of why, and links out: a navigation app, a map,
+and for lodging a booking search for that town and night. The links are built
+by the server from the card's fields. Nothing the model writes is ever placed
+on the page as markup, and a web address it gives is kept only when it is a
+plain `http` or `https` address.
+
+**Signed in only, and capped.** `/chester` and everything under it answer only
+to the session or the push token, because every question spends money. Before
+each question the day's spending (UTC) is read from the log; at
+`CHESTER_DAILY_USD` Chester refuses in plain words until midnight UTC. One
+question runs at a time, and a second is told that Chester is busy. A question
+that fails leaves one sentence on the page and stays in the box.
+
+**What a question costs** is worked out from the response's own token counts
+at list prices, plus web searches at $10 per 1,000. A model the price table
+does not know is priced as the dearest one in it, so an unknown model can only
+reach the limit sooner. When the API answers with a model other than the one
+asked for, each price takes the dearer of the two.
+
+**What the API is told.** The active ride's plan as the public pages show it
+(days, legs, miles, hours, checkpoint names and zones, arrival stamps), today's
+leg and how many miles of it are left, the local time in the zone of the
+nearest checkpoint, and one position: the phone's when the trip-keeper taps
+*Send my position*, else the last pinned post. That position goes through the
+store's fuzz seam first, so a point at or near a private place is replaced by
+the same 0.05° cell a post's pin would get. The private overlay, a checklist's
+private text and photos are never sent. The web search is given a time zone,
+and a town only when the nearest checkpoint's own name is one; never a
+coordinate.
+
+**The key.** Chester needs an API key for the Claude API. The operator sets it
+as a Fly secret named `ANTHROPIC_API_KEY`, by hand, with their own key; it is
+not in this repository, not in `fly.toml`, and not in any log. Setting a secret
+restarts the machine, and that restart is the only thing switching Chester on
+takes. With no key the feature is absent: the
+masthead has no link, `/chester` says Chester is not set up, and boot logs
+`chester: disabled`. With one, boot logs `chester: enabled` and the two models.
+`guard_test.go` fails the build on anything shaped like a key in the tree.
+
+**The log.** `GET /admin/chester/log` lists every question: when and in which
+zone, the mode, the question, the model and effort, milliseconds to the first
+word and in all, tokens in, out and read from the cache, searches, dollars, the
+answer, the places, how it stopped, and the fuzzed position that was sent. A
+verdict is one tap in place: **Right**, **Partly**, **Wrong** or
+**Unverified**, with what it was checked against, a note, and an optional pair
+of figures (Chester's and the reference, in minutes, dollars or miles). The
+summary groups by mode and verdict and gives the count, the median time, the
+dollars, and the mean absolute percent error where pairs exist.
+`GET /admin/chester/log.json` is the whole log as data. Neither is reachable
+without signing in, and nothing of the log is on any open page.
+
+```bash
+# ask from curl: the answer streams back one JSON object a line
+curl -sN -H "$H" -d preset=fuel $S/chester/ask
+curl -sN -H "$H" -d mode=plan --data-urlencode 'q=Where should we stay tomorrow night?' $S/chester/ask
+
+# rule on question 12, and read the whole log
+curl -s -H "$H" -d verdict=partly -d against=navigation -d chester_value=50 -d reference_value=40 -d unit=minutes \
+     $S/admin/chester/log/12
+curl -s -H "$H" $S/admin/chester/log.json
+```
+
+Chester only suggests. Nothing it says is written into the plan.
 
 ### Options
 

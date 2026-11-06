@@ -1,6 +1,6 @@
 # Build a static binary, ship it on scratch. No runtime, no package manager,
 # nothing to patch — which is the point: nobody is patching anything from a car.
-FROM golang:1.23-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -22,7 +22,7 @@ FROM scratch
 # trip files (/data/trips) — none of which is ever in this image.
 WORKDIR /app
 COPY --from=build /roadtrip /app/roadtrip
-# TLS roots, for outbound HTTPS if it is ever needed.
+# TLS roots, for outbound HTTPS: Chester's calls to the Claude API need them.
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /tmp/passwd /etc/passwd
 COPY --from=build /tmp/group /etc/group

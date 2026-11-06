@@ -1,0 +1,112 @@
+{{template "head" .}}
+<section class="page-head ch-head">
+  <p class="crumb"><a href="/chester">&larr; Chester</a></p>
+  <h1>Chester log</h1>
+  <p class="muted">Every question, what it cost, and whether the answer held up. A verdict is yours to give:
+    check the answer against a navigation app, a booking site, a map or the place itself, then rule on it here.</p>
+  {{if .Error}}<p class="error" role="alert">Not saved: {{.Error}}.</p>
+  {{else if .Notice}}<p class="plan-saved" role="status">{{.Notice}}</p>{{end}}
+</section>
+
+<section class="ch-summary">
+  <h2>Summary</h2>
+  {{if .Sum.Rows}}
+  <p class="muted small">{{.Sum.N}} question(s), {{.Sum.Ruled}} ruled, {{usd2 .Sum.USD}} in all.</p>
+  <ul class="ch-sum-list">
+    {{range .Sum.Rows}}
+    <li class="ch-sum">
+      <b>{{if eq .Mode "plan"}}Plan{{else}}Quick{{end}} &middot; {{.VerdictLabel}}</b>
+      <span>{{.N}} question(s)</span>
+      <span>median {{secs .MedianMS}}</span>
+      <span>{{usd2 .USD}}</span>
+      <span>{{if .Pairs}}mean error {{pct .MAPE}} over {{.Pairs}} pair(s){{else}}no number pairs{{end}}</span>
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  <p class="muted">No questions yet.</p>
+  {{end}}
+  <p class="muted small">{{.PricesNote}} The whole log as data: <a href="/admin/chester/log.json">log.json</a> (signed in only).</p>
+</section>
+
+<section class="ch-log">
+  <h2>Questions</h2>
+  {{if .Hidden}}<p class="muted small">The newest {{len .Rows}} are listed. {{.Hidden}} older one(s) are in log.json.</p>{{end}}
+  {{range .Rows}}
+  <article class="ch-q{{if .Verdict}} ruled ruled-{{.Verdict}}{{end}}" id="q-{{.ID}}">
+    <header class="ch-q-head">
+      <span class="pill ch-pill-{{.Mode}}">{{if eq .Mode "plan"}}Plan{{else}}Quick{{end}}</span>
+      <time datetime="{{.AskedAt}}">{{local .AskedAt .TZ}}</time>
+      <span class="muted small">{{.TZ}}</span>
+      {{if .Verdict}}<span class="ch-verdict ch-v-{{.Verdict}}">{{.VerdictLabel}}</span>{{else}}<span class="ch-verdict">Not ruled</span>{{end}}
+    </header>
+    <p class="ch-question">{{.Question}}</p>
+    {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+    {{if .Answer}}<div class="ch-answer ch-answer-log">{{.Answer}}</div>{{end}}
+    {{if .Places}}
+    <ul class="ch-places">
+      {{range .Cards}}
+      <li class="ch-place">
+        <span class="ch-kind">{{.KindLabel}}</span>
+        <b class="ch-place-name">{{.Name}}</b>
+        {{with .Town}}<span class="muted">{{.}}</span>{{end}}
+        {{with .Why}}<p class="ch-why">{{.}}</p>{{end}}
+        <p class="ch-links">{{range .Links}}<a class="ch-link" href="{{.Href}}" target="_blank" rel="noopener noreferrer nofollow">{{.Label}}</a>{{end}}</p>
+      </li>
+      {{end}}
+    </ul>
+    {{end}}
+    <dl class="ch-facts">
+      <div><dt>Model</dt><dd>{{.Model}}{{with .ServedModel}}, answered by {{.}}{{end}}</dd></div>
+      <div><dt>Effort</dt><dd>{{.Effort}}</dd></div>
+      <div><dt>First word</dt><dd>{{.FirstMS}} ms</dd></div>
+      <div><dt>Total</dt><dd>{{.TotalMS}} ms</dd></div>
+      <div><dt>Tokens in / out / cached</dt><dd>{{.TokensIn}} / {{.TokensOut}} / {{.CacheRead}}</dd></div>
+      <div><dt>Searches</dt><dd>{{.Searches}}</dd></div>
+      <div><dt>Cost</dt><dd>{{usd .USD}}</dd></div>
+      <div><dt>Stopped</dt><dd>{{if .StopReason}}{{.StopReason}}{{else}}no stop reason{{end}}</dd></div>
+      <div><dt>Position sent</dt><dd>{{.Position}}</dd></div>
+      {{with .Note}}<div><dt>Notes</dt><dd>{{.}}</dd></div>{{end}}
+      {{if .Verdict}}
+      <div><dt>Checked against</dt><dd>{{if .Checked}}{{.CheckedLabel}}{{else}}not said{{end}}</dd></div>
+      {{if .ChesterValue}}<div><dt>Chester / reference</dt><dd>{{opt .ChesterValue}} / {{opt .RefValue}} {{.Unit}}</dd></div>{{end}}
+      {{with .VerdictNote}}<div><dt>Your note</dt><dd>{{.}}</dd></div>{{end}}
+      {{end}}
+    </dl>
+    <form method="post" action="/admin/chester/log/{{.ID}}" class="ch-rule">
+      <details class="cl-edit">
+        <summary>Add what you checked</summary>
+        <div class="stack">
+          <label>Checked against
+            <select name="against">
+              <option value="">not said</option>
+              {{$against := .Checked}}{{range $.Checks}}<option value="{{.Key}}"{{if eq .Key $against}} selected{{end}}>{{.Label}}</option>{{end}}
+            </select>
+          </label>
+          <label>Note
+            <textarea name="note" rows="2" maxlength="1000">{{.VerdictNote}}</textarea>
+          </label>
+          <div class="ch-pair">
+            <label>Chester said
+              <input type="text" inputmode="decimal" name="chester_value" value="{{opt .ChesterValue}}">
+            </label>
+            <label>It was
+              <input type="text" inputmode="decimal" name="reference_value" value="{{opt .RefValue}}">
+            </label>
+            <label>In
+              <select name="unit">
+                <option value="">no figures</option>
+                {{$unit := .Unit}}{{range $.Units}}<option value="{{.}}"{{if eq . $unit}} selected{{end}}>{{.}}</option>{{end}}
+              </select>
+            </label>
+          </div>
+        </div>
+      </details>
+      <div class="ch-rule-buttons">
+        {{$v := .Verdict}}{{range $.Verdicts}}<button type="submit" name="verdict" value="{{.Key}}" class="ch-tap ch-vb{{if eq .Key $v}} on{{end}}">{{.Label}}</button>{{end}}
+      </div>
+    </form>
+  </article>
+  {{end}}
+</section>
+{{template "foot" .}}

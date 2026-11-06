@@ -1,0 +1,61 @@
+{{template "head" .}}
+<section class="page-head ch-head">
+  <p class="crumb"><a href="/">&larr; {{.Ride.Name}}</a></p>
+  <h1>Chester</h1>
+  <p class="ch-limits" role="note">For the passenger, or when parked. Chester has no live traffic:
+    drive times are estimates, and turn-by-turn stays with your navigation app. Check a place before you drive to it.</p>
+</section>
+
+{{if not .On}}
+<section class="card ch-off">
+  <p><b>Chester is not set up.</b></p>
+  <p class="muted">This site has no API key for it, so there is nothing to ask. Everything else works as it did.</p>
+</section>
+{{else}}
+<form id="ch-form" class="ch-form" method="post" action="/chester/ask" autocomplete="off">
+  <fieldset class="ch-presets">
+    <legend>Ask in one tap</legend>
+    {{range .Presets}}<button type="button" class="ch-preset" data-preset="{{.ID}}" data-question="{{.Question}}">{{.Label}}</button>
+    {{end}}
+  </fieldset>
+
+  <label class="ch-ask">Or ask your own
+    <textarea id="ch-q" name="q" rows="3" maxlength="1000" placeholder="Is there a good diner in the next hour?"></textarea>
+  </label>
+
+  <fieldset class="ch-modes">
+    <legend>How much to ask of it</legend>
+    <label class="ch-mode"><input type="radio" name="mode" value="quick" checked>
+      <span><b>Quick</b> <span class="muted small">a short answer, up to {{.QuickSecs}} seconds</span></span></label>
+    <label class="ch-mode"><input type="radio" name="mode" value="plan">
+      <span><b>Plan</b> <span class="muted small">tomorrow&rsquo;s choices, longer, up to {{.PlanSecs}} seconds</span></span></label>
+  </fieldset>
+
+  <div class="ch-row">
+    <button type="button" id="ch-locate" class="ghost ch-tap">Send my position</button>
+    <span id="ch-geo" class="muted small" role="status">Not sent. Chester will use the last pinned post.</span>
+    <input type="hidden" name="lat" id="ch-lat"><input type="hidden" name="lng" id="ch-lng">
+  </div>
+
+  <div class="ch-row">
+    <button type="submit" id="ch-send" class="big ch-tap">Ask</button>
+    <label class="check ch-tap"><input type="checkbox" id="ch-speak"> Read the answer aloud</label>
+  </div>
+</form>
+
+<section class="ch-result" aria-live="polite">
+  <p id="ch-status" class="ch-status muted" role="status" hidden></p>
+  <p id="ch-error" class="error ch-error" role="alert" hidden></p>
+  <div id="ch-answer" class="ch-answer" hidden></div>
+  <ul id="ch-places" class="ch-places" hidden></ul>
+  <p id="ch-meta" class="muted small" hidden></p>
+</section>
+
+<section class="ch-foot">
+  <p class="muted small">Today: {{.Spent}} of {{.Cap}} used (the day runs on UTC). Quick asks {{.Quick.Model}} at {{.Quick.Effort}} effort;
+    Plan asks {{.Plan.Model}} at {{.Plan.Effort}} effort.</p>
+  <p><a class="button ch-tap" href="/admin/chester/log">Open the log and rule on answers</a></p>
+</section>
+<script defer src="/static/js/chester.js?v={{.V}}"></script>
+{{end}}
+{{template "foot" .}}

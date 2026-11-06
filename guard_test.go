@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -122,6 +123,12 @@ func isSynthetic(raw []byte) bool {
 	return json.Unmarshal(raw, &doc) == nil && doc.Synthetic
 }
 
+// apiKeyRE is the shape of a Claude API key: the fixed prefix and then a run
+// of key characters. The site's key is a Fly secret and lives nowhere else;
+// a token of this shape in the tree is one that was pasted there. The bare
+// prefix in a sentence does not match, and neither does this line.
+var apiKeyRE = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]{8,}`)
+
 // repoGuard checks one tree. files are slash-separated paths relative to
 // root. It returns every violation, and an error only when it could not look.
 func repoGuard(root string, files []string) ([]string, error) {
@@ -168,6 +175,11 @@ func repoGuard(root string, files []string) ([]string, error) {
 		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
 		if err != nil {
 			return bad, fmt.Errorf("read %s: %w", f, err)
+		}
+		// An API key, in any file of any kind. The complaint names the file
+		// and never the token.
+		if apiKeyRE.Match(raw) {
+			bad = append(bad, fmt.Sprintf("%s holds what looks like an API key", f))
 		}
 		if named || isChecklistDocument(raw) {
 			switch {
@@ -289,7 +301,13 @@ func TestRepoGuardFires(t *testing.T) {
 		"seed/atx-sjc-2026-09.geojson": string(trip), "testdata/trip-fixture.geojson": string(trip),
 		"testdata/route-fixture.json": string(route), "notes.json": `{"features": []}`,
 		"testdata/checklist-fixture.json": string(checklist), "testdata/other.checklist.json": string(checklist),
-		"todo.json": `{"stages": [], "questions": []}`}
+		"todo.json":    `{"stages": [], "questions": []}`,
+		"docs/keys.md": "A key starts with sk-ant- and is set as a secret, never committed.\n"}
+	// Built at run time, so this file does not itself hold the shape it bans.
+	fakeKey := "sk-" + "ant-" + "api03-" + strings.Repeat("FAKE0", 6)
+	if !apiKeyRE.MatchString(fakeKey) {
+		t.Fatal("the invented key does not have the shape the guard looks for; the key cases would prove nothing")
+	}
 	cases := []struct {
 		name   string
 		change func(tree map[string]string)
@@ -315,6 +333,9 @@ func TestRepoGuardFires(t *testing.T) {
 		{"a checklist name on an empty file", func(m map[string]string) { m["x.checklist.json"] = "" }, "x.checklist.json is a checklist document outside testdata/"},
 		{"a checklist fixture that does not say it is synthetic", func(m map[string]string) { m["testdata/real.json"] = string(unmarkedChecklist) }, "testdata/real.json is a checklist document under testdata/"},
 		{"a checklist name under testdata/ that does not say it is synthetic", func(m map[string]string) { m["testdata/real.checklist.json"] = "{}" }, "testdata/real.checklist.json is a checklist document under testdata/"},
+		{"an API key in an env file", func(m map[string]string) { m["local.env"] = "ANTHROPIC_API_KEY=" + fakeKey + "\n" }, "local.env holds what looks like an API key"},
+		{"an API key in a source file", func(m map[string]string) { m["main.go"] = "package main\n\nconst k = \"" + fakeKey + "\"\n" }, "main.go holds what looks like an API key"},
+		{"an API key in a fixture", func(m map[string]string) { m["testdata/stub.json"] = `{"key": "` + fakeKey + `"}` }, "testdata/stub.json holds what looks like an API key"},
 		{"a questions-only checklist", func(m map[string]string) { m["q.json"] = `{"questions": [{"id": "a", "ask": "Is it?"}]}` }, "q.json is a checklist document outside testdata/"},
 	}
 	for _, c := range cases {

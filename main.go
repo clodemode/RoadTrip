@@ -22,6 +22,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -85,6 +86,13 @@ type App struct {
 	// ("snap", the default) or clear ("exact"). Everywhere else a point is
 	// stored exactly in both modes, and the toggle overrides either way.
 	pinPrecision string
+	// chester is the en-route helper's client and settings, nil when it is
+	// off: no ANTHROPIC_API_KEY, or a setting that does not parse. Every
+	// Chester page asks this one field whether there is anything to offer.
+	chester *Chester
+	// chesterBusy is held for the length of one question. A second question
+	// is refused while it is held (TryLock), never queued.
+	chesterBusy sync.Mutex
 }
 
 // PIN_PRECISION values. See App.pinPrecision.
@@ -263,6 +271,19 @@ func main() {
 		log.Printf("WARN private overlay: %v", err)
 	} else if n := pd.entries(); n > 0 {
 		log.Printf("private overlay: %d checkpoint entr(ies) across %d ride(s) (admin pages only)", n, len(pd.Rides)+1)
+	}
+	// Chester: on only with a key and settings that parse. The log line names
+	// the models and the day's limit and never the key; a credential that
+	// reaches a log is spent.
+	if cfg, why := chesterConfigFrom(os.Getenv); cfg == nil {
+		log.Printf("chester: disabled (%s)", why)
+	} else {
+		app.chester = newChester(cfg)
+		log.Printf("chester: enabled (quick %s at %s effort, plan %s at %s effort, limit $%.2f a day UTC)",
+			cfg.Quick.Model, cfg.Quick.Effort, cfg.Plan.Model, cfg.Plan.Effort, cfg.DailyUSD)
+		if cfg.baseURL != "" {
+			log.Printf("WARN chester: ANTHROPIC_BASE_URL is set, so questions go to that address and not to the API")
+		}
 	}
 	if _, err := store.Ride(rideSlug); err != nil {
 		log.Printf("WARN RIDE_SLUG=%s is not in the database — / will 404 until it is seeded", rideSlug)

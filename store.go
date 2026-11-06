@@ -266,6 +266,44 @@ CREATE TABLE IF NOT EXISTS checklist_items (
   private_note TEXT NOT NULL DEFAULT '',
   UNIQUE (ride_slug, kind, item_id)
 );
+CREATE TABLE IF NOT EXISTS chester_queries (
+  id              INTEGER PRIMARY KEY,
+  ride_slug       TEXT NOT NULL DEFAULT '',
+  asked_at        TEXT NOT NULL,
+  tz              TEXT NOT NULL DEFAULT 'UTC',
+  mode            TEXT NOT NULL,
+  preset          TEXT NOT NULL DEFAULT '',
+  question        TEXT NOT NULL,
+  prompt_version  TEXT NOT NULL DEFAULT '',
+  model           TEXT NOT NULL,
+  served_model    TEXT NOT NULL DEFAULT '',
+  effort          TEXT NOT NULL DEFAULT '',
+  first_ms        INTEGER NOT NULL DEFAULT 0,
+  total_ms        INTEGER NOT NULL DEFAULT 0,
+  tokens_in       INTEGER NOT NULL DEFAULT 0,
+  tokens_out      INTEGER NOT NULL DEFAULT 0,
+  cache_read      INTEGER NOT NULL DEFAULT 0,
+  cache_write     INTEGER NOT NULL DEFAULT 0,
+  searches        INTEGER NOT NULL DEFAULT 0,
+  usd             REAL NOT NULL DEFAULT 0,
+  answer          TEXT NOT NULL DEFAULT '',
+  places          TEXT NOT NULL DEFAULT '[]',
+  stop_reason     TEXT NOT NULL DEFAULT '',
+  error           TEXT NOT NULL DEFAULT '',
+  note            TEXT NOT NULL DEFAULT '',
+  pos_lat         REAL,
+  pos_lng         REAL,
+  pos_source      TEXT NOT NULL DEFAULT 'none',
+  pos_label       TEXT NOT NULL DEFAULT '',
+  verdict         TEXT NOT NULL DEFAULT '',
+  checked_against TEXT NOT NULL DEFAULT '',
+  verdict_note    TEXT NOT NULL DEFAULT '',
+  chester_value   REAL,
+  reference_value REAL,
+  value_unit      TEXT NOT NULL DEFAULT '',
+  verdict_at      TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS chester_asked ON chester_queries(asked_at);
 `
 
 type Store struct{ db *sql.DB }
@@ -573,6 +611,36 @@ func nearPrivate(lat, lng float64, cps []Checkpoint) *Checkpoint {
 		}
 	}
 	return best
+}
+
+// publishPosition is the fuzz seam for a position that is about to leave the
+// site by a road other than a post: the en-route helper sends one to an API.
+// A point that belongs to a private place is replaced by that place's snapped
+// point, exactly as a post's pin is (nearPrivate), and the test is widened to
+// the line mask's radius, because this point goes to a third party and a
+// vertex of a leg line is held to that radius already. Anywhere else the
+// point is published to three decimals, about a hundred metres: enough to
+// find the next fuel stop, and no finer than that needs. The checkpoints
+// must be the store's own, already snapped.
+func publishPosition(lat, lng float64, cps []Checkpoint) (LatLng, *Checkpoint) {
+	if pc := nearPrivate(lat, lng, cps); pc != nil {
+		return LatLng{Lat: pc.Lat, Lng: pc.Lng}, pc
+	}
+	var best *Checkpoint
+	bestKm := math.Inf(1)
+	for i := range cps {
+		c := &cps[i]
+		if c.Precision != precisionFuzzed || !inPrivateZone(lat, lng, *c) {
+			continue
+		}
+		if km := haversineKm(lat, lng, c.Lat, c.Lng); km < bestKm {
+			best, bestKm = c, km
+		}
+	}
+	if best != nil {
+		return LatLng{Lat: best.Lat, Lng: best.Lng}, best
+	}
+	return LatLng{Lat: math.Round(lat*1000) / 1000, Lng: math.Round(lng*1000) / 1000}, nil
 }
 
 // rideCheckpoints flattens a ride's legs into one checkpoint slice.
