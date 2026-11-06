@@ -1,0 +1,31 @@
+entries:
+- slug: todo-roadtrip-chester-log-prices-note-names-a-json-field-on-a-page-a-person-reads
+  title: 'roadtrip: the Chester log''s prices note names a JSON field (usage_json) in the copy a person
+    reads; say it in plain words'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: content
+  character_slug: scout
+  tags:
+  - roadtrip
+  - chester
+  - copy
+  - plain-words
+  - 2026-11
+  status: design
+  description: Seen 2026-11-06 during the design-system restyle, on /admin/chester/log at 390px. The prices
+    note under the summary is built in Go (chester_handlers.go, the PricesNote string) and says each row
+    keeps the token counts "as the API sent them (usage_json in log.json)". The page copy should be plain
+    words on every surface; a field name in parentheses is for the export, not for a reader. The restyle
+    was markup and style only and allowed no Go change outside tests, so it was left as it is.
+  dont: 'DONT rename the usage_json field in the JSON export or the database: only the sentence on the
+    page changes.'
+  do_this: DO reword the note so it says the raw counts are kept in each row of the log export, without
+    naming the field, and update any test that pins the old sentence.
+  do_also: Check the other Go-built page sentences on the Chester pages for field names or codes in the
+    same pass.
+  effort: S
+  impact: low
+  triaged_at: '2026-11-06T22:46:58.527990+00:00'
+  triaged_by: scout

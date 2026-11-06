@@ -1,0 +1,124 @@
+/* Folded from the platform Design System, tokens version 1 (last change 2026-11-05), on 2026-11-06. Changes only by a deliberate re-fold; never refreshed by an automatic step.
+
+   What this file is: roadtrip's own copy of the system rules that apply here,
+   laid over Bootstrap 5.3.3 (static/vendor/bootstrap.min.css). One light
+   theme; no colour-scheme media query anywhere (style_audit_test.go fails on
+   one). What is roadtrip's own (the masthead, Odo, the leg colours, the map,
+   the hero, the post cards) lives in app.css, never here. */
+
+/* --- tokens ------------------------------------------------------------------ */
+:root, [data-bs-theme="light"] {
+  color-scheme: light;
+  --ds-ground: #f8fafc;      /* page ground */
+  --ds-surface: #ffffff;     /* card surface */
+  --ds-text: #1e293b;        /* body text */
+  --ds-muted: #64748b;       /* muted text, 4.76:1 on white */
+  --ds-primary: #2563eb;     /* primary action, white text 5.17:1 */
+  --ds-primary-rgb: 37, 99, 235;
+  --ds-hairline: #dee2e6;
+  --ds-positive: #198754;    /* signed figures only */
+  --ds-negative: #dc3545;
+  --ds-radius: .5rem;
+  --ds-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+  --ds-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --ds-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /* Bootstrap, pointed at the tokens. */
+  --bs-body-bg: var(--ds-ground);
+  --bs-body-color: var(--ds-text);
+  --bs-body-font-family: var(--ds-font);
+  --bs-body-font-size: 1rem;
+  --bs-body-line-height: 1.5;
+  --bs-font-sans-serif: var(--ds-font);
+  --bs-font-monospace: var(--ds-mono);
+  --bs-secondary-color: var(--ds-muted);
+  --bs-border-color: var(--ds-hairline);
+  --bs-border-radius: var(--ds-radius);
+  --bs-link-color: var(--ds-primary);
+  --bs-link-color-rgb: var(--ds-primary-rgb);
+  --bs-link-hover-color: #1d4ed8;
+  --bs-link-hover-color-rgb: 29, 78, 216;
+  --bs-primary: var(--ds-primary);
+  --bs-primary-rgb: var(--ds-primary-rgb);
+  --bs-focus-ring-color: rgba(var(--ds-primary-rgb), .15);
+}
+
+/* --- tints: meaning on a row or a surface, at alpha .06. A tint is never the
+   only signal: every use sits beside a word that says the same thing. ------- */
+.bg-primary-tint   { background-color: rgba(13, 110, 253, .06) !important; }
+.bg-success-tint   { background-color: rgba(25, 135, 84, .06) !important; }
+.bg-danger-tint    { background-color: rgba(220, 53, 69, .06) !important; }
+.bg-warning-tint   { background-color: rgba(255, 193, 7, .06) !important; }
+.bg-info-tint      { background-color: rgba(13, 202, 240, .06) !important; }
+.bg-secondary-tint { background-color: rgba(108, 117, 125, .06) !important; }
+
+/* --- type ---------------------------------------------------------------------- */
+body { font-family: var(--ds-font); font-size: 1rem; line-height: 1.5; }
+h2, .section-title { font-size: 1rem; font-weight: 600; }
+small, .small { font-size: .875rem; }
+.table > thead th, .table-head { font-size: .75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .025em; color: var(--ds-muted); }
+/* Every figure (miles, hours, dollars, counts, percentages) is set in
+   tabular numerals so columns of them line up. */
+.figure, .amount { font-variant-numeric: tabular-nums; }
+/* Signed figures only. Red means negative: a positive figure is never red. */
+.amount-positive { color: var(--ds-positive); }
+.amount-negative { color: var(--ds-negative); }
+
+/* --- surfaces ----------------------------------------------------------------- */
+.card { --bs-card-border-radius: var(--ds-radius); --bs-card-inner-border-radius: calc(var(--ds-radius) - 1px);
+  --bs-card-border-color: var(--ds-hairline); --bs-card-bg: var(--ds-surface);
+  box-shadow: var(--ds-shadow); }
+
+/* --- actions ------------------------------------------------------------------ */
+.btn-primary { --bs-btn-bg: var(--ds-primary); --bs-btn-border-color: var(--ds-primary);
+  --bs-btn-hover-bg: #1d4ed8; --bs-btn-hover-border-color: #1d4ed8;
+  --bs-btn-active-bg: #1e40af; --bs-btn-active-border-color: #1e40af;
+  --bs-btn-disabled-bg: var(--ds-primary); --bs-btn-disabled-border-color: var(--ds-primary);
+  --bs-btn-focus-shadow-rgb: var(--ds-primary-rgb); }
+.btn-outline-primary { --bs-btn-color: var(--ds-primary); --bs-btn-border-color: var(--ds-primary);
+  --bs-btn-hover-bg: var(--ds-primary); --bs-btn-hover-border-color: var(--ds-primary);
+  --bs-btn-active-bg: var(--ds-primary); --bs-btn-active-border-color: var(--ds-primary); }
+.btn-outline-secondary { --bs-btn-color: #475569; --bs-btn-border-color: var(--ds-hairline);
+  --bs-btn-hover-color: var(--ds-text); --bs-btn-hover-bg: #f1f5f9; --bs-btn-hover-border-color: #cbd5e1;
+  --bs-btn-active-color: var(--ds-text); --bs-btn-active-bg: #e2e8f0; --bs-btn-active-border-color: #cbd5e1; }
+
+/* --- focus: keyboard focus is always visible, one outline -------------------- */
+:focus-visible { outline: 2px solid var(--ds-primary); outline-offset: 2px; }
+.btn:focus-visible, .form-check-input:focus-visible { outline: 2px solid var(--ds-primary); outline-offset: 2px; }
+.form-control:focus, .form-select:focus, .form-check-input:focus {
+  border-color: var(--ds-primary); box-shadow: 0 0 0 .2rem rgba(var(--ds-primary-rgb), .15); }
+.form-check-input:checked { background-color: var(--ds-primary); border-color: var(--ds-primary); }
+
+/* --- forms: compact, related fields on one row ------------------------------- */
+.form-label { margin-bottom: .25rem; font-size: .875rem; font-weight: 600; color: var(--ds-text); }
+label.form-label > .form-control, label.form-label > .form-select { margin-top: .25rem; font-weight: 400; }
+.form-text { color: var(--ds-muted); }
+
+/* --- the hidden attribute always wins. Reboot already says so; this is the
+   fold saying it again, so a later author display rule cannot bring back a
+   control a script has hidden. ----------------------------------------------- */
+[hidden] { display: none !important; }
+
+/* --- disclosure: never a modal. Content opens in place below its trigger, the
+   whole summary is the target, and a chevron turns in .15s. ----------------- */
+details > summary { list-style: none; cursor: pointer; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: ""; display: inline-block; flex: 0 0 auto;
+  width: .5em; height: .5em; margin: 0 .55em .15em .1em;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg); transition: transform .15s ease; }
+details[open] > summary::before { transform: rotate(45deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+
+/* --- phone portrait first (390px): no sideways page scroll, touch targets at
+   least 44px tall. Breakpoints 576px and 768px. ------------------------------- */
+html, body { overflow-x: clip; }
+.btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: .4rem; }
+.form-control, .form-select { min-height: 44px; }
+textarea.form-control { min-height: 5rem; }
+.form-check.touch { display: flex; align-items: center; gap: .55rem; min-height: 44px; padding-left: 0; margin: 0; }
+.form-check.touch .form-check-input { float: none; margin: 0; flex: 0 0 auto; width: 1.25rem; height: 1.25rem; }

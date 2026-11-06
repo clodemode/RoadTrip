@@ -3,15 +3,15 @@
   {{template "terrain" .PageLeg}}
   <div class="hero-top">
     <h1>{{.Ride.Name}}</h1>
-    <span class="badge">{{.Day.Badge}}</span>
+    <span class="badge day-badge">{{.Day.Badge}}</span>
   </div>
   <p class="hero-line">
     <b>{{.Ride.OriginLabel}}</b> &rarr; <b>{{.Ride.TerminusLabel}}</b>
-    <span class="pill pill-topology">ONE-WAY</span>
-    <span class="muted">{{day .Ride.StartDate}} &ndash; {{day .Ride.EndDate}} &middot; {{.Ride.Mode}}</span>
+    <span class="pill">One-way</span>
+    <span class="muted figure">{{day .Ride.StartDate}} &ndash; {{day .Ride.EndDate}} &middot; {{.Ride.Mode}}</span>
   </p>
   <p class="cast">Trip-keeper: Kris &middot; Guide: {{.GuideName}} &middot; {{.CreatureName}}</p>
-  {{with .Checklist}}<p class="cl-summary"><a href="/checklist">Checklist</a>: {{.Done}} of {{.Total}} done{{if .Questions}} &middot; {{.Answered}} of {{.Questions}} questions answered{{end}}</p>{{end}}
+  {{with .Checklist}}<p class="cl-summary figure"><a href="/checklist">Checklist</a>: {{.Done}} of {{.Total}} done{{if .Questions}} &middot; {{.Answered}} of {{.Questions}} questions answered{{end}}</p>{{end}}
   <ol class="leg-strip">
     <li class="leg-guide">
       <img src="/static/img/lance.svg?v={{.V}}" width="40" height="40" alt="{{.GuideName}}">
@@ -22,7 +22,7 @@
       <a href="/legs/{{.Slug}}">
         <span class="leg-n">{{.Ord}}</span>
         <span class="leg-name">{{.Name}}</span>
-        <span class="leg-sub">{{day .Date}} &middot; {{num .EstMiles}} mi</span>
+        <span class="leg-sub figure">{{day .Date}} &middot; {{num .EstMiles}} mi</span>
       </a>
     </li>
     {{end}}
@@ -42,13 +42,13 @@
         <span class="cp-label muted">{{.Label}}{{if eq .Precision "fuzzed"}} &middot; approximate{{end}}</span>
       </span>
       <span class="cp-time">
-        {{if .ArrivedAt}}<span class="arrived-at">arrived {{local .ArrivedAt .TZ}}</span>
-        {{else if .PlannedArrive}}<span class="muted">plan: arrive {{clock .PlannedArrive .TZ}}</span>
-        {{else if .PlannedDepart}}<span class="muted">plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
+        {{if .ArrivedAt}}<span class="arrived-at">Arrived {{local .ArrivedAt .TZ}}</span>
+        {{else if .PlannedArrive}}<span class="muted">Plan: arrive {{clock .PlannedArrive .TZ}}</span>
+        {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
         {{if $.Authed}}
-          <form method="post" action="/admin/checkpoint/{{.ID}}/arrive" class="inline">
-            {{if .ArrivedAt}}<input type="hidden" name="clear" value="1"><button class="tiny ghost">undo</button>
-            {{else}}<button class="tiny">Arrived</button>{{end}}
+          <form method="post" action="/admin/checkpoint/{{.ID}}/arrive" class="d-inline">
+            {{if .ArrivedAt}}<input type="hidden" name="clear" value="1"><button class="btn btn-sm btn-outline-secondary">Undo</button>
+            {{else}}<button class="btn btn-sm btn-primary">Arrived</button>{{end}}
           </form>
         {{end}}
       </span>
@@ -60,14 +60,13 @@
 <section class="timeline">
   <div class="section-head">
     <h2>From the road</h2>
-    {{if .Authed}}<a class="button" href="/admin/post">+ Post</a>{{end}}
+    {{if .Authed}}<a class="btn btn-primary" href="/admin/post">New post</a>{{end}}
   </div>
   {{if not .Posts}}<p class="muted">Nothing posted yet.</p>{{end}}
   {{range .Posts}}
     {{template "post_card" (card . $.Authed)}}
     {{if $.Authed}}
-    <form method="post" action="/admin/post/{{.ID}}/delete" class="post-admin"
-          onsubmit="return confirm('Delete this post?')"><button class="tiny ghost">delete</button></form>
+    {{template "delete_post" .}}
     {{end}}
   {{end}}
 </section>
