@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -278,7 +279,7 @@ CREATE TABLE IF NOT EXISTS chester_queries (
   model           TEXT NOT NULL,
   served_model    TEXT NOT NULL DEFAULT '',
   effort          TEXT NOT NULL DEFAULT '',
-  first_ms        INTEGER NOT NULL DEFAULT 0,
+  first_ms        INTEGER,
   total_ms        INTEGER NOT NULL DEFAULT 0,
   tokens_in       INTEGER NOT NULL DEFAULT 0,
   tokens_out      INTEGER NOT NULL DEFAULT 0,
@@ -303,7 +304,9 @@ CREATE TABLE IF NOT EXISTS chester_queries (
   value_unit      TEXT NOT NULL DEFAULT '',
   verdict_at      TEXT NOT NULL DEFAULT '',
   partial         TEXT NOT NULL DEFAULT '',
-  usd_estimated   INTEGER NOT NULL DEFAULT 0
+  usd_estimated   INTEGER NOT NULL DEFAULT 0,
+  answer_synth    INTEGER NOT NULL DEFAULT 0,
+  usage_json      TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS chester_asked ON chester_queries(asked_at);
 `
@@ -344,7 +347,11 @@ func (s *Store) migrate() error {
 	}
 	if err := s.addColumns("chester_queries", []string{
 		"partial TEXT NOT NULL DEFAULT ''", "usd_estimated INTEGER NOT NULL DEFAULT 0",
+		"answer_synth INTEGER NOT NULL DEFAULT 0", "usage_json TEXT NOT NULL DEFAULT '[]'",
 	}); err != nil {
+		return err
+	}
+	if err := s.chesterFirstWordNullable(); err != nil {
 		return err
 	}
 	if err := s.once("pins_backfilled_v1", s.backfillPins); err != nil {
@@ -384,6 +391,42 @@ func (s *Store) addColumns(table string, defs []string) error {
 		}
 		log.Printf("migrate: added column %s.%s", table, name)
 	}
+	return nil
+}
+
+// chesterFirstWordNullable lets chester_queries.first_ms be empty. The column
+// was first made NOT NULL DEFAULT 0, which wrote a wait of zero milliseconds
+// for an answer that had no words at all. A table of that shape is given a
+// column that can be empty, and its zeros, which never meant a time, become
+// empty. A table that already has the new shape is left alone.
+func (s *Store) chesterFirstWordNullable() error {
+	var notNull int
+	err := s.db.QueryRow(`SELECT "notnull" FROM pragma_table_info('chester_queries') WHERE name='first_ms'`).Scan(&notNull)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && notNull == 0) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		`ALTER TABLE chester_queries RENAME COLUMN first_ms TO first_ms_v1`,
+		`ALTER TABLE chester_queries ADD COLUMN first_ms INTEGER`,
+		`UPDATE chester_queries SET first_ms = NULLIF(first_ms_v1, 0)`,
+		`ALTER TABLE chester_queries DROP COLUMN first_ms_v1`,
+	} {
+		if _, err := tx.Exec(q); err != nil {
+			return fmt.Errorf("chester_queries.first_ms: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	log.Printf("migrate: chester_queries.first_ms can now be empty")
 	return nil
 }
 

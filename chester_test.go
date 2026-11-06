@@ -626,8 +626,8 @@ func TestChesterQuickQuestionEndToEnd(t *testing.T) {
 		t.Errorf("the row's counts: in %d out %d written %d read %d searches %d $%v",
 			r.TokensIn, r.TokensOut, r.CacheWrite, r.CacheRead, r.Searches, r.USD)
 	}
-	if r.FirstMS <= 0 || r.TotalMS < r.FirstMS {
-		t.Errorf("the row's times: first word %d ms, total %d ms", r.FirstMS, r.TotalMS)
+	if r.FirstMS == nil || *r.FirstMS <= 0 || r.TotalMS < *r.FirstMS {
+		t.Errorf("the row's times: first word %v ms, total %d ms", r.FirstMS, r.TotalMS)
 	}
 	if r.PosLat == nil || *r.PosLat != 41 || *r.PosLng != -101 || r.PosSource != "browser" || r.TZ != "America/Chicago" {
 		t.Errorf("the row's position: %s in %s", r.Position(), r.TZ)
@@ -719,8 +719,10 @@ func TestChesterPlanQuestion(t *testing.T) {
 			searching++
 		}
 	}
-	if searching != 2 {
-		t.Errorf("%d searching status line(s), want one per search", searching)
+	// Two searches back to back, with nothing said between them, are one
+	// status line: the page is told once.
+	if searching != 1 {
+		t.Errorf("%d searching status line(s), want one for two searches in a row", searching)
 	}
 	cards, _ := eventOf(evs, "places")
 	if len(cards.Places) != 1 || cards.Places[0].Night != "2030-05-02" ||
@@ -765,6 +767,11 @@ func TestChesterAsksAgainWhenTheCardsCameFirst(t *testing.T) {
 	}
 	if result := js(msgs[2]); !strings.Contains(result, `"tool_use_id":"toolu_first"`) || !strings.Contains(result, `"type":"tool_result"`) {
 		t.Errorf("the tool result: %s", result)
+	}
+	// The tool is answered with the request for the words, not with a bare
+	// acknowledgement the model can take as the end of its turn.
+	if result := js(msgs[2]); !strings.Contains(result, "Nothing you wrote before this call was shown") || !strings.Contains(result, "Now write the whole answer") {
+		t.Errorf("the tool result does not ask for the words: %s", result)
 	}
 	// The prefix of the second request is the first request's, byte for byte.
 	first := stub.request(0)

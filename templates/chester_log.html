@@ -43,6 +43,7 @@
     <p class="ch-question">{{.Question}}</p>
     {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
     {{if .Answer}}<div class="ch-answer ch-answer-log">{{.Answer}}</div>{{end}}
+    {{if .AnswerSynth}}<p class="muted small">Not Chester's words: it named places and wrote nothing, so the site wrote this line from the cards.</p>{{end}}
     {{if .Partial}}
     <details class="cl-edit">
       <summary>Not an answer: what had been written when it stopped</summary>
@@ -65,9 +66,9 @@
     <dl class="ch-facts">
       <div><dt>Model</dt><dd>{{.Model}}{{with .ServedModel}}, answered by {{.}}{{end}}</dd></div>
       <div><dt>Effort</dt><dd>{{.Effort}}</dd></div>
-      <div><dt>First word</dt><dd>{{.FirstMS}} ms</dd></div>
+      <div><dt>First word</dt><dd>{{if .FirstMS}}{{.FirstMS}} ms{{else}}no words{{end}}</dd></div>
       <div><dt>Total</dt><dd>{{.TotalMS}} ms</dd></div>
-      <div><dt>Tokens in / out / cached</dt><dd>{{.TokensIn}} / {{.TokensOut}} / {{.CacheRead}}</dd></div>
+      <div><dt>Tokens in / out / cache read / cache written</dt><dd>{{.TokensIn}} / {{.TokensOut}} / {{.CacheRead}} / {{.CacheWrite}}</dd></div>
       <div><dt>Searches</dt><dd>{{.Searches}}</dd></div>
       <div><dt>Cost</dt><dd>{{usd .USD}}{{if .USDEstimated}} (an estimate){{end}}</dd></div>
       <div><dt>Stopped</dt><dd>{{if .StopReason}}{{.StopReason}}{{else}}no stop reason{{end}}</dd></div>

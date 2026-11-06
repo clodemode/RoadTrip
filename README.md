@@ -339,6 +339,18 @@ by the server from the card's fields. Nothing the model writes is ever placed
 on the page as markup, and a web address it gives is kept only when it is a
 plain `http` or `https` address.
 
+**An answer always has words.** Chester is asked to show its places first and
+write the answer after them, and that order is not a matter of taste: the
+default model returns words written ahead of a tool call as a thinking block,
+which arrives empty, so an answer written before its cards is never seen. When
+the cards arrive with no words, the tool is answered with a request for the
+whole answer, and that second request writes it. If the model still writes
+nothing, the page is not left with a card and no sentence: the site builds one
+fixed line from the cards' own names, shows it, and marks the row
+(`answer_synthesized`) so it is never read as Chester's words. While it works,
+the page is told *Thinking* or *Searching the web* once each, not once for
+every step the API takes.
+
 **Signed in only, and capped.** `/chester` and everything under it answer only
 to the session or the push token, because every question spends money. One
 question runs at a time, and a second is told that Chester is busy. A question
@@ -365,13 +377,28 @@ bounds it in advance, and a typical question costs a small part of these
 figures. A limit below a mode's worst case refuses every question in that
 mode, and boot logs a warning saying so.
 
-**What a question costs** is worked out from the response's own token counts
-at list prices, plus web searches at $10 per 1,000. A model the price table
-does not know is priced as the dearest one in it, so an unknown model can only
-reach the limit sooner. When the API re-ran a declined question on another
-model, the response lists every attempt, and each is counted at its own
-model's price: the declined attempt is billed too. Without that list, each
-price takes the dearer of the model asked and the model that answered.
+**What a question costs** is worked out from the API's own usage for every
+request the question took, at list prices, plus web searches at $10 per 1,000.
+Each row keeps that usage as it arrived (`usage_json` in the export: the usage
+object from the first event of each request and the one that ends it, counts
+only, nothing of the question or the answer), and the row's tokens, searches
+and dollars are worked out from that record and from nothing else, so the two
+can always be checked against each other.
+
+How the record is read. The usage that ends a request is the total for the
+whole request. A request that ran a web search is several sampling steps, and
+the response itemises them (`usage.iterations`); the steps add up to the
+top-level counts exactly, so reading either gives the same tokens. The steps
+name no model, so each is priced at the model that ran the request. The first
+live question showed why that needs saying: its steps were priced as the
+dearest model in the table and the row read $0.20 for tokens that cost $0.08.
+When the API re-ran a declined question on another model, the itemised list
+is the only full account: the top-level counts then cover the answering
+attempt alone, the declined attempt is billed too, and each entry is priced at
+the model it names. A model the price table does not know, and an entry of any
+other kind that names no model, is priced as the dearest one in the table, so
+the unknown can only reach the limit sooner. With no itemised list, each price
+takes the dearer of the model asked and the model that answered.
 
 **A question that is cut off.** When the answer stops before the API has said
 how it ended (a dropped connection, the time limit, the browser going away),
@@ -412,10 +439,11 @@ masthead has no link, `/chester` says Chester is not set up, and boot logs
 
 **The log.** `GET /admin/chester/log` lists every question: when and in which
 zone, the mode, the question, the model and effort, milliseconds to the first
-word and in all, tokens in, out and read from the cache, searches, dollars
-(marked when they are an estimate), the answer or, for a question that failed,
-what had been written, the places, how it stopped, and the fuzzed position
-that was sent. A
+word and in all, tokens in, out, read from the cache and written to it,
+searches, dollars (marked when they are an estimate), the answer or, for a
+question that failed, what had been written, the places, how it stopped, and
+the fuzzed position that was sent. The first-word time is the first word of
+Chester's own text; when it wrote none the row has no such time, not a zero. A
 verdict is one tap in place: **Right**, **Partly**, **Wrong** or
 **Unverified**, with what it was checked against, a note, and an optional pair
 of figures (Chester's and the reference, in minutes, dollars or miles). The

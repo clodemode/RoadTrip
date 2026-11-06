@@ -54,7 +54,7 @@ const (
 	// chesterPromptVersion is stored on every row. Change the system prompt,
 	// the context block or the tool and this changes with it, so two rows are
 	// only ever compared when they were asked the same way.
-	chesterPromptVersion = "chester-rt-2"
+	chesterPromptVersion = "chester-rt-3"
 
 	maxChesterQuestion = 1000
 )
@@ -226,7 +226,9 @@ func chesterPriceFor(model string) (p chesterPrice, known bool) {
 
 // chesterUsage is what one question used, summed over every request it took
 // and every attempt inside each. In is the uncached input; the prompt as a
-// whole is In + CacheRead + CacheWrite.
+// whole is In + CacheRead + CacheWrite. It is never counted by hand: it is
+// worked out from the API's own usage objects (chesterUsageOf), and the row
+// keeps those objects beside it.
 type chesterUsage struct {
 	In, Out, CacheRead, CacheWrite, Searches int64
 	// TokenUSD is what those tokens cost, each attempt at its own model's
@@ -239,36 +241,154 @@ type chesterUsage struct {
 	CeilingUSD float64
 }
 
-// add counts one finished request. When the response itemises its attempts
-// (usage.iterations), every entry is counted and priced at the model that ran
-// it: the top-level counts cover only the attempt that produced the message,
-// and an attempt that was declined before a fallback answered is billed too.
-// An entry that names no model, or one the price table does not know, takes
-// the dearest price in the table. Without the itemised list the top-level
-// counts are priced at the dearer of the model asked and the model that
-// answered.
-func (u *chesterUsage) add(asked string, m *anthropic.BetaMessage) {
-	u.Searches += m.Usage.ServerToolUse.WebSearchRequests
-	if its := m.Usage.Iterations; len(its) > 0 {
-		for _, it := range its {
-			u.count(chesterUsage{In: it.InputTokens, Out: it.OutputTokens,
-				CacheRead: it.CacheReadInputTokens, CacheWrite: it.CacheCreationInputTokens}, string(it.Model), "")
-		}
-		return
-	}
-	u.count(chesterUsage{In: m.Usage.InputTokens, Out: m.Usage.OutputTokens,
-		CacheRead: m.Usage.CacheReadInputTokens, CacheWrite: m.Usage.CacheCreationInputTokens}, asked, string(m.Model))
+// chesterRequestUsage is one request of a question as the API counted it.
+// Start and Final are the API's own usage objects, kept as they arrived: the
+// one in the stream's first event (message_start) and the one in the event
+// that ends the turn (message_delta). They hold counts and nothing of the
+// question or the answer. The rest is what pricing them needs: the model the
+// request named, the model the response named, and the request's max_tokens.
+// A row stores the list for its question as JSON (usage_json), and the row's
+// tokens, searches and dollars are worked out from that list and from nothing
+// else.
+type chesterRequestUsage struct {
+	Asked     string `json:"asked"`
+	Served    string `json:"served,omitempty"`
+	MaxTokens int64  `json:"max_tokens"`
+	// Finished is true when the API said how the turn ended and what it
+	// used. False is a request that was cut off: Final is missing.
+	Finished bool            `json:"finished"`
+	Start    json.RawMessage `json:"start,omitempty"`
+	Final    json.RawMessage `json:"final,omitempty"`
 }
 
-// addUnfinished counts a request that ended with no final count: the stream
-// stopped before the API said how the turn ended. What it had read is known
-// from the stream's first event; what it wrote is not, so that round is
-// charged the most it could have written, the mode's max_tokens at the output
-// price. Searches such a round ran are not known either and are not charged.
-func (u *chesterUsage) addUnfinished(m chesterMode, msg *anthropic.BetaMessage) {
-	u.count(chesterUsage{In: msg.Usage.InputTokens,
-		CacheRead: msg.Usage.CacheReadInputTokens, CacheWrite: msg.Usage.CacheCreationInputTokens}, m.Model, string(msg.Model))
-	u.CeilingUSD += m.roundCeilingUSD(string(msg.Model))
+// chesterCounts is the four token counts of a usage object or of one entry
+// in its itemised list. A count that was not sent is nil, not zero.
+type chesterCounts struct {
+	In         *int64 `json:"input_tokens"`
+	Out        *int64 `json:"output_tokens"`
+	CacheWrite *int64 `json:"cache_creation_input_tokens"`
+	CacheRead  *int64 `json:"cache_read_input_tokens"`
+}
+
+// chesterAPIUsage is as much of the API's usage object as a cost is made of.
+type chesterAPIUsage struct {
+	chesterCounts
+	ServerToolUse *struct {
+		WebSearchRequests int64 `json:"web_search_requests"`
+	} `json:"server_tool_use"`
+	Iterations []struct {
+		chesterCounts
+		Type  string `json:"type"`
+		Model string `json:"model"`
+	} `json:"iterations"`
+}
+
+// rawUsage keeps a usage object as it arrived, or nothing if it is not JSON.
+func rawUsage(raw string) json.RawMessage {
+	if raw == "" || !json.Valid([]byte(raw)) {
+		return nil
+	}
+	return json.RawMessage(raw)
+}
+
+func firstCount(vs ...*int64) int64 {
+	for _, v := range vs {
+		if v != nil {
+			return *v
+		}
+	}
+	return 0
+}
+
+// chesterUsageOf works out what a question used and cost from the usage the
+// API reported for each of its requests. It is the only place a token is
+// counted or priced.
+//
+// A finished request. The final usage object is cumulative for the whole
+// request and has the last word; a count it leaves out is the one the first
+// event gave. When it itemises the request (usage.iterations), the entries
+// are what is counted and priced, one by one: for a request that ran web
+// searches they are the sampling steps and add up to the top-level counts,
+// and for a request a fallback model answered the top-level counts cover only
+// the attempt that produced the message while the declined attempt is billed
+// too. An entry is priced at the model it names. An entry for a sampling step
+// or a fallback attempt that names none ran on the model asked or the model
+// that answered, and takes the dearer of the two. Any other entry that names
+// no model, and any model the price table does not know, takes the dearest
+// price in the table. With no itemised list the top-level counts are priced
+// at the dearer of the model asked and the model that answered.
+//
+// A request that was cut off. What it had read is known from the first event;
+// what it wrote is not, so it is charged the most it could have written, its
+// max_tokens at the output price. Searches such a request ran are not known
+// either and are not charged. A final usage object that cannot be read is
+// treated the same way.
+func chesterUsageOf(reqs []chesterRequestUsage) chesterUsage {
+	var u chesterUsage
+	for _, r := range reqs {
+		var start, final chesterAPIUsage
+		if len(r.Start) > 0 && json.Unmarshal(r.Start, &start) != nil {
+			start = chesterAPIUsage{}
+		}
+		finished := r.Finished && len(r.Final) > 0 && json.Unmarshal(r.Final, &final) == nil
+		if !finished {
+			u.count(chesterUsage{In: firstCount(start.In), CacheRead: firstCount(start.CacheRead),
+				CacheWrite: firstCount(start.CacheWrite)}, r.Asked, r.Served)
+			u.CeilingUSD += chesterCeilingUSD(r.Asked, r.Served, r.MaxTokens)
+			continue
+		}
+		if stu := final.ServerToolUse; stu != nil {
+			u.Searches += stu.WebSearchRequests
+		} else if stu := start.ServerToolUse; stu != nil {
+			u.Searches += stu.WebSearchRequests
+		}
+		its := final.Iterations
+		if len(its) == 0 {
+			its = start.Iterations
+		}
+		if len(its) == 0 {
+			u.count(chesterUsage{In: firstCount(final.In, start.In), Out: firstCount(final.Out),
+				CacheRead:  firstCount(final.CacheRead, start.CacheRead),
+				CacheWrite: firstCount(final.CacheWrite, start.CacheWrite)}, r.Asked, r.Served)
+			continue
+		}
+		for _, it := range its {
+			t := chesterUsage{In: firstCount(it.In), Out: firstCount(it.Out),
+				CacheRead: firstCount(it.CacheRead), CacheWrite: firstCount(it.CacheWrite)}
+			switch {
+			case it.Model != "":
+				u.count(t, it.Model, "")
+			case it.Type == "message" || it.Type == "fallback_message":
+				u.count(t, r.Asked, r.Served)
+			default:
+				u.count(t, "", "")
+			}
+		}
+	}
+	return u
+}
+
+// chesterUsageJSON is the list as a row stores it. An empty list is "[]".
+func chesterUsageJSON(reqs []chesterRequestUsage) string {
+	if len(reqs) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(reqs)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+// chesterUsageFromJSON reads a stored list back and works out what it comes
+// to. A row's tokens, searches and dollars are this function of its
+// usage_json, so the two can always be checked against each other.
+func chesterUsageFromJSON(raw string) (chesterUsage, error) {
+	var reqs []chesterRequestUsage
+	if err := json.Unmarshal([]byte(raw), &reqs); err != nil {
+		return chesterUsage{}, err
+	}
+	return chesterUsageOf(reqs), nil
 }
 
 func (u *chesterUsage) count(t chesterUsage, model, served string) {
@@ -299,16 +419,21 @@ func chesterCost(model, served string, u chesterUsage) float64 {
 	return tokens/1e6 + float64(u.Searches)*chesterSearchUSD
 }
 
-// roundCeilingUSD is the most one request in this mode can write, in
-// dollars: max_tokens at the output price, the dearer of the model asked and
-// the one that answered.
-func (m chesterMode) roundCeilingUSD(served string) float64 {
-	p, _ := chesterPriceFor(m.Model)
-	if served != "" && served != m.Model {
+// chesterCeilingUSD is the most one request can write, in dollars: its
+// max_tokens at the output price, the dearer of the model asked and the one
+// that answered.
+func chesterCeilingUSD(asked, served string, maxTokens int64) float64 {
+	p, _ := chesterPriceFor(asked)
+	if served != "" && served != asked {
 		q, _ := chesterPriceFor(served)
 		p = p.max(q)
 	}
-	return float64(m.MaxTokens) * p.Out / 1e6
+	return float64(maxTokens) * p.Out / 1e6
+}
+
+// roundCeilingUSD is the most one request in this mode can write.
+func (m chesterMode) roundCeilingUSD(served string) float64 {
+	return chesterCeilingUSD(m.Model, served, m.MaxTokens)
 }
 
 // worstUSD is what one question in this mode is taken to cost before it is
@@ -705,11 +830,13 @@ Your limits, which you state plainly whenever they bear on the answer:
 - The position can be approximate or hours old. The message says which.
 - When you are not sure, say so. Never invent a place, a price, an opening time or a road condition. "I could not confirm this" is a good answer; a confident wrong one is the worst answer you can give, because someone will drive to it.
 
-Places. When your answer names a specific place the traveller could go to (a fuel stop, a restaurant, a motel, a rest area, a sight), first write the whole answer, then call the show_places tool exactly once, as the last thing you do, listing every place you named. The page turns each one into a card with links to a navigation app, a map and, for lodging, a booking search, so the traveller can check you against them. Write nothing after the tool call. When you named no place, do not call it.
+Places. When your answer will name a specific place the traveller could go to (a fuel stop, a restaurant, a motel, a rest area, a sight), call the show_places tool once, before you write the answer, listing every place you are going to name. The page turns each one into a card with links to a navigation app, a map and, for lodging, a booking search, so the traveller can check you against them. When you will name no place, do not call it.
+
+Then write the answer, as the last thing you do, after your last tool call. The order matters: on this page, words written before a tool call do not reach the traveller, and only what you write after your last tool call is shown. The cards are in addition to the answer, never instead of it: every answer ends with at least one or two plain sentences that say what you found and what to check before relying on it.
 
 Write plain text: no Markdown, no headings, no bullet symbols, no web addresses (the card carries the address).
 
-In quick mode, give the answer first, in a few short sentences, and name at most three places. It may be read aloud.
+In quick mode, the answer is a few short sentences, the most useful thing first, and names at most three places. It may be read aloud.
 In plan mode, the question is usually about tomorrow. A longer answer is right: compare the real options, name up to six places, and say what you would choose and why.`
 
 // chesterToolName is the one client tool. Its input is the place cards.
@@ -719,10 +846,11 @@ func chesterPlacesTool(limit int) anthropic.BetaToolUnionParam {
 	text := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	return anthropic.BetaToolUnionParam{OfTool: &anthropic.BetaToolParam{
 		Name: chesterToolName,
-		Description: anthropic.String("Show the places your answer named as cards the traveller can tap. " +
-			"Call this exactly once, after the complete written answer, whenever the answer names a specific place " +
-			"to go to: fuel, food, coffee, a rest stop, lodging, or a sight. List every place you named, at most " +
-			strconv.Itoa(limit) + ". Do not call it when the answer names no place."),
+		Description: anthropic.String("Show the places your answer names as cards the traveller can tap. " +
+			"Call this once, before you write the answer, whenever the answer will name a specific place " +
+			"to go to: fuel, food, coffee, a rest stop, lodging, or a sight. List every place you are going to name, at most " +
+			strconv.Itoa(limit) + ". The cards go with the written answer and do not replace it: write the answer after this call. " +
+			"Do not call it when the answer names no place."),
 		// Strict keeps the input to this schema. The input is streamed as it
 		// is written, which turns the API's own validation off, so the server
 		// checks it again (parsePlaces).
@@ -811,13 +939,21 @@ type chesterResult struct {
 	// the log, and never shown or counted as an answer.
 	Answer  string
 	Partial string
+	// Synth is true when the model named places and wrote no words, even
+	// when asked again: Answer is then one fixed sentence the server built
+	// from the cards, and the row says it is not the model's.
+	Synth   bool
 	Places  []chesterPlace
 	Stop    string // the API's stop reason for the last request
 	Err     string // a plain sentence for the page, "" when it went well
 	ErrKind string // a short code for the log
 	Notes   []string
-	Usage   chesterUsage
-	Served  string
+	// Requests is the API's own usage for every request the question took.
+	// What the question used and cost is worked out from it (chesterUsageOf).
+	Requests []chesterRequestUsage
+	Served   string
+	// FirstMS is the wait for the first word of the model's own text, and
+	// zero when it wrote none: the row then has no first-word time at all.
 	FirstMS int64
 	TotalMS int64
 }
@@ -832,9 +968,40 @@ const (
 )
 
 // chesterRounds bounds how many requests one question may take: the first,
-// and a second or third only when the API paused a long turn or the model
-// showed its places before writing a word.
+// and a second or third when the API paused a long turn or the model showed
+// its places and has yet to write its answer.
 const chesterRounds = 3
+
+// chesterCardsNowWrite is what the show_places tool is answered with when
+// its cards came with no words, which is the usual order: the prompt asks for
+// the cards first and the answer after. The default model returns text
+// written before a tool call as a thinking block, and that block arrives
+// empty, so an answer written ahead of its cards never reaches the page; the
+// model is told so, and asked for the whole answer now. That request is the
+// whole of the follow-up, and it is bounded by chesterRounds.
+const chesterCardsNowWrite = "The cards are on the page. Nothing you wrote before this call was shown to the traveller. " +
+	"Now write the whole answer: a few plain sentences saying what you found and what to check first. " +
+	"Do not call show_places again."
+
+// chesterSynthAnswer is the one sentence the page shows when the model named
+// places and wrote no words even when asked again. It is built here from the
+// cards' own names and says what happened; it is never the model's prose and
+// the row is marked so (Synth).
+func chesterSynthAnswer(ps []chesterPlace) string {
+	names := make([]string, 0, len(ps))
+	for _, p := range ps {
+		n := p.Name
+		if p.Town != "" {
+			n += " (" + p.Town + ")"
+		}
+		names = append(names, n)
+	}
+	if len(names) == 1 {
+		return "Chester named one place and wrote nothing about it: " + names[0] + ". The card below says why."
+	}
+	return "Chester named " + strconv.Itoa(len(names)) + " places and wrote nothing about them: " +
+		strings.Join(names, "; ") + ". The cards below say why."
+}
 
 // ask runs one question and streams the answer through emit. It never
 // returns an error: whatever happened is in the result, in plain words,
@@ -845,6 +1012,21 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 	res := chesterResult{}
 	ctx, cancel := context.WithTimeout(ctx, m.Timeout)
 	defer cancel()
+
+	// One status line is said once: a search and the steps the API runs
+	// around it each open a block of their own, and the page has no use for
+	// the same word three times in a row.
+	send, lastStatus := emit, ""
+	emit = func(ev chesterEvent) {
+		if ev.T != "status" {
+			lastStatus = ""
+		} else if ev.D == lastStatus {
+			return
+		} else {
+			lastStatus = ev.D
+		}
+		send(ev)
+	}
 
 	params := anthropic.BetaMessageNewParams{
 		Model:     anthropic.Model(m.Model),
@@ -871,6 +1053,8 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 
 	var answer strings.Builder
 	var placeInputs []string
+	// wrote is whether the model has written any words yet.
+	wrote := func() bool { return strings.TrimSpace(answer.String()) != "" }
 	finish := func() chesterResult {
 		// Words that arrived before a question failed are not an answer.
 		if text := strings.TrimSpace(answer.String()); res.Err != "" {
@@ -894,19 +1078,25 @@ rounds:
 		// and counted once it has said how the turn ended and what it used
 		// (message_delta). Between the two the round's cost is not known.
 		began, counted := false, false
+		// used is this request as the API counts it: its two usage objects,
+		// kept as they arrive.
+		used := chesterRequestUsage{Asked: m.Model, MaxTokens: m.MaxTokens}
 		for stream.Next() {
 			ev := stream.Current()
 			if err := msg.Accumulate(ev); err != nil {
 				stream.Close()
 				res.Err, res.ErrKind = "The answer arrived garbled. Ask again.", "stream"
-				res.Usage.addUnfinished(m, &msg)
+				used.Served = string(msg.Model)
+				res.Requests = append(res.Requests, used)
 				return finish()
 			}
 			switch e := ev.AsAny().(type) {
 			case anthropic.BetaRawMessageStartEvent:
 				began = true
+				used.Start = rawUsage(e.Message.Usage.RawJSON())
 			case anthropic.BetaRawMessageDeltaEvent:
 				counted = true
+				used.Final = rawUsage(e.Usage.RawJSON())
 			case anthropic.BetaRawContentBlockStartEvent:
 				switch e.ContentBlock.Type {
 				case "server_tool_use":
@@ -938,9 +1128,11 @@ rounds:
 		err := stream.Err()
 		stream.Close()
 		var refused *anthropic.Error
+		used.Served = string(msg.Model)
 		switch {
 		case counted:
-			res.Usage.add(m.Model, &msg)
+			used.Finished = true
+			res.Requests = append(res.Requests, used)
 		case !began && (errors.As(err, &refused) || chesterNeverSent(err)):
 			// The API answered with an error status instead of an answer, or
 			// the connection to it was never made: the request did not run,
@@ -949,7 +1141,7 @@ rounds:
 			// The round stopped with no final count: a dropped connection,
 			// the time limit, the browser going away, an error part way
 			// through. It may have run, so it is charged as if it did.
-			res.Usage.addUnfinished(m, &msg)
+			res.Requests = append(res.Requests, used)
 		}
 		if string(msg.Model) != "" && string(msg.Model) != m.Model {
 			res.Served = string(msg.Model)
@@ -999,7 +1191,7 @@ rounds:
 			}
 			if b.Name == chesterToolName {
 				placeInputs = append(placeInputs, string(b.Input))
-				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, "The cards are on the page.", false))
+				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, chesterCardsNowWrite, false))
 			} else {
 				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, "There is no such tool.", true))
 			}
@@ -1011,10 +1203,12 @@ rounds:
 			params.Messages = append(params.Messages, msg.ToParam())
 			continue
 		case anthropic.BetaStopReasonToolUse:
-			// The cards came with an answer already written: done, and the
-			// second request is not spent. They came first: one more round
-			// lets the answer be written.
-			if answer.Len() == 0 && len(results) > 0 && round < chesterRounds-1 {
+			// The cards came with no words, as the prompt asks: the tool is
+			// answered with the request for the answer (chesterCardsNowWrite)
+			// and one more round lets it be written. Words that did arrive
+			// ahead of the cards are an answer already: done, and the second
+			// request is not spent.
+			if !wrote() && len(results) > 0 && round < chesterRounds-1 {
 				params.Messages = append(params.Messages, msg.ToParam(), anthropic.NewBetaUserMessage(results...))
 				continue
 			}
@@ -1027,19 +1221,37 @@ rounds:
 		res.Err, res.ErrKind = chesterSaidUnfinishd, "rounds"
 		return finish()
 	}
+	// A place the model listed twice (it can call the tool again when asked
+	// for its words) is one card, not two.
+	listed := map[string]bool{}
 	for _, raw := range placeInputs {
-		ps, err := parsePlaces(raw, m.MaxPlaces-len(res.Places), cx.Tonight)
+		ps, err := parsePlaces(raw, m.MaxPlaces, cx.Tonight)
 		if err != nil {
 			res.Notes = append(res.Notes, err.Error())
 			continue
 		}
-		res.Places = append(res.Places, ps...)
-		if len(res.Places) >= m.MaxPlaces {
-			break
+		for _, p := range ps {
+			if key := p.Name + "\x00" + p.Town; !listed[key] && len(res.Places) < m.MaxPlaces {
+				listed[key] = true
+				res.Places = append(res.Places, p)
+			}
 		}
 	}
-	if answer.Len() == 0 && len(res.Places) == 0 {
+	switch {
+	case wrote():
+	case len(res.Places) == 0:
 		res.Err, res.ErrKind = chesterSaidUnfinishd, "empty"
+	default:
+		// Cards and no words, even after being asked for them. The page is
+		// never left with a card and nothing above it: it gets one sentence
+		// built here from the cards, and the row says whose sentence it is.
+		// No first-word time is set: the model wrote no word.
+		res.Synth = true
+		res.Notes = append(res.Notes, "the model named places and wrote no words; the answer shown was built by the site from the cards")
+		said := chesterSynthAnswer(res.Places)
+		answer.Reset()
+		answer.WriteString(said)
+		emit(chesterEvent{T: "text", D: said})
 	}
 	return finish()
 }
@@ -1112,47 +1324,57 @@ const maxChesterNote = 1000
 
 // ChesterQuery is one row of the log.
 type ChesterQuery struct {
-	ID            int64   `json:"id"`
-	Ride          string  `json:"ride"`
-	AskedAt       string  `json:"asked_at"` // RFC3339 UTC
-	TZ            string  `json:"tz"`
-	Mode          string  `json:"mode"`
-	Preset        string  `json:"preset,omitempty"`
-	Question      string  `json:"question"`
-	PromptVersion string  `json:"prompt_version"`
-	Model         string  `json:"model"`
-	ServedModel   string  `json:"served_model,omitempty"`
-	Effort        string  `json:"effort"`
-	FirstMS       int64   `json:"first_ms"`
-	TotalMS       int64   `json:"total_ms"`
-	TokensIn      int64   `json:"tokens_in"`
-	TokensOut     int64   `json:"tokens_out"`
-	CacheRead     int64   `json:"cache_read"`
-	CacheWrite    int64   `json:"cache_write"`
-	Searches      int64   `json:"searches"`
-	USD           float64 `json:"usd"`
+	ID            int64  `json:"id"`
+	Ride          string `json:"ride"`
+	AskedAt       string `json:"asked_at"` // RFC3339 UTC
+	TZ            string `json:"tz"`
+	Mode          string `json:"mode"`
+	Preset        string `json:"preset,omitempty"`
+	Question      string `json:"question"`
+	PromptVersion string `json:"prompt_version"`
+	Model         string `json:"model"`
+	ServedModel   string `json:"served_model,omitempty"`
+	Effort        string `json:"effort"`
+	// FirstMS is the wait for the first word of the model's own text. It is
+	// nil, and null in the export, when the model wrote none.
+	FirstMS    *int64  `json:"first_ms"`
+	TotalMS    int64   `json:"total_ms"`
+	TokensIn   int64   `json:"tokens_in"`
+	TokensOut  int64   `json:"tokens_out"`
+	CacheRead  int64   `json:"cache_read"`
+	CacheWrite int64   `json:"cache_write"`
+	Searches   int64   `json:"searches"`
+	USD        float64 `json:"usd"`
 	// USDEstimated is true when part of USD is a ceiling charged for a round
 	// that was cut off before the API said what it used.
 	USDEstimated bool `json:"usd_estimated"`
 	// Answer is empty unless the question ended well. Partial holds what
 	// had been written when it did not, and is never an answer.
-	Answer       string         `json:"answer"`
-	Partial      string         `json:"partial,omitempty"`
-	Places       []chesterPlace `json:"places"`
-	StopReason   string         `json:"stop_reason"`
-	Error        string         `json:"error,omitempty"`
-	Note         string         `json:"note,omitempty"`
-	PosLat       *float64       `json:"pos_lat"`
-	PosLng       *float64       `json:"pos_lng"`
-	PosSource    string         `json:"pos_source"`
-	PosLabel     string         `json:"pos_label,omitempty"`
-	Verdict      string         `json:"verdict"`
-	Checked      string         `json:"checked_against"`
-	VerdictNote  string         `json:"verdict_note"`
-	ChesterValue *float64       `json:"chester_value"`
-	RefValue     *float64       `json:"reference_value"`
-	Unit         string         `json:"value_unit"`
-	VerdictAt    string         `json:"verdict_at,omitempty"`
+	Answer string `json:"answer"`
+	// AnswerSynth is true when Answer is not the model's words: it named
+	// places and wrote none, so the site built one sentence from the cards.
+	AnswerSynth bool `json:"answer_synthesized"`
+	// UsageJSON is the API's own usage for every request the question took
+	// (a list of chesterRequestUsage): counts only, nothing of the question
+	// or the answer. The tokens, searches and dollars above are worked out
+	// from it (chesterUsageFromJSON). A row from before it was kept has "[]".
+	UsageJSON    json.RawMessage `json:"usage_json"`
+	Partial      string          `json:"partial,omitempty"`
+	Places       []chesterPlace  `json:"places"`
+	StopReason   string          `json:"stop_reason"`
+	Error        string          `json:"error,omitempty"`
+	Note         string          `json:"note,omitempty"`
+	PosLat       *float64        `json:"pos_lat"`
+	PosLng       *float64        `json:"pos_lng"`
+	PosSource    string          `json:"pos_source"`
+	PosLabel     string          `json:"pos_label,omitempty"`
+	Verdict      string          `json:"verdict"`
+	Checked      string          `json:"checked_against"`
+	VerdictNote  string          `json:"verdict_note"`
+	ChesterValue *float64        `json:"chester_value"`
+	RefValue     *float64        `json:"reference_value"`
+	Unit         string          `json:"value_unit"`
+	VerdictAt    string          `json:"verdict_at,omitempty"`
 }
 
 // Cards is the row's places with their links, for the page.
@@ -1200,15 +1422,19 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 	if err != nil || q.Places == nil {
 		places = []byte("[]")
 	}
+	usage := q.UsageJSON
+	if len(usage) == 0 || !json.Valid(usage) {
+		usage = json.RawMessage("[]")
+	}
 	res, err := s.db.Exec(`INSERT INTO chester_queries
 	  (ride_slug,asked_at,tz,mode,preset,question,prompt_version,model,served_model,effort,first_ms,total_ms,
 	   tokens_in,tokens_out,cache_read,cache_write,searches,usd,answer,places,stop_reason,error,note,
-	   pos_lat,pos_lng,pos_source,pos_label,partial,usd_estimated)
-	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	   pos_lat,pos_lng,pos_source,pos_label,partial,usd_estimated,answer_synth,usage_json)
+	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		q.Ride, q.AskedAt, q.TZ, q.Mode, q.Preset, q.Question, q.PromptVersion, q.Model, q.ServedModel, q.Effort,
 		q.FirstMS, q.TotalMS, q.TokensIn, q.TokensOut, q.CacheRead, q.CacheWrite, q.Searches, q.USD,
 		q.Answer, string(places), q.StopReason, q.Error, q.Note, q.PosLat, q.PosLng, q.PosSource, q.PosLabel,
-		q.Partial, q.USDEstimated)
+		q.Partial, q.USDEstimated, q.AnswerSynth, string(usage))
 	if err != nil {
 		return err
 	}
@@ -1219,19 +1445,27 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 const chesterCols = `id,ride_slug,asked_at,tz,mode,preset,question,prompt_version,model,served_model,effort,
   first_ms,total_ms,tokens_in,tokens_out,cache_read,cache_write,searches,usd,answer,places,stop_reason,error,note,
   pos_lat,pos_lng,pos_source,pos_label,verdict,checked_against,verdict_note,chester_value,reference_value,
-  value_unit,verdict_at,partial,usd_estimated`
+  value_unit,verdict_at,partial,usd_estimated,answer_synth,usage_json`
 
 func scanChester(sc interface{ Scan(...any) error }) (ChesterQuery, error) {
 	var q ChesterQuery
-	var places string
+	var places, usage string
+	var first sql.NullInt64
 	var lat, lng, cv, rv sql.NullFloat64
 	err := sc.Scan(&q.ID, &q.Ride, &q.AskedAt, &q.TZ, &q.Mode, &q.Preset, &q.Question, &q.PromptVersion,
-		&q.Model, &q.ServedModel, &q.Effort, &q.FirstMS, &q.TotalMS, &q.TokensIn, &q.TokensOut, &q.CacheRead,
+		&q.Model, &q.ServedModel, &q.Effort, &first, &q.TotalMS, &q.TokensIn, &q.TokensOut, &q.CacheRead,
 		&q.CacheWrite, &q.Searches, &q.USD, &q.Answer, &places, &q.StopReason, &q.Error, &q.Note,
 		&lat, &lng, &q.PosSource, &q.PosLabel, &q.Verdict, &q.Checked, &q.VerdictNote, &cv, &rv, &q.Unit, &q.VerdictAt,
-		&q.Partial, &q.USDEstimated)
+		&q.Partial, &q.USDEstimated, &q.AnswerSynth, &usage)
 	if err != nil {
 		return q, err
+	}
+	if first.Valid {
+		q.FirstMS = &first.Int64
+	}
+	q.UsageJSON = json.RawMessage("[]")
+	if json.Valid([]byte(usage)) {
+		q.UsageJSON = json.RawMessage(usage)
 	}
 	for _, f := range []struct {
 		n   sql.NullFloat64

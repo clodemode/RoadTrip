@@ -202,11 +202,19 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := a.chester.ask(r.Context(), mode, cx, question, emit)
-	usd, estimated := res.Usage.cost(), res.Usage.CeilingUSD > 0
+	// The row keeps the API's own usage for every request, and its tokens,
+	// searches and dollars are read back out of exactly what it keeps.
+	usageJSON := chesterUsageJSON(res.Requests)
+	used, err := chesterUsageFromJSON(usageJSON)
+	if err != nil {
+		log.Printf("ERROR chester: the usage record could not be read back: %v", err)
+		used = chesterUsageOf(res.Requests)
+	}
+	usd, estimated := used.cost(), used.CeilingUSD > 0
 	notes := res.Notes
 	if estimated {
 		notes = append(notes, "the cost is an estimate: a round was cut off before the API said what it used, so "+
-			usd4(res.Usage.CeilingUSD)+" was charged for it, the most it could have written")
+			usd4(used.CeilingUSD)+" was charged for it, the most it could have written")
 	}
 	if res.ErrKind != "" {
 		notes = append(notes, "ended: "+res.ErrKind)
@@ -215,10 +223,18 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	row := &ChesterQuery{
 		Ride: cx.Ride, AskedAt: utcString(now), TZ: cx.TZ, Mode: mode, Preset: preset, Question: question,
 		PromptVersion: chesterPromptVersion, Model: m.Model, ServedModel: res.Served, Effort: m.Effort,
-		FirstMS: res.FirstMS, TotalMS: res.TotalMS, TokensIn: res.Usage.In, TokensOut: res.Usage.Out,
-		CacheRead: res.Usage.CacheRead, CacheWrite: res.Usage.CacheWrite, Searches: res.Usage.Searches,
-		USD: usd, USDEstimated: estimated, Answer: res.Answer, Partial: res.Partial, Places: res.Places, StopReason: res.Stop,
+		TotalMS: res.TotalMS, TokensIn: used.In, TokensOut: used.Out,
+		CacheRead: used.CacheRead, CacheWrite: used.CacheWrite, Searches: used.Searches,
+		USD: usd, USDEstimated: estimated, UsageJSON: json.RawMessage(usageJSON),
+		Answer: res.Answer, AnswerSynth: res.Synth, Partial: res.Partial, Places: res.Places, StopReason: res.Stop,
 		Error: a.chester.stripKey(res.Err), Note: a.chester.stripKey(note), PosSource: "none",
+	}
+	// A first-word time is a time a word of the model's arrived. With no
+	// word there is none, and the row holds nothing rather than a zero.
+	firstWord := "no words"
+	if res.FirstMS > 0 {
+		row.FirstMS = &res.FirstMS
+		firstWord = "first word at " + strconv.FormatInt(res.FirstMS, 10) + " ms"
 	}
 	if cx.Pos != nil {
 		row.PosLat, row.PosLng, row.PosSource, row.PosLabel = &cx.Pos.Lat, &cx.Pos.Lng, cx.Pos.Source, cx.Pos.Label
@@ -228,9 +244,9 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		emit(chesterEvent{T: "error", D: "The answer could not be written to the log."})
 	}
 	// What happened and what it cost. Never the question, the answer or a place.
-	log.Printf("chester: a %s question ended (%s) in %d ms, first word at %d ms, %d search(es), %d place(s), %s",
-		mode, firstOf(res.ErrKind, res.Stop, "no stop reason"), res.TotalMS, res.FirstMS,
-		res.Usage.Searches, len(res.Places), usd4(usd))
+	log.Printf("chester: a %s question ended (%s) in %d ms, %s, %d search(es), %d place(s), %s",
+		mode, firstOf(res.ErrKind, res.Stop, "no stop reason"), res.TotalMS, firstWord,
+		used.Searches, len(res.Places), usd4(usd))
 
 	if len(res.Places) > 0 {
 		emit(chesterEvent{T: "places", Places: chesterCards(res.Places)})
@@ -288,7 +304,8 @@ var chesterRefusals = map[string]string{
 var chesterNotices = map[string]string{chOKSaved: "Verdict saved."}
 
 const chesterPricesNote = "Dollars are worked out from each response's own token counts at list prices, " +
-	"plus web searches at $10 per 1,000. A model the price table does not know is priced as the dearest one. " +
+	"plus web searches at $10 per 1,000. Each row keeps those counts as the API sent them (usage_json in log.json), " +
+	"and its tokens and dollars are worked out from them. A model the price table does not know is priced as the dearest one. " +
 	"A question that was cut off before the API said what it used is charged the most it could have written, " +
 	"and its cost is marked as an estimate."
 
