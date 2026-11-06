@@ -1,0 +1,44 @@
+entries:
+- slug: todo-roadtrip-private-overlay-is-keyed-by-checkpoint-order-with-no-ride-so-one-rides-addresses-show-against-another-rides-checkpoints
+  title: 'roadtrip: the private overlay is keyed by checkpoint order alone, with no ride, so once a second
+    ride is active one ride''s addresses and notes show against the other ride''s checkpoints on the signed-in
+    screens, and saving the lodging form rewrites them'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: data
+  character_slug: krispy
+  tags:
+  - private-overlay
+  - active-ride
+  - lodging
+  - 2026-11
+  status: design
+  description: 'Found 2026-11-06 while building spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06.
+    $DATA_DIR/private.json is {"checkpoints": {"<order>": {"address", "notes"}}} (private.go). The key
+    is a checkpoint order and nothing says which ride it belongs to: it was written when the site had
+    one ride. Now the active ride can change (POST /admin/ride/active). The post form (handlers.go postForm,
+    addressByOrd) and the lodging form (lodgingForm, byOrd) read the overlay for whichever ride is active,
+    so an entry written for order 3 of the first ride is shown beside order 3 of the next. lodgingSave
+    rebuilds the whole document from the ACTIVE ride''s checkpoints, so one save on the new ride drops
+    every entry whose order the new ride does not have and re-files the rest under the new ride''s stops.
+    Nothing leaks to anonymous visitors (the overlay renders on signed-in screens only), but the trip-keeper
+    is shown the wrong address for a stop, and the earlier ride''s entries are destroyed by an ordinary
+    save. A trip with options adds a second wrinkle: a choice that adds a stop renumbers the checkpoints
+    after it, so an order is not a stable key even within one ride.'
+  dont: 'DONT move the overlay into the trip document or the repository: it is the one file that holds
+    street addresses and it stays a separate file on the volume (pattern-go-microvm-private-overlay-json-on-data-volume-never-in-repo).
+    DONT drop the existing top-level shape without a migration: the Data workflow pushes that shape from
+    a repository secret. DONT log an address or a note.'
+  do_this: 'DO key the overlay by ride: {"rides": {"<slug>": {"checkpoints": {...}}}}, reading the old
+    top-level "checkpoints" as belonging to the fallback ride (RIDE_SLUG) so the existing file and the
+    Data workflow keep working. lodgingSave rewrites only the active ride''s block. For a trip with options,
+    key an entry by something that survives a renumbering (the checkpoint name, or a stable id carried
+    on the checkpoint feature) rather than by order. Tests: an entry for ride A is not shown on ride B''s
+    forms; saving ride B''s lodging form leaves ride A''s block byte-identical; the old shape still loads.'
+  do_also: Until this lands, the safe practice after activating a new ride is to push a fresh overlay
+    for it (POST /admin/private) and keep the earlier ride's overlay document somewhere off the volume.
+  effort: M
+  impact: high
+  triaged_at: '2026-11-06T19:54:05.833415+00:00'
+  triaged_by: krispy

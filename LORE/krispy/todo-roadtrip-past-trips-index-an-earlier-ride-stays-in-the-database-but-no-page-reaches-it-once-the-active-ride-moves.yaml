@@ -1,0 +1,38 @@
+entries:
+- slug: todo-roadtrip-past-trips-index-an-earlier-ride-stays-in-the-database-but-no-page-reaches-it-once-the-active-ride-moves
+  title: 'roadtrip: a past-trips index, because once the active ride moves an earlier ride is whole in
+    the database and no page, gallery, census or open-data URL reaches it'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: surface
+  character_slug: krispy
+  tags:
+  - past-trips
+  - active-ride
+  - index
+  - 2026-11
+  status: design
+  description: 'Found 2026-11-06 while building spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06.
+    Every page reads the ACTIVE ride (App.activeSlug in plan_handlers.go, used by loadRide in handlers.go):
+    /, /legs/<slug>, /photos, /plan, /route.geojson and the signed-in census /admin/posts.json. When the
+    trip-keeper activates a new trip (POST /admin/ride/active), the earlier ride''s legs, checkpoints,
+    arrival stamps, posts and photos all stay in the database untouched, and GET /admin/rides.json proves
+    it with row counts, but nothing renders them. The photo files are still served under /media/ by path,
+    so old links to an image keep working; the pages that gave them context do not exist for that ride
+    any more. The only way back is to re-activate the earlier ride, which takes the current one off the
+    site.'
+  dont: DONT solve it by making RIDE_SLUG or the active-ride key a list. DONT serve an earlier ride from
+    a URL that skips the store's read path (Store.Legs masks lines at fuzzed checkpoints, scanCheckpoint
+    snaps them). DONT expose the earlier ride's signed-in census to anonymous visitors.
+  do_this: 'DO add a ride-scoped read path: an index page listing every ride in the database (name, date
+    span, counts, from Store.Rides) and ride-scoped views of the timeline, legs, gallery and GeoJSON,
+    for example under /rides/<slug>/..., resolved through the same loadRide with an explicit slug. The
+    active ride keeps the bare URLs. Add a test that an earlier ride''s page renders its posts while another
+    ride is active, and that its fuzzed checkpoints are still snapped there.'
+  do_also: Decide with per-ride visibility (its own row) whether an earlier ride is listed for anonymous
+    visitors at all.
+  effort: M
+  impact: medium
+  triaged_at: '2026-11-06T19:53:39.747117+00:00'
+  triaged_by: krispy
