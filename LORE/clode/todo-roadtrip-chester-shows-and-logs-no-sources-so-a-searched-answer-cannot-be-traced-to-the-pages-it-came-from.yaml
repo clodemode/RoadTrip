@@ -1,0 +1,35 @@
+entries:
+- slug: todo-roadtrip-chester-shows-and-logs-no-sources-so-a-searched-answer-cannot-be-traced-to-the-pages-it-came-from
+  title: 'roadtrip Chester shows and logs no sources: a searched answer carries the search count but not
+    the pages it was drawn from, so a wrong answer cannot be traced and search quality cannot be judged
+    from the log'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: clode
+  tags:
+  - chester
+  - web-search
+  - sources
+  - evaluation-log
+  - 2026-11
+  status: design
+  description: |-
+    When Chester searches the web, the API returns the result pages (title and address) and marks which sentences of the answer cite which page. Chester streams only the words and stores only the answer, the place cards and the number of searches. The titles and addresses of the pages are dropped.
+
+    Why it matters for the experiment: the log exists to measure how far an answer can be trusted. A row ruled Wrong says the answer was wrong but not whether the search found a bad page, found a good page that was misread, or was not run at all. With the sources on the row, a wrong verdict can be traced.
+
+    Why it was left out of the first build: the page must never place a model-chosen address on screen as a link without the same check a place card's address gets, and the citation blocks arrive interleaved with the text. It is a contained addition, not a redesign.
+  dont: 'DONT render a source as raw markup or follow it server-side. DONT store the search results''
+    encrypted content: only the title and the address.'
+  do_this: Collect title and address from the web search result blocks of each response, keep only plain
+    http or https addresses (the same check a card's address gets), store them on the log row as a list,
+    show them under the answer on the log page as links built by the server, and include them in the JSON
+    export. Add a stub test with two result pages and one malformed address.
+  do_also: Consider showing the sources on the question page too, collapsed, so the passenger can open
+    the page an answer came from.
+  effort: S
+  impact: medium
+  triaged_at: '2026-11-06T21:28:21.653826+00:00'
+  triaged_by: clode

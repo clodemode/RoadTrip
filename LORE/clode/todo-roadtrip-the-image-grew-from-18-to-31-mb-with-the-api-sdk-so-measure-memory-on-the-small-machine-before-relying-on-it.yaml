@@ -1,0 +1,34 @@
+entries:
+- slug: todo-roadtrip-the-image-grew-from-18-to-31-mb-with-the-api-sdk-so-measure-memory-on-the-small-machine-before-relying-on-it
+  title: 'roadtrip: linking the Claude API SDK grew the image from 18 MB to 31 MB and raised the Go toolchain
+    to 1.25; measure the binary''s resting and peak memory on the small machine before the trip relies
+    on it'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: packaging
+  character_slug: clode
+  tags:
+  - chester
+  - packaging
+  - memory
+  - go-toolchain
+  - 2026-11
+  status: design
+  description: |-
+    The official Go SDK for the Claude API (v2.7.0) needs Go 1.25 or later, so go.mod and the Dockerfile's builder image moved from 1.23 to 1.25 together. The SDK also brings its own dependencies, OpenTelemetry among them, and the production image went from about 18 MB to about 31 MB. The site runs on a small machine whose memory has already been the cause of one outage (a phone photo post was killed for memory; see the open row about raising memory and bounding the JPEG decode).
+
+    A larger binary means more resident memory at rest, and a Chester question holds a streamed response, the accumulated message and its search results in memory while a photo post could arrive at the same time. None of this has been measured: the tests run on a development machine with no memory limit.
+
+    Chester switches the SDK's trace spans off, so the OpenTelemetry code is linked but idle.
+  dont: 'DONT assume the old memory headroom still holds. DONT drop the official SDK for hand-written
+    HTTP to save size: the SDK is the supported binding.'
+  do_this: Run the new image under the production memory limit locally (docker run --memory with the machine's
+    size), read resident memory at rest, then during a stubbed plan question, then during a photo post
+    made while a question is streaming. If the peak is close to the limit, raise the machine's memory
+    or bound the question (fewer searches, a smaller max_tokens) before the trip.
+  do_also: Record the three figures on this row with the moment they were read.
+  effort: S
+  impact: medium
+  triaged_at: '2026-11-06T21:28:30.878452+00:00'
+  triaged_by: clode

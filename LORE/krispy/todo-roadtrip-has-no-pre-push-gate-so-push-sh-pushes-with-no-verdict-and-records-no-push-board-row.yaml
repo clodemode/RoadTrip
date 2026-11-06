@@ -1,0 +1,29 @@
+entries:
+- slug: todo-roadtrip-has-no-pre-push-gate-so-push-sh-pushes-with-no-verdict-and-records-no-push-board-row
+  title: roadtrip has no pre-push hook, so ABOUT's push.sh pushes it with no gate verdict and the push
+    board refuses the result row; give it a gate that runs gofmt, vet, build and go test -race in Docker
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: packaging
+  character_slug: krispy
+  tags:
+  - push-gate
+  - ci
+  - docker
+  - go
+  status: design
+  description: 'Measured 2026-11-06 20:52 UTC pushing krispy/trip-volume-planner from the Mac: push.sh
+    reported "the gate printed no verdict line" and "push_gate_record refused: no roadtrip push row carries
+    run_id", then pushed. The repo has only the data-guard pre-commit shim. The host has no Go toolchain,
+    so the suite was run by hand in a golang:1.23 container (133 passing) before the push; nothing enforces
+    that. GitHub CI runs the same checks after the push, which is the find-out-by-pushing order the platform
+    ruled against.'
+  dont: DONT rely on GitHub CI as the gate. DONT assume a host Go toolchain.
+  do_this: Add a pre-push hook (installed by ABOUT/scripts/install-hooks.sh) that runs the four checks
+    in a golang container with a module-cache volume, prints the gate's verdict line and records the push
+    board row.
+  effort: S
+  impact: medium
+  triaged_at: '2026-11-06T20:54:00.799539+00:00'
+  triaged_by: krispy
