@@ -1,5 +1,6 @@
 {{template "head" .}}
 <section class="card narrow admin">
+  <div class="card-body">
   <h1>Post</h1>
   <p class="muted small">{{.Day.Badge}}{{with .DefaultLeg}} &middot; leg {{.Ord}}: {{.Name}}{{end}}</p>
   {{with .Error}}<p class="error">{{.}}</p>{{end}}
@@ -7,46 +8,46 @@
   {{with .DefaultLeg}}
   <div class="arrive-strip">
     {{range .Checkpoints}}
-    <form method="post" action="/admin/checkpoint/{{.ID}}/arrive" class="inline">
+    <form method="post" action="/admin/checkpoint/{{.ID}}/arrive" class="d-inline">
       {{if .ArrivedAt}}
         <input type="hidden" name="clear" value="1">
-        <button class="tiny ghost" title="arrived {{local .ArrivedAt .TZ}} — tap to undo">&#10003; {{.Name}}</button>
+        <button class="btn btn-sm btn-outline-secondary" title="arrived {{local .ArrivedAt .TZ}}, tap to undo">Arrived: {{.Name}} (undo)</button>
       {{else}}
-        <button class="tiny" title="stamp arrival now">Arrived: {{.Name}}</button>
+        <button class="btn btn-sm btn-primary" title="stamp arrival now">Arrived: {{.Name}}</button>
       {{end}}
     </form>
     {{end}}
   </div>
   {{end}}
 
-  <form method="post" action="/admin/post" enctype="multipart/form-data" class="stack">
-    <label class="file">Photo (JPEG)
-      <input type="file" name="photo" id="f-photo" accept="image/jpeg">
+  <form method="post" action="/admin/post" enctype="multipart/form-data" class="d-flex flex-column gap-3 mt-3">
+    <label class="form-label d-block">Photo (JPEG)
+      <input class="form-control" type="file" name="photo" id="f-photo" accept="image/jpeg">
     </label>
     <p class="muted small" id="exif-status">photo GPS: pick a file to read it</p>
-    <div class="row">
-      <label>Kind<select name="kind">
+    <div class="row g-2">
+      <label class="form-label col-6">Kind<select class="form-select" name="kind">
         {{range .Kinds}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
       </select></label>
-      <label>Zone<select name="tz" id="f-tz">
+      <label class="form-label col-6">Zone<select class="form-select" name="tz" id="f-tz">
         {{range .Zones}}<option value="{{.}}"{{if eq . $.DefaultTZ}} selected{{end}}>{{.}}</option>{{end}}
       </select></label>
     </div>
-    <label>Title<input name="title" maxlength="140" autocomplete="off"></label>
-    <label>Body<textarea name="body" rows="3"></textarea></label>
-    <div class="row">
-      <label>Leg<select name="leg_id" id="f-leg">
+    <label class="form-label d-block">Title<input class="form-control" name="title" maxlength="140" autocomplete="off"></label>
+    <label class="form-label d-block">Body<textarea class="form-control" name="body" rows="3"></textarea></label>
+    <div class="row g-2">
+      <label class="form-label col-6">Leg<select class="form-select" name="leg_id" id="f-leg">
         {{range .Legs}}<option value="{{.ID}}"{{if eq .ID $.DefaultLegID}} selected{{end}}>{{.Ord}}: {{.Name}}</option>{{end}}
       </select></label>
-      <label>Checkpoint<select name="checkpoint_id" id="f-cp">
+      <label class="form-label col-6">Checkpoint<select class="form-select" name="checkpoint_id" id="f-cp">
         <option value="">—</option>
         {{range .Legs}}<optgroup label="Leg {{.Ord}}">
           {{range .Checkpoints}}<option value="{{.ID}}" data-tz="{{.TZ}}" data-leg="{{.LegID}}">{{.Ord}}. {{.Name}}{{with index $.Private .Ord}} — {{.}}{{end}}</option>{{end}}
         </optgroup>{{end}}
       </select></label>
     </div>
-    <label>When <span class="muted">(optional — else the photo's time, else now)</span>
-      <input type="datetime-local" name="when"></label>
+    <label class="form-label d-block">When <span class="form-text">(optional: else the photo's time, else now)</span>
+      <input class="form-control" type="datetime-local" name="when"></label>
     <input type="hidden" name="lat" id="f-lat">
     <input type="hidden" name="lng" id="f-lng">
     <input type="hidden" name="accuracy" id="f-acc">
@@ -60,22 +61,23 @@
     <input type="hidden" name="fuzz_choice" id="f-fuzzset" value="">
     <fieldset class="pin">
       <legend>Pin</legend>
-      <label class="check"><input type="radio" name="pin_source" value="exif" id="p-exif" disabled>
-        Photo GPS <span class="muted small" id="p-exif-note">&mdash; no file picked</span></label>
-      <label class="check"><input type="radio" name="pin_source" value="browser" id="p-brow" disabled>
-        My phone location <span class="muted small" id="geo-status">location: &hellip;</span></label>
-      <label class="check"><input type="radio" name="pin_source" value="checkpoint" id="p-cp">
-        Checkpoint <span class="muted small" id="p-cp-note">&mdash; none picked</span></label>
-      <label class="check"><input type="radio" name="pin_source" value="none" id="p-none">
-        No pin <span class="muted small">&mdash; location hidden</span></label>
-      <label class="check"><input type="checkbox" name="fuzz_location" id="f-fuzz" value="1">
-        Fuzz location <span class="muted small">&mdash; publish a 5 km cell, not the point</span></label>
+      <label class="form-check touch"><input class="form-check-input" type="radio" name="pin_source" value="exif" id="p-exif" disabled>
+        <span>Photo GPS <span class="muted small" id="p-exif-note">&mdash; no file picked</span></span></label>
+      <label class="form-check touch"><input class="form-check-input" type="radio" name="pin_source" value="browser" id="p-brow" disabled>
+        <span>My phone location <span class="muted small" id="geo-status">location: &hellip;</span></span></label>
+      <label class="form-check touch"><input class="form-check-input" type="radio" name="pin_source" value="checkpoint" id="p-cp">
+        <span>Checkpoint <span class="muted small" id="p-cp-note">&mdash; none picked</span></span></label>
+      <label class="form-check touch"><input class="form-check-input" type="radio" name="pin_source" value="none" id="p-none">
+        <span>No pin <span class="muted small">&mdash; location hidden</span></span></label>
+      <label class="form-check touch"><input class="form-check-input" type="checkbox" name="fuzz_location" id="f-fuzz" value="1">
+        <span>Fuzz location <span class="muted small">&mdash; publish a 5 km cell, not the point</span></span></label>
       <p class="muted small" id="pin-publishes">publishes as: &mdash;</p>
     </fieldset>
-    <button type="submit" class="big">Post</button>
+    <button type="submit" class="btn btn-primary btn-lg">Post</button>
     <p class="muted small">Best pin: choose from Photo Library &mdash; the photo keeps its own GPS and time, and it is read here before you post. Taking the photo here works too, on the phone&rsquo;s own location, since Safari strips GPS from live camera shots. Otherwise the pin lands on the checkpoint you picked.</p>
     <p class="muted small">JPEG only (iPhone: Settings &rarr; Camera &rarr; Formats &rarr; Most Compatible). Max 20 MB.</p>
   </form>
+  </div>
 </section>
 <script>
 (function () {

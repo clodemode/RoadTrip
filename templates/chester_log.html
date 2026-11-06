@@ -11,7 +11,7 @@
 <section class="ch-summary">
   <h2>Summary</h2>
   {{if .Sum.Rows}}
-  <p class="muted small">{{.Sum.N}} question(s), {{.Sum.Ruled}} ruled, {{usd2 .Sum.USD}} in all.{{if .Sum.Failed}} {{.Sum.Failed}} ended with no answer.{{end}}</p>
+  <p class="muted small figure">{{.Sum.N}} question(s), {{.Sum.Ruled}} ruled, {{usd2 .Sum.USD}} in all.{{if .Sum.Failed}} {{.Sum.Failed}} ended with no answer.{{end}}</p>
   <ul class="ch-sum-list">
     {{range .Sum.Rows}}
     <li class="ch-sum">
@@ -83,25 +83,25 @@
     <form method="post" action="/admin/chester/log/{{.ID}}" class="ch-rule">
       <details class="cl-edit">
         <summary>Add what you checked</summary>
-        <div class="stack">
-          <label>Checked against
-            <select name="against">
+        <div class="d-flex flex-column gap-3">
+          <label class="form-label d-block">Checked against
+            <select class="form-select" name="against">
               <option value="">not said</option>
               {{$against := .Checked}}{{range $.Checks}}<option value="{{.Key}}"{{if eq .Key $against}} selected{{end}}>{{.Label}}</option>{{end}}
             </select>
           </label>
-          <label>Note
-            <textarea name="note" rows="2" maxlength="1000">{{.VerdictNote}}</textarea>
+          <label class="form-label d-block">Note
+            <textarea class="form-control" name="note" rows="2" maxlength="1000">{{.VerdictNote}}</textarea>
           </label>
           <div class="ch-pair">
-            <label>Chester said
-              <input type="text" inputmode="decimal" name="chester_value" value="{{opt .ChesterValue}}">
+            <label class="form-label d-block">Chester said
+              <input class="form-control figure" type="text" inputmode="decimal" name="chester_value" value="{{opt .ChesterValue}}">
             </label>
-            <label>It was
-              <input type="text" inputmode="decimal" name="reference_value" value="{{opt .RefValue}}">
+            <label class="form-label d-block">It was
+              <input class="form-control figure" type="text" inputmode="decimal" name="reference_value" value="{{opt .RefValue}}">
             </label>
-            <label>In
-              <select name="unit">
+            <label class="form-label d-block">In
+              <select class="form-select" name="unit">
                 <option value="">no figures</option>
                 {{$unit := .Unit}}{{range $.Units}}<option value="{{.}}"{{if eq . $unit}} selected{{end}}>{{.}}</option>{{end}}
               </select>

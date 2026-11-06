@@ -1,5 +1,6 @@
 {{template "head" .}}
 <section class="card narrow admin">
+  <div class="card-body">
   <h1>Edit post</h1>
   <p class="muted small">
     posted {{local .Post.OccurredAt .Post.TZ}}
@@ -12,43 +13,46 @@
        never content. Replacing a photo means deleting the post and posting it
        again, which keeps the content-addressed media store append-only. */}}
   {{with .Post.Photo}}
-  <a class="post-photo" href="/media/{{.Path}}">
+  <a class="post-photo post-edit-photo" href="/media/{{.Path}}">
     <img src="/media/{{.ThumbPath}}" alt="" loading="lazy">
   </a>
   {{end}}
 
-  <form method="post" action="/admin/post/{{.Post.ID}}/edit" class="stack">
+  <form method="post" action="/admin/post/{{.Post.ID}}/edit" class="d-flex flex-column gap-3 mt-2">
     <input type="hidden" name="back" value="{{.Back}}">
-    <div class="row">
-      <label>Kind<select name="kind" id="f-kind">
+    <div class="row g-2">
+      <label class="form-label col-6">Kind<select class="form-select" name="kind" id="f-kind">
         {{range .Kinds}}<option value="{{.Value}}"{{if eq .Value $.Post.Kind}} selected{{end}}>{{.Label}}</option>{{end}}
       </select></label>
-      <label>Zone<select name="tz" id="f-tz">
+      <label class="form-label col-6">Zone<select class="form-select" name="tz" id="f-tz">
         {{range .Zones}}<option value="{{.}}"{{if eq . $.Post.TZ}} selected{{end}}>{{.}}</option>{{end}}
       </select></label>
     </div>
-    <label>Title<input name="title" maxlength="140" autocomplete="off" value="{{.Post.Title}}"></label>
-    <label>Body<textarea name="body" rows="3">{{.Post.Body}}</textarea></label>
-    <div class="row">
-      <label>Leg<select name="leg_id" id="f-leg">
+    <label class="form-label d-block">Title<input class="form-control" name="title" maxlength="140" autocomplete="off" value="{{.Post.Title}}"></label>
+    <label class="form-label d-block">Body<textarea class="form-control" name="body" rows="3">{{.Post.Body}}</textarea></label>
+    <div class="row g-2">
+      <label class="form-label col-6">Leg<select class="form-select" name="leg_id" id="f-leg">
         {{range .Legs}}<option value="{{.ID}}"{{if eq .ID $.Post.LegID}} selected{{end}}>{{.Ord}}: {{.Name}}</option>{{end}}
       </select></label>
-      <label>Checkpoint<select name="checkpoint_id" id="f-cp">
+      <label class="form-label col-6">Checkpoint<select class="form-select" name="checkpoint_id" id="f-cp">
         <option value="">&mdash;</option>
         {{range .Legs}}<optgroup label="Leg {{.Ord}}">
           {{range .Checkpoints}}<option value="{{.ID}}" data-tz="{{.TZ}}" data-leg="{{.LegID}}"{{if eq .ID $.Post.CheckpointID}} selected{{end}}>{{.Ord}}. {{.Name}}{{with index $.Private .Ord}} &mdash; {{.}}{{end}}</option>{{end}}
         </optgroup>{{end}}
       </select></label>
     </div>
-    <label>When <span class="muted">(the wall clock in the zone above)</span>
-      <input type="datetime-local" name="when" value="{{.When}}"></label>
-    <button type="submit" class="big">Save</button>
+    <label class="form-label d-block">When <span class="form-text">(the wall clock in the zone above)</span>
+      <input class="form-control" type="datetime-local" name="when" value="{{.When}}"></label>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <button type="submit" class="btn btn-primary btn-lg">Save</button>
+      <a class="btn btn-outline-secondary btn-lg" href="{{.Back}}#post-{{.Post.ID}}">Cancel</a>
+    </div>
     <p class="muted small">Picking a checkpoint moves the post to that checkpoint&rsquo;s leg and zone. The
       photo and the pin are not edited here &mdash; the pin has its own re-pin control on the post itself, so
       saving this form leaves a deliberate re-pin alone. The one exception: a pin that came <em>from</em> a
       checkpoint follows the checkpoint you choose.</p>
-    <p class="muted small"><a href="{{.Back}}#post-{{.Post.ID}}">Cancel</a></p>
   </form>
+  </div>
 </section>
 <script>
 /* Same coupling as the post form: a checkpoint carries its own zone and leg,

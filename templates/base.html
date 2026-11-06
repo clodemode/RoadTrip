@@ -1,5 +1,5 @@
 {{define "head"}}<!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -15,8 +15,12 @@
 {{end}}<link rel="icon" href="/static/img/creature.svg?v={{.V}}">
 <!-- Stylesheets BEFORE scripts: a deferred script executes while a
      stylesheet declared after it is still pending, and #map would then
-     have zero height when Leaflet measures it -> fitBounds lands on maxZoom. -->
+     have zero height when Leaflet measures it -> fitBounds lands on maxZoom.
+     Order: Leaflet, Bootstrap (vendored, never a CDN), the folded foundation,
+     then roadtrip's own app.css, each one able to refine the one before. -->
 <link rel="stylesheet" href="/static/vendor/leaflet.css?v={{.V}}">
+<link rel="stylesheet" href="/static/vendor/bootstrap.min.css?v={{.V}}">
+<link rel="stylesheet" href="/static/css/foundation.css?v={{.V}}">
 <link rel="stylesheet" href="/static/css/app.css?v={{.V}}">
 <script defer src="/static/vendor/leaflet.js?v={{.V}}"></script>
 </head>
@@ -31,7 +35,7 @@
         <span class="mast-tag"><b>{{.CreatureName}}</b>{{trimPrefix .CreatureTag .CreatureName}}</span>
       </span>
     </a>
-    <nav class="mast-nav">
+    <nav class="mast-nav" aria-label="Site">
       <span class="mast-links">
         <a href="/">Ride</a>
         <a href="/plan">Plan</a>
@@ -42,17 +46,17 @@
           <a href="/admin/post" class="post-link">Post</a>
           {{if .ChesterOn}}<a href="/chester">Chester</a>{{end}}
           <a href="/admin/lodging">Lodging</a>
-          <form method="post" action="/admin/logout" class="inline"><button class="linkish">Sign out</button></form>
+          <form method="post" action="/admin/logout"><button class="linkish">Sign out</button></form>
         {{else}}
           <a href="/admin/login">Sign in</a>
         {{end}}
       </span>
-      <a class="clode-badge" href="https://github.com/clodemode"
-         title="CLODE — github.com/clodemode">
-        <span class="cb-kicker">Built with</span>
-        <span class="cb-name">CLODE</span>
-      </a>
     </nav>
+    <a class="clode-badge" href="https://github.com/clodemode"
+       title="CLODE, github.com/clodemode" aria-label="Built with CLODE">
+      <span class="cb-kicker">Built with</span>
+      <span class="cb-name">CLODE</span>
+    </a>
   </div>
 </header>
 
@@ -62,7 +66,7 @@
 {{define "foot"}}
 </main>
 <footer>
-  <p>Route coordinates are planning-grade — town centroids, about a kilometre.
+  <p>Route coordinates are planning-grade: town centroids, about a kilometre.
      Times are shown in the zone where they happened.</p>
   <p class="small"><a href="https://github.com/clodemode">Source</a>
      &middot; Built with <a href="https://github.com/clodemode">CLODE</a></p>
@@ -72,7 +76,7 @@
 {{end}}
 
 {{define "post_card"}}
-<article class="post kind-{{.Kind}}" id="post-{{.ID}}">
+<article class="post card kind-{{.Kind}}" id="post-{{.ID}}">
   {{with .Photo}}
   <a class="post-photo" href="/media/{{.Path}}">
     <img src="/media/{{.ThumbPath}}" alt="" loading="lazy">
@@ -92,20 +96,34 @@
     {{/* Signed-in only. This line carries raw coordinates and never renders
          to an anonymous visitor — the {{if .Authed}} is the whole gate. */}}
     <p class="post-pin muted small">{{.PinLine}}</p>
-    <p class="post-edit"><a class="tiny" href="/admin/post/{{.ID}}/edit">Edit kind, leg, checkpoint, time&hellip;</a></p>
+    <p class="post-edit"><a href="/admin/post/{{.ID}}/edit">Edit kind, leg, checkpoint, time&hellip;</a></p>
     <form method="post" action="/admin/post/{{.ID}}/pin" class="post-repin">
       <input type="hidden" name="fuzz_choice" value="1">
-      <label>re-pin
-        <select name="pin_source">
+      <label class="d-flex align-items-center gap-2 m-0">Re-pin
+        <select name="pin_source" class="form-select form-select-sm">
           <option value="">leave the source</option>
           {{if .RepinEXIF}}<option value="exif">the photo&rsquo;s GPS</option>{{end}}
           {{with .RepinCheckpoint}}<option value="checkpoint">{{.}}</option>{{end}}
           <option value="none">no pin</option>
         </select></label>
-      <label class="check"><input type="checkbox" name="fuzz_location" value="1"{{if .PinFuzzed}} checked{{end}}> fuzz</label>
-      <button class="tiny">Apply</button>
+      <label class="form-check touch"><input class="form-check-input" type="checkbox" name="fuzz_location" value="1"{{if .PinFuzzed}} checked{{end}}> Fuzz</label>
+      <button class="btn btn-sm btn-outline-primary">Apply</button>
     </form>
     {{end}}
   </div>
 </article>
+{{end}}
+
+{{/* delete_post: the in-place confirm under a post card. No browser dialog:
+     the summary opens a sentence and the form's real submit button. */}}
+{{define "delete_post"}}
+<form method="post" action="/admin/post/{{.ID}}/delete" class="post-admin">
+  <details>
+    <summary>Delete</summary>
+    <div class="confirm-body">
+      <p>Delete this post and its photo? This cannot be undone.</p>
+      <button type="submit" class="btn btn-danger btn-sm">Delete post</button>
+    </div>
+  </details>
+</form>
 {{end}}
