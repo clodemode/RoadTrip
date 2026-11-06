@@ -53,31 +53,82 @@ func requireFiles(t *testing.T, got map[string]string, want ...string) {
 	}
 }
 
-// One light theme: no stylesheet of ours asks the browser for a dark one.
-func TestStyleNoColourSchemeMediaQuery(t *testing.T) {
+// ourPages returns our templates, our stylesheets and our scripts (the
+// vendored files are left out: they are checked byte for byte or not ours).
+func ourPages(t *testing.T) map[string]string {
+	t.Helper()
+	files := shipped(t, templateFS, "templates", ".html")
+	requireFiles(t, files, "templates/base.html", "templates/index.html", "templates/leg.html")
 	css := shipped(t, staticFS, "static/css", ".css")
 	requireFiles(t, css, "static/css/foundation.css", "static/css/app.css")
-	for path, body := range css {
-		if strings.Contains(body, "prefers-color-scheme") {
-			t.Errorf("%s carries a prefers-color-scheme rule: the site has one light theme", path)
+	js := shipped(t, staticFS, "static/js", ".js")
+	requireFiles(t, js, "static/js/map.js", "static/js/plan.js", "static/js/post.js", "static/js/chester.js")
+	for _, m := range []map[string]string{css, js} {
+		for p, b := range m {
+			files[p] = b
 		}
+	}
+	return files
+}
+
+// One light theme: nothing of ours asks the browser for a dark one, whether by
+// a media query (in a stylesheet, an inline style or a script's matchMedia), a
+// color-scheme that admits dark, or a dark Bootstrap theme.
+var darkTheme = regexp.MustCompile(`(?i)prefers-color-scheme|color-scheme[^;>{}]*\bdark\b|data-bs-theme\s*=\s*["']?\s*dark|setAttribute\(\s*["']data-bs-theme`)
+
+func TestStyleNoColourSchemeMediaQuery(t *testing.T) {
+	for path, body := range ourPages(t) {
+		if m := darkTheme.FindString(body); m != "" {
+			t.Errorf("%s asks for a dark theme (%s): the site has one light theme", path, m)
+		}
+	}
+	// Positive control: the pattern reads each way a dark theme gets in.
+	for _, s := range []string{"@media (prefers-color-scheme: dark)", `<meta name="color-scheme" content="light dark">`, "color-scheme: dark;", `<html data-bs-theme="dark">`} {
+		if !darkTheme.MatchString(s) {
+			t.Fatalf("the dark-theme pattern misses %q: the check cannot fire", s)
+		}
+	}
+	if darkTheme.MatchString("color-scheme: light;") {
+		t.Fatal("the dark-theme pattern refuses the light declaration foundation.css makes")
 	}
 }
 
 // No modal and no browser dialog: content opens in place instead.
+var dialogCall = regexp.MustCompile(`(?i)\b(confirm|alert|prompt)\s*\(|\[\s*["'](confirm|alert|prompt)["']\s*\]|<dialog\b|\.showModal\s*\(|class\s*=\s*["'][^"']*\bmodal\b|data-bs-toggle\s*=\s*["']?modal`)
+
 func TestStyleNoBrowserDialogs(t *testing.T) {
-	files := shipped(t, templateFS, "templates", ".html")
-	requireFiles(t, files, "templates/base.html", "templates/index.html", "templates/leg.html")
-	js := shipped(t, staticFS, "static/js", ".js")
-	requireFiles(t, js, "static/js/map.js", "static/js/plan.js", "static/js/post.js", "static/js/chester.js")
-	for p, b := range js {
-		files[p] = b
-	}
-	dialog := regexp.MustCompile(`\b(confirm|alert|prompt)\s*\(`)
+	files := ourPages(t)
 	for path, body := range files {
-		if m := dialog.FindString(body); m != "" {
-			t.Errorf("%s opens a browser dialog (%s): confirm in place with a <details> instead", path, m)
+		if strings.HasSuffix(path, ".css") {
+			continue // a stylesheet cannot open a dialog, and its comments may name one
 		}
+		if m := dialogCall.FindString(body); m != "" {
+			t.Errorf("%s opens a dialog or a modal (%s): open it in place with a <details> instead", path, m)
+		}
+	}
+	for _, s := range []string{"return confirm('x')", "window.confirm ('x')", "window['alert']('x')", "<dialog open>", "d.showModal()", `<div class="modal fade">`, `data-bs-toggle="modal"`} {
+		if !dialogCall.MatchString(s) {
+			t.Fatalf("the dialog pattern misses %q: the check cannot fire", s)
+		}
+	}
+}
+
+// The "Whole trip" button on /plan is hidden by its hidden attribute until a
+// day is zoomed, so the attribute must beat every display rule a button gets.
+func TestStyleHiddenAttributeAlwaysWins(t *testing.T) {
+	b, err := staticFS.ReadFile("static/css/foundation.css")
+	if err != nil {
+		t.Fatalf("foundation.css is not embedded: %v", err)
+	}
+	if !regexp.MustCompile(`\[hidden\]\s*\{\s*display\s*:\s*none\s*!important\s*;?\s*\}`).Match(b) {
+		t.Error("foundation.css does not carry [hidden] { display: none !important; }")
+	}
+	plan, err := templateFS.ReadFile("templates/plan.html")
+	if err != nil {
+		t.Fatalf("plan.html: %v", err)
+	}
+	if !regexp.MustCompile(`<button\b[^>]*\bid="plan-all"[^>]*\bhidden\b`).Match(plan) {
+		t.Error(`plan.html: the button with id plan-all no longer starts hidden`)
 	}
 }
 
@@ -88,7 +139,8 @@ func TestStyleNoBrowserDialogs(t *testing.T) {
 const tileHost = "tile.openstreetmap.org"
 
 func absHost(u string) (string, bool) {
-	u = strings.TrimSpace(u)
+	// Browsers read the scheme in any case and a backslash as a slash.
+	u = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(u), `\`, "/"))
 	switch {
 	case strings.HasPrefix(u, "https://"):
 		u = u[len("https://"):]
@@ -114,9 +166,13 @@ func allowedAssetHost(host string) bool {
 
 var (
 	tmplAsset = []*regexp.Regexp{
-		regexp.MustCompile(`(?i)\b(?:src|srcset|poster|data|action)\s*=\s*["']?\s*([^"'\s>]+)`),
-		regexp.MustCompile(`(?i)<link\b[^>]*?\bhref\s*=\s*["']?\s*([^"'\s>]+)`),
+		regexp.MustCompile(`(?i)\b(?:src|poster|data|action)\s*=\s*["']?\s*([^"'\s>]+)`),
 	}
+	// srcset holds a list: every candidate is an asset, not just the first.
+	srcsetAttr = regexp.MustCompile(`(?i)\bsrcset\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
+	// href loads an asset on every element but a link someone follows: <link>,
+	// and SVG <image> and <use>, all count; <a> and <area> do not.
+	hrefAttr = regexp.MustCompile(`(?i)<([a-z][a-z0-9:-]*)\b[^>]*?\b(?:xlink:)?href\s*=\s*["']?\s*([^"'\s>]+)`)
 	cssAsset = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)url\(\s*["']?\s*([^"')\s]+)`),
 		regexp.MustCompile(`(?i)@import\s+(?:url\(\s*)?["']?\s*([^"')\s;]+)`),
@@ -137,6 +193,53 @@ func assetURLs(body string, pats ...*regexp.Regexp) []string {
 	return out
 }
 
+// templateAssetURLs is assetURLs for markup: the attribute patterns, every
+// srcset candidate, and every href that is not on a followed link.
+func templateAssetURLs(body string) []string {
+	out := assetURLs(body, tmplAsset...)
+	for _, m := range srcsetAttr.FindAllStringSubmatch(body, -1) {
+		for _, cand := range strings.Split(m[1]+m[2]+m[3], ",") {
+			if f := strings.Fields(cand); len(f) > 0 {
+				out = append(out, f[0])
+			}
+		}
+	}
+	for _, m := range hrefAttr.FindAllStringSubmatch(body, -1) {
+		if tag := strings.ToLower(m[1]); tag != "a" && tag != "area" {
+			out = append(out, m[2])
+		}
+	}
+	return out
+}
+
+func TestStyleNoThirdPartyAssetsCatchesEveryLoad(t *testing.T) {
+	for _, s := range []string{
+		`<link rel="stylesheet" href="HTTPS://cdn.example.com/x.css">`,
+		`<img srcset="/a.jpg 1x, https://cdn.example.com/b.jpg 2x">`,
+		`<svg><image href="https://cdn.example.com/i.png"/></svg>`,
+		`<svg><use xlink:href="//cdn.example.com/s.svg#i"/></svg>`,
+		`<script src="\\cdn.example.com/x.js"></script>`,
+		`<link rel="preload" href="https://cdn.example.com/f.woff2">`,
+	} {
+		bad := false
+		for _, u := range templateAssetURLs(s) {
+			if h, abs := absHost(u); abs && !allowedAssetHost(h) {
+				bad = true
+			}
+		}
+		if !bad {
+			t.Errorf("the asset patterns let %s through", s)
+		}
+	}
+	for _, s := range []string{`<a href="https://github.com/clodemode">Source</a>`, `<link rel="stylesheet" href="/static/css/app.css">`} {
+		for _, u := range templateAssetURLs(s) {
+			if h, abs := absHost(u); abs && !allowedAssetHost(h) {
+				t.Errorf("the asset patterns refuse %s, which loads nothing from another host", s)
+			}
+		}
+	}
+}
+
 func TestStyleNoThirdPartyAssets(t *testing.T) {
 	checked := map[string]int{}
 	check := func(kind, path string, urls []string) {
@@ -151,7 +254,7 @@ func TestStyleNoThirdPartyAssets(t *testing.T) {
 	tmpl := shipped(t, templateFS, "templates", ".html")
 	requireFiles(t, tmpl, "templates/base.html")
 	for path, body := range tmpl {
-		check("template", path, assetURLs(body, tmplAsset...))
+		check("template", path, templateAssetURLs(body))
 		check("template", path, assetURLs(body, cssAsset...)) // inline style blocks and style= attributes
 		check("template", path, assetURLs(body, jsLoad))      // inline scripts
 	}
