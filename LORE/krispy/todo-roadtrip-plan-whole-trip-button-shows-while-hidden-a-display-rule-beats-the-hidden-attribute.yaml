@@ -13,7 +13,7 @@ entries:
   - css
   - hidden
   - ui
-  status: design
+  status: shipped
   description: 'Seen 2026-11-06 20:49 UTC on the local container (image built from roadtrip commit d91dbf3,
     the trip planner branch), at a 375 px viewport, on /plan with no day in focus. plan.js sets hidden
     on the button with id plan-all whenever no day is zoomed, and the element reports hidden=true, yet
@@ -35,3 +35,5 @@ entries:
   impact: low
   triaged_at: '2026-11-06T20:50:19.909515+00:00'
   triaged_by: krispy
+  closed_by_actor: 30a6d1fa-b557-41b0-bc77-2ebd9afd4446
+  closed_at: '2026-11-06T22:58:51.935956+00:00'

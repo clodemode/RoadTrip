@@ -11,7 +11,7 @@ entries:
   - css
   - light-theme
   - 2026-11
-  status: design
+  status: shipped
   description: 'Found 2026-11-06 while building the checklist page (spec-roadtrip-a-trip-carries-a-public-checklist-of-steps-checked-off-with-a-time-and-an-outcome-note-while-identifying-details-stay-signed-in-only-first-use-a-cross-border-car-import).
     The first rule block of static/css/app.css redefines the page colour variables under @media (prefers-color-scheme:
     dark). Every page reads those variables, so a visitor whose phone is set to dark gets a dark site:
@@ -30,3 +30,5 @@ entries:
   impact: low
   triaged_at: '2026-11-06T20:20:18.400695+00:00'
   triaged_by: scout
+  closed_by_actor: 30a6d1fa-b557-41b0-bc77-2ebd9afd4446
+  closed_at: '2026-11-06T22:58:50.380057+00:00'
