@@ -44,7 +44,8 @@
         <span class="cp-label muted">{{.Label}}{{if eq .Precision "fuzzed"}} &middot; approximate{{end}}</span>
       </span>
       <span class="cp-time">
-        {{if .ArrivedAt}}<span class="arrived-at">Arrived {{local .ArrivedAt .TZ}}</span>
+        {{if .ArrivedAt}}<span class="arrived-at">{{if eq .Ord 1}}Left{{else}}Arrived{{end}} {{local .ArrivedAt .TZ}}</span>
+        {{else if .SkippedAt}}<span class="skipped-at muted">{{if eq .SkipReason "rerouted"}}Rerouted around{{else}}Missed{{end}}</span>
         {{else if .PlannedArrive}}<span class="muted">Plan: arrive {{clock .PlannedArrive .TZ}}</span>
         {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
         {{if $.Driver}}
