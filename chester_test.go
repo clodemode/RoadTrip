@@ -324,7 +324,7 @@ func near(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 func TestChesterRefusesAnonymous(t *testing.T) {
 	stub := newAPIStub(t)
 	app := chesterApp(t, stub)
-	if err := app.store.InsertChesterQuery(&ChesterQuery{AskedAt: utcString(time.Now()), Mode: chesterQuick,
+	if err := app.store.InsertChesterQuery(&ChesterQuery{User: "push-token", AskedAt: utcString(time.Now()), Mode: chesterQuick,
 		Question: "LOG-MARKER question", Model: stubModel, Answer: "LOG-MARKER answer", PosSource: "none"}); err != nil {
 		t.Fatal(err)
 	}
@@ -813,7 +813,7 @@ func TestChesterDailyCapRefusesInPlainWords(t *testing.T) {
 	now := time.Now().UTC()
 	spend := func(at time.Time, usd float64) {
 		t.Helper()
-		if err := app.store.InsertChesterQuery(&ChesterQuery{AskedAt: utcString(at), Mode: chesterQuick,
+		if err := app.store.InsertChesterQuery(&ChesterQuery{User: "push-token", AskedAt: utcString(at), Mode: chesterQuick,
 			Question: "earlier", Model: stubModel, USD: usd, PosSource: "none"}); err != nil {
 			t.Fatal(err)
 		}
@@ -1308,7 +1308,7 @@ func TestParsePlaces(t *testing.T) {
 
 func logRow(t *testing.T, app *App, mode string, ms int64, usd float64) int64 {
 	t.Helper()
-	q := &ChesterQuery{AskedAt: utcString(time.Now()), TZ: "America/Chicago", Mode: mode, Question: "a question",
+	q := &ChesterQuery{User: "push-token", AskedAt: utcString(time.Now()), TZ: "America/Chicago", Mode: mode, Question: "a question",
 		Model: stubModel, Effort: "low", TotalMS: ms, USD: usd, Answer: "an answer", PosSource: "none"}
 	if err := app.store.InsertChesterQuery(q); err != nil {
 		t.Fatal(err)

@@ -794,8 +794,12 @@ func (a *App) enrichPicks(ctx context.Context, out *freePicksOut, user string, l
 	var sb strings.Builder
 	// The drive, what is remembered, and the driver's own line: all different
 	// every time, so they are in the message and not the system prompt.
-	sb.WriteString(a.driveNote(ctx, user, now, lat, lng) + a.memoryNote(user))
+	sb.WriteString(a.driveNote(ctx, user, now, lat, lng))
+	// The default ranking is cached and served to every driver, so it is made
+	// without anyone's memory. Only a personal ranking (the driver's own line)
+	// carries their notes, and that one is never cached for anyone else.
 	if want != "" {
+		sb.WriteString(a.memoryNote(user))
 		sb.WriteString("THE DRIVER SAYS RIGHT NOW (this outranks their general taste): " + want + "\n")
 	}
 	sb.WriteString("Candidates found along the route:\n")
@@ -835,7 +839,7 @@ func (a *App) enrichPicks(ctx context.Context, out *freePicksOut, user string, l
 	}
 	msg, err := a.chester.client.Beta.Messages.New(rctx, params)
 	ms := time.Since(start).Milliseconds()
-	row := &ChesterQuery{Ride: a.activeSlug(), AskedAt: utcString(now), TZ: "UTC", Mode: "picks",
+	row := &ChesterQuery{User: user, Ride: a.activeSlug(), AskedAt: utcString(now), TZ: "UTC", Mode: "picks",
 		Question: "along-route picks: " + strings.Join(keys, ", "), PromptVersion: freePicksVersion, Model: m.Model,
 		Effort: m.Effort, TotalMS: ms, PosSource: "none"}
 	var text string
