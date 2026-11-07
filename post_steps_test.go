@@ -31,9 +31,6 @@ type postWorld struct {
 	body  string
 	last  *httptest.ResponseRecorder
 	pred  time.Time
-	// lenient is set by the start-and-check-in feature's Background: its
-	// "the request is refused" steps name the reason in a step of their own.
-	lenient bool
 }
 
 // rawPrivateLat/Lng is where the trip file puts milestone C. The fuzzed flag
@@ -54,24 +51,13 @@ func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) {
 	sc.Step(`^its heading is "([^"]*)"$`, p.heading)
 	sc.Step(`^no milestone is selected$`, p.noneSelected)
 	sc.Step(`^the form carries no arrival button$`, p.noArrivalButton)
-	sc.Step(`^the milestone choices are B and C$`, p.choicesBC)
-	sc.Step(`^A is not among them$`, p.aNotAmong)
 	sc.Step(`^kris posts a photo with no milestone chosen$`, func() error { return p.post("") })
-	sc.Step(`^kris posts a photo with milestone ([ABC]) chosen$`, p.postWith)
-	sc.Step(`^kris posts that photo with milestone ([ABC]) chosen$`, p.postWith)
+	sc.Step(`^kris posts a photo taken at ([ABC])$`, p.postWith)
 	sc.Step(`^the post exists$`, p.postExists)
 	sc.Step(`^B and C are still not arrived at$`, p.bcNotArrived)
-	sc.Step(`^a photo taken at 10:42 in B's zone$`, func() error { p.photo = jpegTaken("2026:11:07 10:42:00"); return nil })
-	sc.Step(`^a photo with no time of its own$`, func() error { p.photo = jpegTaken(""); return nil })
-	sc.Step(`^B is arrived at 10:42 in B's zone$`, p.bArrived1042)
-	sc.Step(`^C is arrived at the current time$`, p.cArrivedNow)
-	sc.Step(`^the request is refused$`, p.refused)
-	sc.Step(`^A's arrival time is unchanged$`, p.aUnchanged)
 	sc.Step(`^an ETA prediction for B exists$`, p.seedPredictionB)
 	sc.Step(`^that prediction is scored$`, p.scored)
 	sc.Step(`^the bus carries an eta_hit record for B with no latitude and no longitude$`, p.busHit)
-	sc.Step(`^each offered milestone carries its published position as data attributes$`, p.attrsPresent)
-	sc.Step(`^a milestone that is a private place carries its snapped cell, never its point$`, p.privateSnapped)
 	initStartCheckinScenarios(sc, p)
 }
 
@@ -152,15 +138,9 @@ func (p *postWorld) heading(h string) error {
 var radioRe = regexp.MustCompile(`<input[^>]*name="milestone_id"[^>]*>`)
 
 func (p *postWorld) noneSelected() error {
-	radios := radioRe.FindAllString(p.body, -1)
-	if len(radios) == 0 {
-		return fmt.Errorf("the form has no milestone radios")
-	}
-	for _, r := range radios {
-		checked := strings.Contains(r, "checked")
-		justAPhoto := strings.Contains(r, `value=""`)
-		if checked != justAPhoto {
-			return fmt.Errorf("selection is wrong at %s", r)
+	for _, r := range radioRe.FindAllString(p.body, -1) {
+		if strings.Contains(r, "checked") && !strings.Contains(r, `value=""`) {
+			return fmt.Errorf("a stop is selected: %s", r)
 		}
 	}
 	return nil
@@ -169,33 +149,6 @@ func (p *postWorld) noneSelected() error {
 func (p *postWorld) noArrivalButton() error {
 	if strings.Contains(p.body, "/arrive") || strings.Contains(p.body, "Arrived:") || strings.Contains(p.body, "arrive-strip") {
 		return fmt.Errorf("the form still carries an arrival button")
-	}
-	return nil
-}
-
-var choiceRe = regexp.MustCompile(`(?s)<label[^>]*data-lat="([^"]*)" data-lng="([^"]*)"[^>]*>\s*<input[^>]*name="milestone_id" value="(\d+)"[^>]*>\s*<span class="ms-name">([^<]*)</span>`)
-
-func (p *postWorld) choices() []string {
-	var out []string
-	for _, m := range choiceRe.FindAllStringSubmatch(p.body, -1) {
-		out = append(out, m[4])
-	}
-	return out
-}
-
-func (p *postWorld) choicesBC() error {
-	got := strings.Join(p.choices(), ",")
-	if want := p.cps[1].Name + "," + p.cps[2].Name; got != want {
-		return fmt.Errorf("choices are %q, want %q", got, want)
-	}
-	return nil
-}
-
-func (p *postWorld) aNotAmong() error {
-	for _, n := range p.choices() {
-		if n == p.cps[0].Name {
-			return fmt.Errorf("%s is offered", n)
-		}
 	}
 	return nil
 }
@@ -272,46 +225,6 @@ func (p *postWorld) bcNotArrived() error {
 	return nil
 }
 
-func (p *postWorld) bArrived1042() error {
-	c := p.cp(1)
-	at, ok := parseUTC(c.ArrivedAt)
-	if !ok {
-		return fmt.Errorf("B has no arrival: %q (answer %d %s)", c.ArrivedAt, p.last.Code, p.last.Body.String())
-	}
-	if got := at.In(loadLoc(c.TZ)).Format("2006-01-02 15:04"); got != "2026-11-07 10:42" {
-		return fmt.Errorf("B arrived %s in %s", got, c.TZ)
-	}
-	return nil
-}
-
-func (p *postWorld) cArrivedNow() error {
-	at, ok := parseUTC(p.cp(2).ArrivedAt)
-	if !ok {
-		return fmt.Errorf("C has no arrival (answer %d %s)", p.last.Code, p.last.Body.String())
-	}
-	if d := time.Since(at); d < -time.Minute || d > 2*time.Minute {
-		return fmt.Errorf("C arrived %s ago", d)
-	}
-	return nil
-}
-
-func (p *postWorld) refused() error {
-	if p.lenient && p.last.Code == http.StatusBadRequest {
-		return nil
-	}
-	if p.last.Code != http.StatusBadRequest || !strings.Contains(p.last.Body.String(), "milestone already reached or unknown") {
-		return fmt.Errorf("answer %d: %s", p.last.Code, p.last.Body.String())
-	}
-	return nil
-}
-
-func (p *postWorld) aUnchanged() error {
-	if a := p.cp(0).ArrivedAt; a != p.arrA {
-		return fmt.Errorf("A arrival %q, was %q", a, p.arrA)
-	}
-	return nil
-}
-
 func (p *postWorld) seedPredictionB() error {
 	p.pred = time.Now().Add(-2 * time.Hour).Truncate(time.Minute)
 	_, err := p.sim.app.store.RecordETA("post-photo-trip", p.cps[1].ID, "kris", p.pred.Add(-time.Hour), p.pred, "plan")
@@ -352,38 +265,4 @@ func (p *postWorld) busHit() error {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return fmt.Errorf("no eta_hit record reached the bus")
-}
-
-func (p *postWorld) attrsPresent() error {
-	ms := choiceRe.FindAllStringSubmatch(p.body, -1)
-	if len(ms) != 2 {
-		return fmt.Errorf("want 2 offered milestones with data-lat and data-lng, found %d", len(ms))
-	}
-	for _, m := range ms {
-		if _, err := strconv.ParseFloat(m[1], 64); err != nil {
-			return fmt.Errorf("data-lat %q", m[1])
-		}
-		if _, err := strconv.ParseFloat(m[2], 64); err != nil {
-			return fmt.Errorf("data-lng %q", m[2])
-		}
-	}
-	return nil
-}
-
-func (p *postWorld) privateSnapped() error {
-	for _, m := range choiceRe.FindAllStringSubmatch(p.body, -1) {
-		if m[4] != p.cps[2].Name {
-			continue
-		}
-		lat, _ := strconv.ParseFloat(m[1], 64)
-		lng, _ := strconv.ParseFloat(m[2], 64)
-		if lat != snap(rawPrivateLat) || lng != snap(rawPrivateLng) {
-			return fmt.Errorf("private milestone carries %v,%v, want the cell %v,%v", lat, lng, snap(rawPrivateLat), snap(rawPrivateLng))
-		}
-		if strings.Contains(p.body, "42.0456") || strings.Contains(p.body, "102.0123") {
-			return fmt.Errorf("the raw point is in the page")
-		}
-		return nil
-	}
-	return fmt.Errorf("the private milestone is not offered")
 }

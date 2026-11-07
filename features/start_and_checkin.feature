@@ -1,27 +1,26 @@
-Feature: Start the drive, then check in at each stop with a position
+Feature: Start the drive, then every photo checks in wherever the car got to
   The trip's first stop is where the car leaves from, so it is never a
-  check-in. Until the drive is started the post form asks for one thing:
-  Start the drive, with a photo as the evidence. After that, each stop is a
-  check-in, and a check-in needs a position near the stop: the photo's own
-  GPS, else the phone's location, else (on a KATE only) the simulated car.
-  A check-in with no position, or one too far from the stop, is refused and
-  nothing is stamped. The bus says which source vouched and how far off it
-  was, in rounded kilometres, never a coordinate.
-  Stops are taken in order. The form offers only the NEXT stop, with two
-  buttons beside it: Missed it (the stop is skipped, stamped as such, and
-  the one after it becomes next) and Later (post the photo with no check-in;
-  the next stop stays next). A stop cannot be checked in while an earlier
-  one is neither arrived at nor skipped.
+  check-in: until the drive is started the post form asks to Start the drive,
+  with a photo as the evidence. After that there is nothing to choose. Kris
+  takes or uploads a photo and posts it; the app works out the rest from a
+  position: the photo's own GPS (a library upload keeps full metadata), else
+  the phone's location, else (on a KATE only, where it goes first) the
+  simulated car. If that position is within 10 km of an open stop, the
+  nearest such stop is checked in at the photo's time, and every earlier stop
+  still open is skipped: "missed" when it lies near the way the car came
+  (within 15 km of the line from the last check-in to here), "rerouted" when
+  it does not. A photo near no open stop is just a photo. Nothing is ever
+  stamped without a position. The bus says what was decided, by which
+  source, in rounded kilometres, never a coordinate and never a name.
 
   Background:
     Given kris is signed in
-    And the active trip has stops A, B and C in order, none arrived at
+    And the active trip has stops A, B, C and D in order along a line, none arrived at
 
-  Scenario: Before the drive starts the form asks to start it, not to check in
+  Scenario: Before the drive starts the form asks to start it
     When kris opens the post form
     Then the form offers "Start the drive from A"
-    And A is not offered as a check-in
-    And B and C are not offered yet
+    And the form offers no stop to choose
 
   Scenario: Starting the drive needs a photo
     When kris starts the drive with no photo
@@ -40,80 +39,81 @@ Feature: Start the drive, then check in at each stop with a position
     Then the request is refused with a message naming A and the distance
     And A is still not arrived at
 
-  Scenario: Once started, the form offers only the next stop
+  Scenario: Once started, the form is just a photo
     Given the drive has started at A
     When kris opens the post form
     Then the form does not offer to start the drive
-    And the form offers "Next: B" with the buttons "Check in", "Missed it" and "Later"
-    And C is not offered
+    And the form offers no stop to choose
+    And the form says the next stop is B
 
-  Scenario: A later stop cannot be checked in while an earlier one is open
-    Given the drive has started at A
-    And a photo taken at 10:42 with its GPS at C
-    When kris posts that photo checking in at C
-    Then the request is refused with a message naming B
-    And C is still not arrived at
-    And no post was saved
-
-  Scenario: Missed it skips the next stop and moves on
-    Given the drive has started at A
-    When kris taps "Missed it" for B
-    Then B is skipped and not arrived at
-    And the form offers "Next: C" with the buttons "Check in", "Missed it" and "Later"
-    And the bus carries a checkin_skipped record for B with no latitude and no longitude
-
-  Scenario: Later posts the photo and keeps the next stop next
+  Scenario: A photo at the next stop checks in there
     Given the drive has started at A
     And a photo taken at 10:42 with its GPS at B
-    When kris posts that photo choosing "Later"
-    Then the post exists
-    And B is still not arrived at
-    And the form offers "Next: B" with the buttons "Check in", "Missed it" and "Later"
-
-  Scenario: After the last stop there is nothing to check in
-    Given the drive has started at A
-    And B is skipped
-    And C is arrived at
-    When kris opens the post form
-    Then the form offers no check-in
-
-  Scenario: A check-in at B vouched for by the photo's GPS
-    Given the drive has started at A
-    And a photo taken at 10:42 with its GPS at B
-    When kris posts that photo checking in at B
+    When kris posts that photo
     Then B is arrived at 10:42 in B's zone
+    And the post exists
     And the bus carries a checkin_verified record for B whose source is "photo" with no latitude and no longitude
 
-  Scenario: A check-in at B vouched for by the phone when the photo has no GPS
+  Scenario: The phone vouches when the photo has no GPS
     Given the drive has started at A
     And a photo with no GPS of its own
     And the phone reports a position at B
-    When kris posts that photo checking in at B
+    When kris posts that photo
     Then B is arrived at
     And the bus carries a checkin_verified record for B whose source is "phone"
 
-  Scenario: A check-in with no position at all is refused
+  Scenario: A photo near no stop is just a photo
+    Given the drive has started at A
+    And a photo taken at 10:42 with its GPS 30 km from every stop
+    When kris posts that photo
+    Then the post exists
+    And B is still not arrived at
+    And the notice says it was posted as a photo and names B as next
+
+  Scenario: A photo with no position is just a photo
     Given the drive has started at A
     And a photo with no GPS of its own
-    When kris posts that photo checking in at B
-    Then the request is refused with a message asking for a position
+    When kris posts that photo
+    Then the post exists
     And B is still not arrived at
-    And no post was saved
 
-  Scenario: A check-in far from the stop is refused
+  Scenario: Driving past a stop marks it missed
     Given the drive has started at A
-    And a photo taken at 10:42 with its GPS at C
-    When kris posts that photo checking in at B
-    Then the request is refused with a message naming B and the distance
-    And B is still not arrived at
-    And the bus carries a checkin_refused record for B with no latitude and no longitude
+    And a photo taken at 11:30 with its GPS at C
+    When kris posts that photo
+    Then C is arrived at 11:30 in C's zone
+    And B is skipped as "missed" and not arrived at
+    And the bus carries a checkin_skipped record for B whose reason is "missed" with no latitude and no longitude
 
-  Scenario: On a KATE the simulated car vouches for a check-in
+  Scenario: A stop far off the way the car came was rerouted around
+    Given the active trip has stops A, B, C and D where B lies 40 km off the line from A to C
+    And the drive has started at A
+    And a photo taken at 11:30 with its GPS at C
+    When kris posts that photo
+    Then C is arrived at 11:30 in C's zone
+    And B is skipped as "rerouted" and not arrived at
+
+  Scenario: The notice says what was decided
+    Given the drive has started at A
+    And a photo taken at 11:30 with its GPS at C
+    When kris posts that photo
+    Then the notice says C was reached and B was missed
+
+  Scenario: A stop already passed is never checked in later
+    Given the drive has started at A
+    And B is skipped
+    And C is arrived at
+    And a photo taken at 12:10 with its GPS at B
+    When kris posts that photo
+    Then the post exists
+    And B is still skipped and not arrived at
+
+  Scenario: On a KATE the simulated car vouches before the photo
     Given simulation is allowed
     And the drive has started at A
     And kris's simulated car is at B
-    And a photo with no GPS of its own
-    When kris posts that photo checking in at B
+    And a photo taken at 10:42 with its GPS 900 km from every stop
+    When kris posts that photo
     Then B is arrived at
     And the bus carries a checkin_verified record for B whose source is "sim"
 
@@ -129,5 +129,5 @@ Feature: Start the drive, then check in at each stop with a position
     Given simulation is not allowed
     And the drive has started at A
     And a photo with no GPS of its own
-    When kris posts that photo checking in at B
-    Then the request is refused with a message asking for a position
+    When kris posts that photo
+    Then B is still not arrived at
