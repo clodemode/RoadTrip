@@ -744,6 +744,11 @@ type legJS struct {
 	Date  string          `json:"date"`
 	Color string          `json:"color"`
 	Line  json.RawMessage `json:"line"`
+	// Hours are the whole-hour points ON the planned line and HoursLine the
+	// stretch they measure, for the muted stick beside the route. Both are
+	// published-line points; see hoursbar.go.
+	Hours     []hourPoint `json:"hours,omitempty"`
+	HoursLine [][]float64 `json:"hours_line,omitempty"`
 }
 
 type cpJS struct {
@@ -876,10 +881,12 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	if dl := defaultLeg(rv.Legs, di); dl != nil {
 		pageLeg = dl.Slug
 	}
+	bars := a.hoursBars(rv.Ride.Slug, rv.Legs, allIndexes(len(rv.Legs)), len(rv.Legs) > 1)
 	data := map[string]any{
 		"Title": "", "Ride": rv.Ride, "Legs": rv.Legs, "Posts": posts,
-		"Day": di, "PageLeg": pageLeg,
-		"Map": buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts))}
+		"Day": di, "PageLeg": pageLeg, "Multi": len(rv.Legs) > 1,
+		"HoursBars": bars,
+		"Map":       withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
 	// The checklist in one line, n of m done. Counts only.
 	if sum, ok := a.store.ChecklistSummary(rv.Ride.Slug); ok {
 		data["Checklist"] = sum
@@ -916,12 +923,14 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	di := dayOf(rv.Ride, rv.Legs, time.Now())
+	bars := a.hoursBars(rv.Ride.Slug, rv.Legs, []int{legIndex(rv.Legs, leg)}, false)
 	a.render(w, r, "leg.html", map[string]any{
 		"Title": leg.Name, "Ride": rv.Ride, "Leg": leg, "Prev": prev, "Next": next,
-		"Posts": posts, "Day": di, "Total": len(rv.Legs),
+		"Posts": posts, "Day": di, "Total": len(rv.Legs), "Multi": len(rv.Legs) > 1,
+		"HoursBars": bars,
 		// The tracks are computed over the whole ride so this leg's own track
 		// still begins where the day before it ended.
-		"Map":     buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)),
+		"Map":     withHours(buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars),
 		"PageLeg": leg.Slug})
 }
 
@@ -1189,9 +1198,9 @@ func (a *App) postForm(w http.ResponseWriter, r *http.Request) {
 	a.renderPostForm(w, r, http.StatusOK, r.URL.Query().Get("error"))
 }
 
-// milestoneChoice is one radio under "Milestone (optional)": a checkpoint not
-// yet arrived at. Lat and Lng are the PUBLISHED position, the cell for a
-// private place, which is all the page ever gets.
+// milestoneChoice is the one radio the post form can offer: Start the drive.
+// Lat and Lng are the PUBLISHED position, the cell for a private place, which
+// is all the page ever gets.
 type milestoneChoice struct {
 	ID       int64
 	Name     string
@@ -1199,23 +1208,178 @@ type milestoneChoice struct {
 	Lat, Lng float64
 }
 
-// unarrivedMilestones is every checkpoint of the ride, in route order, that
-// has no arrival yet.
-func unarrivedMilestones(legs []Leg) []milestoneChoice {
-	var out []milestoneChoice
-	for _, l := range legs {
-		for _, c := range l.Checkpoints {
-			if c.ArrivedAt != "" {
-				continue
-			}
-			label := l.Name
-			if v := localFmt(c.PlannedArrive, c.TZ, "3:04 PM MST"); v != "" {
-				label = v
-			}
-			out = append(out, milestoneChoice{ID: c.ID, Name: c.Name, Label: label, Lat: c.Lat, Lng: c.Lng})
+// checkinRadiusKm is how near a position must be to a stop to vouch for it.
+const checkinRadiusKm = 10
+
+// missedRadiusKm is how near the way the car came a skipped stop must lie to
+// count as missed rather than rerouted around.
+const missedRadiusKm = 15
+
+// tripStart is the checkpoint the car leaves from: the first of the first leg.
+// It is never a check-in; the drive is started there.
+func tripStart(legs []Leg) *Checkpoint {
+	if len(legs) == 0 {
+		return nil
+	}
+	return legOrigin(legs, 0)
+}
+
+// openStops are the stops after the start that have neither an arrival nor a
+// skip, in route order. The first is the next stop.
+func openStops(legs []Leg) []Checkpoint {
+	start := tripStart(legs)
+	var out []Checkpoint
+	for _, c := range rideCheckpoints(legs) {
+		if (start != nil && c.ID == start.ID) || c.ArrivedAt != "" || c.SkippedAt != "" {
+			continue
 		}
+		out = append(out, c)
 	}
 	return out
+}
+
+// vouch is the position a request proves, and who vouched for it.
+type vouch struct {
+	src      string // "sim", "photo" or "phone"
+	lat, lng float64
+}
+
+// vouchFor resolves the position a post is made at: the simulated car first
+// (only where SIM_ALLOWED, so a real photo never vouches on a KATE), then the
+// photo's own GPS, then the phone's location the form attached. nil when there
+// is none.
+func (a *App) vouchFor(r *http.Request, exLat, exLng *float64) *vouch {
+	if la, ln := a.simFix(r); la != nil {
+		return &vouch{"sim", *la, *ln}
+	}
+	if exLat != nil && exLng != nil {
+		return &vouch{"photo", *exLat, *exLng}
+	}
+	if la, ln := formCoord(r, "lat", 90), formCoord(r, "lng", 180); la != nil && ln != nil {
+		return &vouch{"phone", *la, *ln}
+	}
+	return nil
+}
+
+// pointSegKm is the distance from a point to the segment a-b, on an
+// equirectangular projection around the point: good to a fraction of a percent
+// at the tens of kilometres it is used for.
+func pointSegKm(pLat, pLng, aLat, aLng, bLat, bLng float64) float64 {
+	const kmPerDeg = 111.195
+	k := math.Cos(pLat * math.Pi / 180)
+	ax, ay := (aLng-pLng)*k*kmPerDeg, (aLat-pLat)*kmPerDeg
+	bx, by := (bLng-pLng)*k*kmPerDeg, (bLat-pLat)*kmPerDeg
+	dx, dy := bx-ax, by-ay
+	t := 0.0
+	if d2 := dx*dx + dy*dy; d2 > 0 {
+		t = math.Max(0, math.Min(1, -(ax*dx+ay*dy)/d2))
+	}
+	return math.Hypot(ax+t*dx, ay+t*dy)
+}
+
+// arrivalAt is the photo's own time read as wall-clock time in the stop's
+// zone, else now. loc is the zone the form read the photo's clock in.
+func arrivalAt(photo *Photo, loc *time.Location, stopTZ string) time.Time {
+	if photo != nil && photo.TakenAt != "" {
+		if t, ok := parseUTC(photo.TakenAt); ok {
+			lt := t.In(loc)
+			return time.Date(lt.Year(), lt.Month(), lt.Day(), lt.Hour(), lt.Minute(), lt.Second(), 0, loadLoc(stopTZ))
+		}
+	}
+	return time.Now()
+}
+
+// checkInFromPhoto is what posting a photo does after the drive has started:
+// nothing is chosen, the position decides. The nearest open stop within
+// checkinRadiusKm is arrived at the photo's time and every open stop before it
+// is skipped at the same instant: "missed" when it lies near the line from the
+// last resolved point to here, "rerouted" when it does not. Returns the notice
+// for the form, "" when there was nothing to say. The bus gets stops (ordinals)
+// and sources, never a coordinate or a name.
+func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, photo *Photo, loc *time.Location) (string, error) {
+	open := openStops(legs)
+	if len(open) == 0 {
+		return "", nil
+	}
+	var exLat, exLng *float64
+	if photo != nil {
+		exLat, exLng = photo.Lat, photo.Lng
+	}
+	v := a.vouchFor(r, exLat, exLng)
+	if v == nil {
+		return "", nil
+	}
+	best, bestKm := -1, 0.0
+	for i, c := range open {
+		if km := haversineKm(v.lat, v.lng, c.Lat, c.Lng); km <= checkinRadiusKm && (best < 0 || km < bestKm) {
+			best, bestKm = i, km
+		}
+	}
+	if best < 0 {
+		return fmt.Sprintf("Posted as a photo; next stop %s, %d km", open[0].Name,
+			int(math.Round(haversineKm(v.lat, v.lng, open[0].Lat, open[0].Lng)))), nil
+	}
+	x := open[best]
+	at := arrivalAt(photo, loc, x.TZ)
+	// The last resolved point: the latest arrival, which is the start at worst.
+	var last *Checkpoint
+	all := rideCheckpoints(legs)
+	for i := range all {
+		if all[i].ArrivedAt != "" && (last == nil || all[i].ArrivedAt > last.ArrivedAt) {
+			last = &all[i]
+		}
+	}
+	var missed, rerouted []string
+	for _, c := range open[:best] {
+		reason := "rerouted"
+		if last != nil && pointSegKm(c.Lat, c.Lng, last.Lat, last.Lng, x.Lat, x.Lng) <= missedRadiusKm {
+			reason = "missed"
+		}
+		if err := a.store.SetSkipped(c.ID, at, reason); err != nil {
+			return "", err
+		}
+		a.melt.Event("checkin_skipped", map[string]any{"stop": c.Ord, "reason": reason})
+		if reason == "missed" {
+			missed = append(missed, c.Name)
+		} else {
+			rerouted = append(rerouted, c.Name)
+		}
+	}
+	if err := a.arriveCheckpoint(&x, at, nil); err != nil {
+		return "", err
+	}
+	a.melt.Event("checkin_verified", map[string]any{"stop": x.Ord, "vouched_by": v.src, "km": math.Round(bestKm*10) / 10})
+	log.Printf("checkin: stop %d (%s) reached by %s, %d skipped", x.Ord, x.Name, v.src, best)
+	msg := "Reached " + x.Name + " at " + at.In(loadLoc(x.TZ)).Format("3:04 PM MST")
+	if len(missed) > 0 {
+		msg += "; missed " + strings.Join(missed, ", ")
+	}
+	if len(rerouted) > 0 {
+		msg += "; rerouted around " + strings.Join(rerouted, ", ")
+	}
+	return msg, nil
+}
+
+// startChoice is the Start the drive choice while the drive has not started;
+// nil once it has.
+func startChoice(legs []Leg) *milestoneChoice {
+	c := tripStart(legs)
+	if c == nil || c.ArrivedAt != "" {
+		return nil
+	}
+	return &milestoneChoice{ID: c.ID, Name: c.Name, Lat: c.Lat, Lng: c.Lng}
+}
+
+// nextStopName is the stop the next photo would check in at, "" before the
+// drive starts or after the last stop.
+func nextStopName(legs []Leg) string {
+	if startChoice(legs) != nil {
+		return ""
+	}
+	if o := openStops(legs); len(o) > 0 {
+		return o[0].Name
+	}
+	return ""
 }
 
 func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int, errMsg string) {
@@ -1242,7 +1406,7 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 		"Private":      pd.forRide(rv.Ride.Slug, a.rideSlug).addressByOrd(),
 		"DefaultLegID": dlID, "DefaultLeg": dl, "DefaultTZ": tz, "Zones": zones(rv.Legs, tz),
 		"Day": di, "Error": errMsg, "Notice": r.URL.Query().Get("notice"),
-		"Milestones": unarrivedMilestones(rv.Legs),
+		"Start": startChoice(rv.Legs), "NextStop": nextStopName(rv.Legs),
 		// What the form needs to say, before posting, what will be published:
 		// the private cells the fuzz toggle pre-ticks itself for, and which way
 		// PIN_PRECISION tips that default. These are the ALREADY-FUZZED
@@ -1528,21 +1692,53 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The milestone option: "" is a plain photo; a value must be a checkpoint of
-	// this ride with no arrival yet. Checked before anything is saved, so a
-	// refusal leaves no photo and no post behind.
-	var milestone *Checkpoint
-	if v := strings.TrimSpace(r.PostFormValue("milestone_id")); v != "" {
+	// Starting the drive is the one thing the form can choose. After the drive
+	// has started a post chooses nothing: its position decides (see
+	// checkInFromPhoto), and an old form's milestone_id is ignored.
+	start := tripStart(rv.Legs)
+	starting := false
+	if v := strings.TrimSpace(r.PostFormValue("milestone_id")); v != "" && start != nil && start.ArrivedAt == "" {
 		id, _ := strconv.ParseInt(v, 10, 64)
-		for _, c := range rideCheckpoints(rv.Legs) {
-			if c.ID == id && c.ArrivedAt == "" {
-				c := c
-				milestone = &c
+		starting = id == start.ID
+	}
+	// A start is vouched for BEFORE anything is saved, so a refusal leaves no
+	// photo and no post behind. The EXIF is read from a second handle on the
+	// upload; savePhoto reads the first.
+	var startSrc string
+	var startKm float64
+	startSim := false
+	if starting {
+		var exLat, exLng *float64
+		hasPhoto := false
+		if f, _, err := r.FormFile("photo"); err == nil {
+			hasPhoto = true
+			if info := readEXIF(f); info.hasGPS {
+				exLat, exLng = &info.lat, &info.lng
 			}
+			f.Close()
 		}
-		if milestone == nil {
-			a.renderPostForm(w, r, http.StatusBadRequest, "milestone already reached or unknown")
+		if !hasPhoto {
+			a.renderPostForm(w, r, http.StatusBadRequest, "Starting the drive needs a photo")
 			return
+		}
+		switch v := a.vouchFor(r, exLat, exLng); {
+		case a.simAllowed:
+			// On a KATE starting the drive starts the pretend car from the
+			// corridor's own origin: accepted, and the sim begins now.
+			startSrc, startSim = "sim", true
+		case v == nil:
+			a.melt.Event("checkin_refused", map[string]any{"stop": start.Ord, "reason": "no_position"})
+			a.renderPostForm(w, r, http.StatusBadRequest,
+				"No position to start the drive at "+start.Name+": attach a photo with GPS or allow location")
+			return
+		default:
+			startSrc, startKm = v.src, haversineKm(v.lat, v.lng, start.Lat, start.Lng)
+			if startKm > checkinRadiusKm {
+				a.melt.Event("checkin_refused", map[string]any{"stop": start.Ord, "reason": "too_far", "km": math.Round(startKm*10) / 10})
+				a.renderPostForm(w, r, http.StatusBadRequest, fmt.Sprintf(
+					"%s is %d km from where you are; start the drive when you are there", start.Name, int(math.Round(startKm))))
+				return
+			}
 		}
 	}
 
@@ -1643,24 +1839,31 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	log.Printf("post %d: pin %s", post.ID, pinNote)
 	a.melt.Event("post_created", map[string]any{"pin_source": post.PinSource, "has_photo": photo != nil,
 		"exif_gps": photo != nil && photo.Lat != nil, "fuzzed": pinFuzzed})
-	if milestone != nil {
-		// The photo's own time, read as the milestone's wall clock, else now.
-		at := time.Now()
-		if photo != nil && photo.TakenAt != "" {
-			if t, ok := parseUTC(photo.TakenAt); ok {
-				lt := t.In(loc)
-				at = time.Date(lt.Year(), lt.Month(), lt.Day(), lt.Hour(), lt.Minute(), lt.Second(), 0, loadLoc(milestone.TZ))
-			}
-		}
-		if err := a.arriveCheckpoint(milestone, at, nil); err != nil {
-			fail("The post is saved, but the milestone could not be marked: " + err.Error())
+	if starting {
+		at := arrivalAt(photo, loc, start.TZ)
+		if err := a.arriveCheckpoint(start, at, nil); err != nil {
+			fail("The post is saved, but the drive could not be started: " + err.Error())
 			return
 		}
-		log.Printf("post %d: milestone %d (%s) marked reached from the photo", post.ID, milestone.Ord, milestone.Name)
-		// Never a silent arrival: the form says what it just did.
-		msg := "Marked " + milestone.Name + " reached at " + at.In(loadLoc(milestone.TZ)).Format("3:04 PM MST")
+		if startSim {
+			a.restartSim(a.userOf(r))
+		}
+		a.melt.Event("drive_started", map[string]any{"vouched_by": startSrc, "km": math.Round(startKm*10) / 10})
+		log.Printf("post %d: drive started from %s by %s", post.ID, start.Name, startSrc)
+		msg := "Drive started from " + start.Name + " at " + at.In(loadLoc(start.TZ)).Format("3:04 PM MST")
 		http.Redirect(w, r, "/driver/post?notice="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
+	}
+	if start != nil && start.ArrivedAt != "" {
+		msg, err := a.checkInFromPhoto(r, rv.Legs, photo, loc)
+		if err != nil {
+			fail("The post is saved, but the check-in failed: " + err.Error())
+			return
+		}
+		if msg != "" {
+			http.Redirect(w, r, "/driver/post?notice="+url.QueryEscape(msg), http.StatusSeeOther)
+			return
+		}
 	}
 	http.Redirect(w, r, "/#post-"+strconv.FormatInt(post.ID, 10), http.StatusSeeOther)
 }

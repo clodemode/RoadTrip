@@ -2,16 +2,16 @@
 <div class="terrain-band">{{template "terrain" .PageLeg}}</div>
 <section class="hero leg-hero" style="--leg:{{legColor .Leg.Ord}}">
   <p class="crumb"><a href="/">&larr; {{.Ride.Name}}</a>
-    {{with .Prev}}&middot; <a href="/legs/{{.Slug}}">&larr; Previous: Leg {{.Ord}}</a>{{end}}
-    {{with .Next}}&middot; <a href="/legs/{{.Slug}}">Next: Leg {{.Ord}} &rarr;</a>{{end}}
+    {{with .Prev}}&middot; <a href="/legs/{{.Slug}}">&larr; Previous: d{{.Ord}}</a>{{end}}
+    {{with .Next}}&middot; <a href="/legs/{{.Slug}}">Next: d{{.Ord}} &rarr;</a>{{end}}
   </p>
   <div class="hero-top">
-    <h1><span class="leg-n big">{{.Leg.Ord}}</span> {{.Leg.Name}}</h1>
+    <h1>{{if .Multi}}<span class="leg-n big">d{{.Leg.Ord}}</span> {{end}}{{.Leg.Name}}</h1>
     {{if and .Day.Today (eq .Day.Today.ID .Leg.ID)}}<span class="badge day-badge">Today</span>{{end}}
   </div>
   <p class="hero-line">
     <span>{{day .Leg.Date}}</span>
-    <span class="muted figure">&middot; ~{{num .Leg.EstMiles}} mi &middot; ~{{num .Leg.EstHours}} h &middot; leg {{.Leg.Ord}} of {{.Total}}</span>
+    <span class="muted figure">&middot; ~{{num .Leg.EstMiles}} mi &middot; ~{{num .Leg.EstHours}} h{{if .Multi}} &middot; day {{.Leg.Ord}} of {{.Total}}{{end}}</span>
   </p>
   <p class="guide-line">
     <img src="/static/img/lance.svg?v={{.V}}" width="40" height="40" alt="{{.GuideName}}">
@@ -19,6 +19,8 @@
   </p>
   {{with .Leg.RouteHint}}<p class="route-hint">{{.}}</p>{{end}}
 </section>
+
+{{template "hours_bar" .HoursBars}}
 
 <div id="map" data-mode="leg"></div>
 
@@ -33,7 +35,8 @@
         <span class="cp-label muted">{{.Label}} &middot; {{.TZ}}{{if eq .Precision "fuzzed"}} &middot; approximate{{end}}</span>
       </span>
       <span class="cp-time">
-        {{if .ArrivedAt}}<span class="arrived-at">Arrived {{local .ArrivedAt .TZ}}</span>
+        {{if .ArrivedAt}}<span class="arrived-at">{{if eq .Ord 1}}Left{{else}}Arrived{{end}} {{local .ArrivedAt .TZ}}</span>
+        {{else if .SkippedAt}}<span class="skipped-at muted">{{if eq .SkipReason "rerouted"}}Rerouted around{{else}}Missed{{end}}</span>
         {{else if .PlannedArrive}}<span class="muted">Plan: arrive {{clock .PlannedArrive .TZ}}</span>
         {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
         {{if $.Driver}}

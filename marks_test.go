@@ -17,7 +17,7 @@ func TestMarkCheckpointsLettersForLandmarksNumbersForLegEnds(t *testing.T) {
 			got = append(got, c.Mark)
 		}
 	}
-	if want := "1 A 1 B 2"; strings.Join(got, " ") != want {
+	if want := "d1 A d1 B d2"; strings.Join(got, " ") != want {
 		t.Fatalf("marks %q, want %q", strings.Join(got, " "), want)
 	}
 	if letterMark(0) != "A" || letterMark(25) != "Z" || letterMark(26) != "AA" || letterMark(27) != "AB" {
@@ -131,5 +131,17 @@ func TestMapLinksGiveWazeGoogleAndAppleFromOneHelper(t *testing.T) {
 		n.Google != "https://www.google.com/maps/dir/?api=1&destination=Cedar+Camp%2C+ZZ+%26+more" ||
 		n.Apple != "https://maps.apple.com/?daddr=Cedar+Camp%2C+ZZ+%26+more" {
 		t.Errorf("name only: %q %q", n.Google, n.Apple)
+	}
+}
+
+func TestMarkCheckpointsOneLegIsAllLetters(t *testing.T) {
+	legs := []Leg{{Ord: 1, Checkpoints: []Checkpoint{{Ord: 1, IsTerminal: true}, {Ord: 2}, {Ord: 3, IsTerminal: true}}}}
+	markCheckpoints(legs)
+	var got []string
+	for _, c := range legs[0].Checkpoints {
+		got = append(got, c.Mark)
+	}
+	if want := "A B C"; strings.Join(got, " ") != want {
+		t.Fatalf("one-leg marks %q, want %q", strings.Join(got, " "), want)
 	}
 }

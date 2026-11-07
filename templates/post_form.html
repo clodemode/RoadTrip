@@ -59,17 +59,16 @@
         <span>Fuzz location <span class="muted small">&mdash; publish a 5 km cell, not the point</span></span></label>
       <p class="muted small" id="pin-publishes">publishes as: &mdash;</p>
     </fieldset>
-    <fieldset class="milestone">
-      <legend>Milestone (optional)</legend>
+    {{if .Start}}<fieldset class="milestone">
+      <legend>Start the drive</legend>
       <label class="form-check"><input class="form-check-input" type="radio" name="milestone_id" value="" checked>
         <span>Just a photo</span></label>
-      {{range .Milestones}}
-      <label class="form-check" data-lat="{{.Lat}}" data-lng="{{.Lng}}">
-        <input class="form-check-input" type="radio" name="milestone_id" value="{{.ID}}">
-        <span class="ms-name">{{.Name}}</span> <span class="muted small">&middot; {{.Label}}</span><span class="ms-near muted small" hidden>near you</span></label>
-      {{end}}
-      <p class="muted small mb-0">Choosing one marks it reached at the photo&rsquo;s own time.</p>
-    </fieldset>
+      <label class="form-check" data-lat="{{.Start.Lat}}" data-lng="{{.Start.Lng}}">
+        <input class="form-check-input" type="radio" name="milestone_id" value="{{.Start.ID}}">
+        <span class="ms-name">Start the drive from {{.Start.Name}}</span></label>
+      <p class="muted small mb-0">Starting needs a photo; its own GPS, or your phone&rsquo;s location, says you are there. It is stamped at the photo&rsquo;s own time.</p>
+    </fieldset>{{else if .NextStop}}<p class="muted" id="next-stop">Next stop: {{.NextStop}}</p>
+    <p class="muted small">Post a photo near a stop and it is checked in at the photo&rsquo;s own time; stops passed on the way are marked missed or rerouted.</p>{{end}}
     <button type="submit" class="btn btn-primary btn-lg">Post</button>
     <p class="muted small">Best pin: choose from Photo Library &mdash; the photo keeps its own GPS and time, and it is read here before you post. Taking the photo here works too, on the phone&rsquo;s own location, since Safari strips GPS from live camera shots. Otherwise the pin lands on the checkpoint you picked.</p>
     <p class="muted small">JPEG only (iPhone: Settings &rarr; Camera &rarr; Formats &rarr; Most Compatible). Max 20 MB.</p>

@@ -13,7 +13,12 @@ import (
 func TestFeatures(t *testing.T) {
 	suite := godog.TestSuite{
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {
-			func() { sim := initSimScenarios(t, sc); initEtaScenarios(t, sc, sim); initPostScenarios(t, sc, sim) }()
+			func() {
+				sim := initSimScenarios(t, sc)
+				initEtaScenarios(t, sc, sim)
+				initPostScenarios(t, sc, sim)
+				initMarksScenarios(t, sc, sim)
+			}()
 		},
 		Options: &godog.Options{
 			Format:   "pretty",

@@ -179,7 +179,7 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving b
 	// The next stop: the first checkpoint ahead that nobody has arrived at.
 	nextIdx := -1
 	for i, c := range cps {
-		if c.ArrivedAt != "" || (haveLine && alongs[i] <= posAlong+0.5) {
+		if c.ArrivedAt != "" || c.SkippedAt != "" || (haveLine && alongs[i] <= posAlong+0.5) {
 			continue
 		}
 		nextIdx = i
@@ -254,7 +254,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 	if !onRide && st.Mode != modeDestined && !aimless {
 		a.freeSvc().set(a.userOf(r), func(s *freeState) { s.enter(modeDestined) })
 	}
-	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h,
+	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h, "DriveStarted": a.driveStarted(),
 		"TracksOn": a.tracks != nil, "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 
@@ -370,4 +370,15 @@ func (a *App) hudServed(r *http.Request, mode string, h hudView, hasFix, sim boo
 	a.melt.Event("hud_served", map[string]any{"mode": mode, "pos_source": source, "has_fix": hasFix,
 		"has_next": h.HasNext, "next_name": h.NextName, "miles_left": miles,
 		"eta_shown": h.ETA != "" && h.ETA != "—", "sim": sim})
+}
+
+// driveStarted is false only while the active trip's start has no arrival: the
+// driver's Post tool then reads Start the drive.
+func (a *App) driveStarted() bool {
+	rv, err := a.loadRide()
+	if err != nil {
+		return true
+	}
+	c := tripStart(rv.Legs)
+	return c == nil || c.ArrivedAt != ""
 }
