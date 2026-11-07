@@ -215,6 +215,9 @@ func (a *App) remember(user, q, answer string, notes []string, now time.Time) {
 // the traveller typed; the position is not repeated here, only what it gives.
 func (a *App) driveNote(ctx context.Context, user string, now time.Time, lat, lng *float64) string {
 	st := a.freeSvc().get(user)
+	if st.Mode == modeAimless {
+		return "DRIVE: FreeLance Aimless, just driving with no destination and no route; candidate places are those near the car, not along a route. The TODAY, TONIGHT and MILES LEFT lines describe the planned ride, which this drive is not part of.\n"
+	}
 	if st.Mode != modeDestined {
 		return "DRIVE: the planned ride (its leg and tonight's stop are above).\n"
 	}
