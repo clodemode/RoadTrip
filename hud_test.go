@@ -44,6 +44,9 @@ func TestHUDFallsBackToThePlanByDate(t *testing.T) {
 	if !h.HasNext || h.Waze == "" || !strings.HasPrefix(h.Waze, "https://waze.com/ul?") {
 		t.Fatalf("a next stop with a Waze link is the centre of the screen: %+v", h)
 	}
+	if !strings.HasPrefix(h.Google, "https://www.google.com/maps/dir/?api=1&destination=") || !strings.HasPrefix(h.Apple, "https://maps.apple.com/?daddr=") {
+		t.Fatalf("every stop gets Google and Apple links beside Waze: %q %q", h.Google, h.Apple)
+	}
 	if h.TonightName == "" || h.TZ == "" {
 		t.Fatalf("tonight's stop and the zone are gauges: %+v", h)
 	}

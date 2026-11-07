@@ -38,6 +38,8 @@
         {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
         {{if $.Authed}}
           <a class="btn btn-sm btn-outline-primary" href="{{waze .Name .Lat .Lng}}" rel="noopener">Navigate in Waze</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{{gmaps .Name .Lat .Lng}}" rel="noopener">Google Maps</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{{applemaps .Name .Lat .Lng}}" rel="noopener">Apple Maps</a>
           {{if $.ChesterOn}}<a class="btn btn-sm btn-outline-secondary" href="{{askChester .Name}}">Ask Chester about here</a>{{end}}
           <form method="post" action="/driver/checkpoint/{{.ID}}/arrive" class="d-inline">
             {{if .ArrivedAt}}<input type="hidden" name="clear" value="1"><button class="btn btn-sm btn-outline-secondary">Undo</button>

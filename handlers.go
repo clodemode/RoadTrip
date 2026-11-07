@@ -68,6 +68,8 @@ func localFmt(utc, tz, layout string) string {
 func (a *App) funcs() template.FuncMap {
 	return template.FuncMap{
 		"waze":       func(name string, lat, lng float64) string { return wazeLink(name, lat, lng) },
+		"gmaps":      func(name string, lat, lng float64) string { return mapLinks(lat, lng, name).Google },
+		"applemaps":  func(name string, lat, lng float64) string { return mapLinks(lat, lng, name).Apple },
 		"askChester": askChesterLink,
 		"json": func(v any) template.JS {
 			b, err := json.Marshal(v)
@@ -156,6 +158,9 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("POST /driver/logout", a.logout)
 	mux.Handle("GET /driver", a.requireAuth(a.driverHome))
 	mux.Handle("GET /driver/hud.json", a.requireAuth(a.hudJSON))
+	mux.Handle("POST /driver/freelance/mode", a.requireAuth(a.freeMode))
+	mux.Handle("POST /driver/freelance/dest", a.requireAuth(a.freeDest))
+	mux.Handle("POST /driver/freelance/picks", a.requireAuth(a.freePicks))
 	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
 	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))

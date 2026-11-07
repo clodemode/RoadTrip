@@ -50,6 +50,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 | `trip.go`, `plan_handlers.go`, `convert.go` | trips on the volume and the planner: the trip file and its options, `/plan`, `/driver/trip`, `/driver/plan`, `/driver/ride/active`, and the `-convert` flag |
 | `checklist.go`, `checklist_handlers.go` | a trip's checklist: the document and its checks, the store seam for private text, `/checklist`, `/checklist.json`, `/driver/checklist`, `/driver/checklist.json`, and the check-off at `/driver/checklist/{step\|question}/{id}` |
 | `chester.go`, `chester_handlers.go` | Chester, the en-route helper: settings, the price table, what the API is told, the place cards, the one request, the log and its summary; `/chester`, `/chester/ask`, `/driver/chester/log`, `/driver/chester/log.json`, `/driver/chester/log/{id}` |
+| `freelance.go` | FreeLance: Destined on `/driver`: per-user mode and destination in memory (never the plan), TomTom search/route/along-route, the HUD view and "Find picks" with one Chester call logged as mode `picks`; `POST /driver/freelance/{mode,dest,picks}` |
 | `seed/*.geojson` | RWGPS-import shape: one `LineString` per leg; `Point` features `kind=checkpoint` (each with its own `tz`) and `kind=candidate`. The embedded history; nothing is added here |
 | `testdata/` | synthetic fixtures (invented places), each marked `"synthetic": true` |
 | `APP_PROFILE.yaml` | the venue paths: binary `/app/roadtrip`, data `/data`. The CLODE harness reads it |

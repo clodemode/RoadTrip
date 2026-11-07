@@ -1666,6 +1666,30 @@ func wazeLink(where string, lat, lng float64) string {
 	return "https://waze.com/ul?" + q.Encode()
 }
 
+// navLinks are the three ways the site opens a place for turn-by-turn: Waze,
+// Google Maps and Apple Maps, so a diversion can go to a second phone in a
+// different app while Waze keeps the waypoint or the end-of-day route.
+type navLinks struct{ Waze, Google, Apple string }
+
+// mapLinks builds all three from one place. With coordinates the maps get the
+// point; with none (a private place is a snapped cell, never a coordinate)
+// they get the escaped name, never a 0,0.
+func mapLinks(lat, lng float64, name string) navLinks {
+	l := navLinks{Waze: wazeLink(name, lat, lng)}
+	if lat != 0 || lng != 0 {
+		pt := strconv.FormatFloat(lat, 'f', -1, 64) + "," + strconv.FormatFloat(lng, 'f', -1, 64)
+		l.Google = "https://www.google.com/maps/dir/?api=1&destination=" + pt
+		l.Apple = "https://maps.apple.com/?daddr=" + pt
+		if name != "" {
+			l.Apple += "&q=" + url.QueryEscape(name)
+		}
+		return l
+	}
+	l.Google = "https://www.google.com/maps/dir/?api=1&destination=" + url.QueryEscape(name)
+	l.Apple = "https://maps.apple.com/?daddr=" + url.QueryEscape(name)
+	return l
+}
+
 // askChesterLink is the link that opens Chester with a question already in the
 // box about one stop. The page sets it as text.
 func askChesterLink(stop string) string {
