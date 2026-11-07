@@ -507,3 +507,5 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 .rt-list { list-style: none; margin: 0; padding: .4rem; display: flex; flex-direction: column; gap: .4rem;
   height: 14rem; overflow-y: auto; overscroll-behavior: contain; border: 2px dashed #d1d5db; border-radius: .6rem; }
 .rt-list a { display: block; padding: .6rem .7rem; border: 2px solid #111827; border-radius: .6rem; background: #fff; color: #111827; font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.ms-suggested { font-weight: 700; }
+.ms-near { margin-left: .4rem; }

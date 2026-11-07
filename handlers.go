@@ -452,6 +452,9 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if s, ok := data["Status"].(int); ok {
+		w.WriteHeader(s) // after the headers above, which a WriteHeader would freeze out
+	}
 	if err := a.tmpl.ExecuteTemplate(w, name, data); err != nil {
 		log.Printf("ERROR render %s: %v", name, err)
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -1183,6 +1186,39 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 // last arrival, and picking a checkpoint re-selects its zone (see the inline
 // script in the template).
 func (a *App) postForm(w http.ResponseWriter, r *http.Request) {
+	a.renderPostForm(w, r, http.StatusOK, r.URL.Query().Get("error"))
+}
+
+// milestoneChoice is one radio under "Milestone (optional)": a checkpoint not
+// yet arrived at. Lat and Lng are the PUBLISHED position, the cell for a
+// private place, which is all the page ever gets.
+type milestoneChoice struct {
+	ID       int64
+	Name     string
+	Label    string
+	Lat, Lng float64
+}
+
+// unarrivedMilestones is every checkpoint of the ride, in route order, that
+// has no arrival yet.
+func unarrivedMilestones(legs []Leg) []milestoneChoice {
+	var out []milestoneChoice
+	for _, l := range legs {
+		for _, c := range l.Checkpoints {
+			if c.ArrivedAt != "" {
+				continue
+			}
+			label := l.Name
+			if v := localFmt(c.PlannedArrive, c.TZ, "3:04 PM MST"); v != "" {
+				label = v
+			}
+			out = append(out, milestoneChoice{ID: c.ID, Name: c.Name, Label: label, Lat: c.Lat, Lng: c.Lng})
+		}
+	}
+	return out
+}
+
+func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int, errMsg string) {
 	rv, err := a.loadRide()
 	if err != nil {
 		http.NotFound(w, r)
@@ -1205,7 +1241,8 @@ func (a *App) postForm(w http.ResponseWriter, r *http.Request) {
 		// This ride's addresses and no other's: an ord means nothing without its ride.
 		"Private":      pd.forRide(rv.Ride.Slug, a.rideSlug).addressByOrd(),
 		"DefaultLegID": dlID, "DefaultLeg": dl, "DefaultTZ": tz, "Zones": zones(rv.Legs, tz),
-		"Day": di, "Error": r.URL.Query().Get("error"),
+		"Day": di, "Error": errMsg, "Notice": r.URL.Query().Get("notice"),
+		"Milestones": unarrivedMilestones(rv.Legs),
 		// What the form needs to say, before posting, what will be published:
 		// the private cells the fuzz toggle pre-ticks itself for, and which way
 		// PIN_PRECISION tips that default. These are the ALREADY-FUZZED
@@ -1214,6 +1251,9 @@ func (a *App) postForm(w http.ResponseWriter, r *http.Request) {
 	}
 	if dl != nil {
 		data["PageLeg"] = dl.Slug
+	}
+	if status != http.StatusOK {
+		data["Status"] = status
 	}
 	a.render(w, r, "post_form.html", data)
 }
@@ -1488,6 +1528,24 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The milestone option: "" is a plain photo; a value must be a checkpoint of
+	// this ride with no arrival yet. Checked before anything is saved, so a
+	// refusal leaves no photo and no post behind.
+	var milestone *Checkpoint
+	if v := strings.TrimSpace(r.PostFormValue("milestone_id")); v != "" {
+		id, _ := strconv.ParseInt(v, 10, 64)
+		for _, c := range rideCheckpoints(rv.Legs) {
+			if c.ID == id && c.ArrivedAt == "" {
+				c := c
+				milestone = &c
+			}
+		}
+		if milestone == nil {
+			a.renderPostForm(w, r, http.StatusBadRequest, "milestone already reached or unknown")
+			return
+		}
+	}
+
 	tz := strings.TrimSpace(r.PostFormValue("tz"))
 	if _, err := time.LoadLocation(tz); err != nil || tz == "" {
 		if cp != nil {
@@ -1585,6 +1643,25 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	log.Printf("post %d: pin %s", post.ID, pinNote)
 	a.melt.Event("post_created", map[string]any{"pin_source": post.PinSource, "has_photo": photo != nil,
 		"exif_gps": photo != nil && photo.Lat != nil, "fuzzed": pinFuzzed})
+	if milestone != nil {
+		// The photo's own time, read as the milestone's wall clock, else now.
+		at := time.Now()
+		if photo != nil && photo.TakenAt != "" {
+			if t, ok := parseUTC(photo.TakenAt); ok {
+				lt := t.In(loc)
+				at = time.Date(lt.Year(), lt.Month(), lt.Day(), lt.Hour(), lt.Minute(), lt.Second(), 0, loadLoc(milestone.TZ))
+			}
+		}
+		if err := a.arriveCheckpoint(milestone, at, nil); err != nil {
+			fail("The post is saved, but the milestone could not be marked: " + err.Error())
+			return
+		}
+		log.Printf("post %d: milestone %d (%s) marked reached from the photo", post.ID, milestone.Ord, milestone.Name)
+		// Never a silent arrival: the form says what it just did.
+		msg := "Marked " + milestone.Name + " reached at " + at.In(loadLoc(milestone.TZ)).Format("3:04 PM MST")
+		http.Redirect(w, r, "/driver/post?notice="+url.QueryEscape(msg), http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/#post-"+strconv.FormatInt(post.ID, 10), http.StatusSeeOther)
 }
 
@@ -1702,7 +1779,13 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := a.store.SetArrived(id, at, loc); err != nil {
+	var stampErr error
+	if clearing {
+		stampErr = a.store.SetArrived(id, at, loc)
+	} else {
+		stampErr = a.arriveCheckpoint(cp, at, loc)
+	}
+	if stampErr != nil {
 		http.Error(w, "could not stamp", 500)
 		return
 	}
@@ -1715,14 +1798,6 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 	if !clearing && !at.Equal(time.Time{}) && r.PostFormValue("at") != "" {
 		when = " (at " + utcString(at) + ", supplied)"
 	}
-	if !clearing {
-		delta := 0
-		if pa, err := time.Parse(time.RFC3339, cp.PlannedArrive); err == nil {
-			delta = int(at.Sub(pa).Round(time.Minute) / time.Minute)
-		}
-		a.melt.Event("checkpoint_arrived", map[string]any{"name": cp.Name, "delta_min": delta})
-		a.scoreETAs(cp, at)
-	}
 	switch {
 	case clearing:
 		log.Printf("checkpoint %d (%s): arrival cleared; the location stays", cp.Ord, cp.Name)
@@ -1734,6 +1809,23 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 		log.Printf("checkpoint %d (%s): arrived%s, location adopted → precision exact", cp.Ord, cp.Name, when)
 	}
 	http.Redirect(w, r, backTo(r, "/driver/post"), http.StatusSeeOther)
+}
+
+// arriveCheckpoint is the one arrival path: it stamps the checkpoint, tells
+// the bus how far off plan it was, and scores the ETAs the screen showed for
+// the stop. The one-tap button, a back-dated repair and a photo's milestone
+// option all come through here.
+func (a *App) arriveCheckpoint(cp *Checkpoint, at time.Time, loc *LatLng) error {
+	if err := a.store.SetArrived(cp.ID, at, loc); err != nil {
+		return err
+	}
+	delta := 0
+	if pa, err := time.Parse(time.RFC3339, cp.PlannedArrive); err == nil {
+		delta = int(at.Sub(pa).Round(time.Minute) / time.Minute)
+	}
+	a.melt.Event("checkpoint_arrived", map[string]any{"name": cp.Name, "delta_min": delta})
+	a.scoreETAs(cp, at)
+	return nil
 }
 
 // scoreETAs scores the ETAs the screen showed for this stop and tells the bus

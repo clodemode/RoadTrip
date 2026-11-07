@@ -1,24 +1,10 @@
 {{template "head" .}}
 <section class="card narrow admin">
   <div class="card-body">
-  <h1>Post</h1>
+  <h1>Post a Photo</h1>
   <p class="muted small">{{.Day.Badge}}{{with .DefaultLeg}} &middot; leg {{.Ord}}: {{.Name}}{{end}}</p>
   {{with .Error}}<p class="error">{{.}}</p>{{end}}
-
-  {{with .DefaultLeg}}
-  <div class="arrive-strip">
-    {{range .Checkpoints}}
-    <form method="post" action="/driver/checkpoint/{{.ID}}/arrive" class="d-inline">
-      {{if .ArrivedAt}}
-        <input type="hidden" name="clear" value="1">
-        <button class="btn btn-sm btn-outline-secondary" title="arrived {{local .ArrivedAt .TZ}}, tap to undo">Arrived: {{.Name}} (undo)</button>
-      {{else}}
-        <button class="btn btn-sm btn-primary" title="stamp arrival now">Arrived: {{.Name}}</button>
-      {{end}}
-    </form>
-    {{end}}
-  </div>
-  {{end}}
+  {{with .Notice}}<p class="muted small">{{.}}</p>{{end}}
 
   <form method="post" action="/driver/post" enctype="multipart/form-data" class="d-flex flex-column gap-3 mt-3">
     <label class="form-label d-block">Photo (JPEG)
@@ -72,6 +58,17 @@
       <label class="form-check touch"><input class="form-check-input" type="checkbox" name="fuzz_location" id="f-fuzz" value="1">
         <span>Fuzz location <span class="muted small">&mdash; publish a 5 km cell, not the point</span></span></label>
       <p class="muted small" id="pin-publishes">publishes as: &mdash;</p>
+    </fieldset>
+    <fieldset class="milestone">
+      <legend>Milestone (optional)</legend>
+      <label class="form-check"><input class="form-check-input" type="radio" name="milestone_id" value="" checked>
+        <span>Just a photo</span></label>
+      {{range .Milestones}}
+      <label class="form-check" data-lat="{{.Lat}}" data-lng="{{.Lng}}">
+        <input class="form-check-input" type="radio" name="milestone_id" value="{{.ID}}">
+        <span class="ms-name">{{.Name}}</span> <span class="muted small">&middot; {{.Label}}</span><span class="ms-near muted small" hidden>near you</span></label>
+      {{end}}
+      <p class="muted small mb-0">Choosing one marks it reached at the photo&rsquo;s own time.</p>
     </fieldset>
     <button type="submit" class="btn btn-primary btn-lg">Post</button>
     <p class="muted small">Best pin: choose from Photo Library &mdash; the photo keeps its own GPS and time, and it is read here before you post. Taking the photo here works too, on the phone&rsquo;s own location, since Safari strips GPS from live camera shots. Otherwise the pin lands on the checkpoint you picked.</p>
