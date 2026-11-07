@@ -113,3 +113,23 @@ func TestWazeLinkShape(t *testing.T) {
 		t.Errorf("ll only: %q want %q", got, want)
 	}
 }
+
+func TestMapLinksGiveWazeGoogleAndAppleFromOneHelper(t *testing.T) {
+	l := mapLinks(30.4, -97.9, "Old Mill Roasters")
+	if l.Waze != wazeLink("Old Mill Roasters", 30.4, -97.9) {
+		t.Errorf("waze: %q", l.Waze)
+	}
+	if want := "https://www.google.com/maps/dir/?api=1&destination=30.4,-97.9"; l.Google != want {
+		t.Errorf("google: %q want %q", l.Google, want)
+	}
+	if want := "https://maps.apple.com/?daddr=30.4,-97.9&q=Old+Mill+Roasters"; l.Apple != want {
+		t.Errorf("apple: %q want %q", l.Apple, want)
+	}
+	// No coordinates (a private, snapped place): the name goes, escaped, never a 0,0.
+	n := mapLinks(0, 0, "Cedar Camp, ZZ & more")
+	if strings.Contains(n.Google, "0,0") || strings.Contains(n.Apple, "0,0") ||
+		n.Google != "https://www.google.com/maps/dir/?api=1&destination=Cedar+Camp%2C+ZZ+%26+more" ||
+		n.Apple != "https://maps.apple.com/?daddr=Cedar+Camp%2C+ZZ+%26+more" {
+		t.Errorf("name only: %q %q", n.Google, n.Apple)
+	}
+}

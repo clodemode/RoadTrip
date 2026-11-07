@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const ttKey = "tt-key-for-tests-only"
@@ -18,6 +19,7 @@ type ttStub struct {
 	srv                  *httptest.Server
 	geo, route, along    atomic.Int32
 	geoBody, routeStatus string
+	routeBody            string
 	alongBody            map[string]string // by query word; "500" is a failure
 	mu                   sync.Mutex
 	alongReq             []string
@@ -52,7 +54,10 @@ func newTT(t *testing.T) *ttStub {
 			s.mu.Lock()
 			s.alongReq = append(s.alongReq, q+"|"+r.URL.Query().Get("maxDetourTime"))
 			s.mu.Unlock()
-			body := s.alongBody[q]
+			body, known := s.alongBody[q]
+			if !known {
+				body = `{"results":[]}`
+			}
 			if body == "500" {
 				http.Error(w, "boom "+r.URL.RawQuery, 500)
 				return
@@ -68,6 +73,10 @@ func newTT(t *testing.T) *ttStub {
 			}
 			if s.routeStatus != "" {
 				http.Error(w, "boom "+r.URL.RawQuery, 500)
+				return
+			}
+			if s.routeBody != "" {
+				w.Write([]byte(s.routeBody))
 				return
 			}
 			w.Write([]byte(routeOK))
@@ -163,6 +172,10 @@ func TestFreeDestinedHUDGivesDistanceETAWazeAndHazardsAlongTheRoute(t *testing.T
 	}
 	if !strings.HasPrefix(f.Waze, "https://waze.com/ul?") || !strings.Contains(f.Waze, "ll=30.4%2C-97.9") {
 		t.Fatalf("waze to the destination: %q", f.Waze)
+	}
+	if f.Google != "https://www.google.com/maps/dir/?api=1&destination=30.4,-97.9" ||
+		!strings.HasPrefix(f.Apple, "https://maps.apple.com/?daddr=30.4,-97.9&q=") {
+		t.Fatalf("google and apple links to the destination: %q %q", f.Google, f.Apple)
 	}
 	if !strings.Contains(chipTexts(h.Hazards), "Flood Watch") {
 		t.Fatalf("hazards: %s", chipTexts(h.Hazards))
@@ -276,31 +289,53 @@ func findPicks(t *testing.T, app *App, c *http.Cookie, fix bool) freePicksOut {
 	return o
 }
 
-func TestFreePicksCandidatesChesterNotesHonestStatesAndCost(t *testing.T) {
+func allQueries(c freeCat) []string { return c.Queries }
+
+// fillAll answers every query of every category with the same two places.
+func fillAll(tt *ttStub) {
+	for _, c := range freeCats {
+		for _, q := range allQueries(c) {
+			tt.alongBody[q] = coffeeRes
+		}
+	}
+}
+
+const allNotes = `{"picks":[{"id":"coffee-1","note":"a"},{"id":"food-1","note":"b"},{"id":"music-1","note":"c"},{"id":"evening-1","note":"e"},{"id":"outdoors-1","note":"d"},{"id":"culture-1","note":"f"}]}`
+
+func TestFreePicksSpanTheCategoriesHonestStatesAndCost(t *testing.T) {
 	tt := newTT(t)
 	tt.alongBody["coffee shop"] = coffeeRes
-	tt.alongBody["fried chicken"] = `{"results":[]}`
-	tt.alongBody["state park"] = "500"
-	stub := newAPIStub(t, messageJSON(`Sure: {"picks":[{"id":"coffee-2","note":"Small roaster, local owner."},{"id":"ghost-9","note":"invented"}]}`))
+	tt.alongBody["museum"] = coffeeRes // Chester will drop these
+	tt.alongBody["state park"] = "500" // outdoors: one source failed and nothing else answered
+	stub := newAPIStub(t, messageJSON(`Sure: {"picks":[{"id":"coffee-1","note":"Small roaster, local owner."},{"id":"ghost-9","note":"invented"}]}`))
 	app, c := picksApp(t, tt, stub)
 
 	o := findPicks(t, app, c, true)
-	if o.State != "ok" || o.Chester != "ok" || len(o.Cats) != 3 {
-		t.Fatalf("picks: %+v", o)
+	keys := map[string]freeCatOut{}
+	var order []string
+	for _, k := range o.Cats {
+		keys[k.Key] = k
+		order = append(order, k.Key)
 	}
-	cof, chk, swim := o.Cats[0], o.Cats[1], o.Cats[2]
-	// Chester dropped the chain and ranked the roaster first, with its note and TomTom's detour.
+	if o.State != "ok" || o.Chester != "ok" || strings.Join(order, ",") != "coffee,food,music,outdoors,culture" {
+		t.Fatalf("the daytime categories, in order, no evening music at 3:40 pm: %v %+v", order, o)
+	}
+	cof := keys["coffee"]
 	if cof.State != "items" || len(cof.Picks) != 1 || cof.Picks[0].Name != "Old Mill Roasters" ||
 		cof.Picks[0].Note != "Small roaster, local owner." || cof.Picks[0].Detour != "2 min detour" ||
-		!strings.HasPrefix(cof.Picks[0].Waze, "https://waze.com/ul?") {
+		!strings.HasPrefix(cof.Picks[0].Waze, "https://waze.com/ul?") ||
+		!strings.HasPrefix(cof.Picks[0].Google, "https://www.google.com/maps/dir/?api=1&destination=30.31,-97.81") ||
+		!strings.HasPrefix(cof.Picks[0].Apple, "https://maps.apple.com/?daddr=30.31,-97.81&q=Old+Mill+Roasters") {
 		t.Fatalf("coffee: %+v", cof)
 	}
-	// A source that answered empty says none; one that failed says unavailable, never empty.
-	if chk.State != "empty" || !strings.Contains(chk.Text, "no fried chicken") {
-		t.Fatalf("chicken: %+v", chk)
+	if f := keys["food"]; f.State != "empty" || !strings.Contains(f.Text, "no standout food") {
+		t.Fatalf("food: %+v", f)
 	}
-	if swim.State != "unavailable" || !strings.Contains(swim.Text, "unavailable") || strings.Contains(swim.Text, "none") {
-		t.Fatalf("swim: %+v", swim)
+	if m := keys["culture"]; m.State != "empty" || !strings.Contains(m.Text, "worth the stop") {
+		t.Fatalf("Chester may drop dull ones: %+v", m)
+	}
+	if u := keys["outdoors"]; u.State != "unavailable" || !strings.Contains(u.Text, "unavailable") || strings.Contains(u.Text, "none") {
+		t.Fatalf("outdoors: %+v", u)
 	}
 	if !tt.sawKey.Load() {
 		t.Fatal("TomTom was never sent the key")
@@ -310,43 +345,185 @@ func TestFreePicksCandidatesChesterNotesHonestStatesAndCost(t *testing.T) {
 			t.Errorf("detour cap not sent: %s", q)
 		}
 	}
-	// One Anthropic call, with web search capped at 3, told the taste words.
-	req := stub.request(0)
 	if n := len(stub.requests()); n != 1 {
 		t.Fatalf("anthropic calls: %d", n)
 	}
 	raw := string(stub.requests()[0].Body)
-	if !strings.Contains(raw, `"max_uses":3`) || !strings.Contains(raw, "web_search") || !strings.Contains(raw, "not chains") ||
-		!strings.Contains(raw, "free state park with good swimming") || strings.Contains(raw, ttKey) {
-		t.Fatalf("request: %s", raw)
+	for _, want := range []string{`"max_uses":3`, "web_search", "not chains", "CATEGORY coffee", "CATEGORY culture", "museums, historic sites"} {
+		if !strings.Contains(raw, want) {
+			t.Errorf("request lacks %q", want)
+		}
 	}
-	_ = req
-	// Cost is logged like any Chester question.
+	if strings.Contains(raw, ttKey) {
+		t.Fatal("the TomTom key went to Anthropic")
+	}
 	rows := chesterRows(t, app)
 	if len(rows) != 1 || rows[0].Mode != "picks" || rows[0].USD <= 0 || rows[0].Searches != 2 || rows[0].PromptVersion != freePicksVersion {
 		t.Fatalf("log: %+v", rows)
 	}
 }
 
-func TestFreePicksAreCachedTenMinutesWhenWhole(t *testing.T) {
+func TestFreeFoodMergesCuisinesAndDropsTheSamePlaceTwice(t *testing.T) {
 	tt := newTT(t)
-	for _, q := range []string{"coffee shop", "fried chicken", "state park"} {
-		tt.alongBody[q] = coffeeRes
-	}
-	stub := newAPIStub(t, messageJSON(`{"picks":[{"id":"coffee-2","note":"x"},{"id":"chicken-2","note":"y"},{"id":"swim-2","note":"z"}]}`))
-	app, c := picksApp(t, tt, stub)
-	findPicks(t, app, c, true)
+	tt.alongBody["barbecue"] = `{"results":[{"poi":{"name":"Smoke Shack"},"address":{"municipality":"Lockhart","countrySubdivision":"TX"},"position":{"lat":30.3,"lon":-97.8},"detourTime":300}]}`
+	tt.alongBody["indian restaurant"] = `{"results":[{"poi":{"name":"Smoke Shack"},"address":{"municipality":"Lockhart","countrySubdivision":"TX"},"position":{"lat":30.3,"lon":-97.8},"detourTime":300},
+ {"poi":{"name":"Masala House"},"address":{"municipality":"Austin","countrySubdivision":"TX"},"position":{"lat":30.32,"lon":-97.82},"detourTime":200}]}`
+	app, c := picksApp(t, tt, nil)
 	o := findPicks(t, app, c, true)
-	if !o.Cached || tt.along.Load() != 3 || len(stub.requests()) != 1 {
-		t.Fatalf("second tap must come from the cache: cached=%v along=%d chester=%d", o.Cached, tt.along.Load(), len(stub.requests()))
+	var food freeCatOut
+	for _, k := range o.Cats {
+		if k.Key == "food" {
+			food = k
+		}
+	}
+	if len(food.Picks) != 2 || food.Picks[0].Name != "Masala House" || food.Picks[1].Name != "Smoke Shack" || food.Picks[0].ID != "food-1" {
+		t.Fatalf("food: %+v", food)
+	}
+}
+
+func eveningRoute(arrival string, far bool) string {
+	last := `{"latitude":30.40,"longitude":-97.90}`
+	if far {
+		last = `{"latitude":35.40,"longitude":-97.90}`
+	}
+	return `{"routes":[{"summary":{"lengthInMeters":24140,"travelTimeInSeconds":1500,"trafficDelayInSeconds":0,"arrivalTime":"` + arrival + `"},
+ "legs":[{"points":[{"latitude":30.20,"longitude":-97.80},{"latitude":30.30,"longitude":-97.88},` + last + `]}]}]}`
+}
+
+func catKeys(o freePicksOut) string {
+	var ks []string
+	for _, k := range o.Cats {
+		ks = append(ks, k.Key)
+	}
+	return strings.Join(ks, ",")
+}
+
+func TestFreeEveningMusicOnlyNearTheEndOfDayWithAnEveningETA(t *testing.T) {
+	for _, tc := range []struct {
+		name, arrival string
+		far, want     bool
+	}{
+		{"near and evening", "2026-11-07T18:40:00-06:00", false, true},
+		{"near but mid-afternoon", "2026-11-07T15:40:00-06:00", false, false},
+		{"evening but far away", "2026-11-07T18:40:00-06:00", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tt := newTT(t)
+			tt.routeBody = eveningRoute(tc.arrival, tc.far)
+			app, c := picksApp(t, tt, nil)
+			got := strings.Contains(catKeys(findPicks(t, app, c, true)), "evening")
+			if got != tc.want {
+				t.Fatalf("evening category present=%v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func clockAt(app *App, ts string) {
+	t, _ := time.Parse(time.RFC3339, ts)
+	app.free.now = func() time.Time { return t }
+}
+
+func TestFreePlacesAreCachedADayAndSharedAcrossUsers(t *testing.T) {
+	tt := newTT(t)
+	fillAll(tt)
+	stub := newAPIStub(t, messageJSON(allNotes), messageJSON(allNotes), messageJSON(allNotes))
+	app, c := picksApp(t, tt, stub)
+	clockAt(app, "2026-11-07T12:00:00Z")
+	findPicks(t, app, c, true)
+	calls := tt.along.Load()
+	if calls < 10 {
+		t.Fatalf("a cold tap asks TomTom per query: %d", calls)
+	}
+	o := findPicks(t, app, c, true)
+	if !o.Cached || tt.along.Load() != calls || len(stub.requests()) != 1 {
+		t.Fatalf("second tap comes from the cache: cached=%v along=%d chester=%d", o.Cached, tt.along.Load(), len(stub.requests()))
+	}
+	// Another signed-in user on the same stretch reuses it too.
+	c2 := asUser(t, app, "dana", roleAdmin)
+	goDestined(t, app, c2, "hudson bend")
+	o2 := findPicks(t, app, c2, true)
+	if !o2.Cached || tt.along.Load() != calls || len(stub.requests()) != 1 || o2.Cats[0].Picks[0].Note != "a" {
+		t.Fatalf("shared across users: cached=%v along=%d chester=%d", o2.Cached, tt.along.Load(), len(stub.requests()))
+	}
+	// 23h later still cached (music has its own, shorter day).
+	clockAt(app, "2026-11-08T11:00:00Z")
+	findPicks(t, app, c, true)
+	coffeeCalls := 0
+	for _, q := range tt.alongReq {
+		if strings.HasPrefix(q, "coffee shop|") {
+			coffeeCalls++
+		}
+	}
+	if coffeeCalls != 1 {
+		t.Fatalf("coffee must be cached for 24 hours: %d calls", coffeeCalls)
+	}
+	// Past 24 hours it is asked again.
+	clockAt(app, "2026-11-08T12:00:01Z")
+	findPicks(t, app, c, true)
+	coffeeCalls = 0
+	for _, q := range tt.alongReq {
+		if strings.HasPrefix(q, "coffee shop|") {
+			coffeeCalls++
+		}
+	}
+	if coffeeCalls != 2 {
+		t.Fatalf("coffee must be asked again after 24 hours: %d calls", coffeeCalls)
+	}
+}
+
+func TestFreeMusicIsCachedOnlyUntilTheEndOfTheLocalDay(t *testing.T) {
+	tt := newTT(t)
+	fillAll(tt)
+	stub := newAPIStub(t, messageJSON(allNotes), messageJSON(allNotes))
+	app, c := picksApp(t, tt, stub)
+	count := func(prefix string) int {
+		n := 0
+		for _, q := range tt.alongReq {
+			if strings.HasPrefix(q, prefix) {
+				n++
+			}
+		}
+		return n
+	}
+	// The stub's ETA is 3:40 pm at -06:00, so that local day ends 06:00 UTC.
+	clockAt(app, "2026-11-08T05:00:00Z")
+	findPicks(t, app, c, true)
+	clockAt(app, "2026-11-08T05:59:00Z")
+	findPicks(t, app, c, true)
+	if count("live music bar|") != 1 || count("coffee shop|") != 1 {
+		t.Fatalf("before midnight local both are cached: music=%d coffee=%d", count("live music bar|"), count("coffee shop|"))
+	}
+	clockAt(app, "2026-11-08T06:01:00Z")
+	findPicks(t, app, c, true)
+	if count("live music bar|") != 2 || count("coffee shop|") != 1 {
+		t.Fatalf("after local midnight music is asked again, coffee is not: music=%d coffee=%d", count("live music bar|"), count("coffee shop|"))
+	}
+	if n := len(stub.requests()); n != 2 {
+		t.Fatalf("Chester ranks only the expired category again: %d calls", n)
+	}
+	if raw := string(stub.requests()[1].Body); !strings.Contains(raw, "CATEGORY music") || strings.Contains(raw, "CATEGORY coffee") {
+		t.Fatalf("second ranking should hold music only: %s", raw)
+	}
+}
+
+func TestFreeCandidatesAreKeptWhenChesterWasOffAndRankedLater(t *testing.T) {
+	tt := newTT(t)
+	fillAll(tt)
+	app, c := picksApp(t, tt, nil)
+	findPicks(t, app, c, true)
+	calls := tt.along.Load()
+	stub := newAPIStub(t, messageJSON(allNotes))
+	app.chester = newChester(chesterEnv(t, stub, nil))
+	o := findPicks(t, app, c, true)
+	if tt.along.Load() != calls || o.Chester != "ok" || o.Cached || o.Cats[0].Picks[0].Note != "a" || len(stub.requests()) != 1 {
+		t.Fatalf("TomTom is not asked again, Chester ranks now: along %d->%d %+v", calls, tt.along.Load(), o)
 	}
 }
 
 func TestFreePicksWithChesterOffSayTheyAreUnranked(t *testing.T) {
 	tt := newTT(t)
 	tt.alongBody["coffee shop"] = coffeeRes
-	tt.alongBody["fried chicken"] = `{"results":[]}`
-	tt.alongBody["state park"] = `{"results":[]}`
 	app, c := picksApp(t, tt, nil)
 	o := findPicks(t, app, c, true)
 	if o.Chester != "off" || !strings.Contains(o.Note, "Chester is off") || len(o.Cats[0].Picks) != 2 || o.Cats[0].Picks[0].Note != "" {
@@ -357,8 +534,6 @@ func TestFreePicksWithChesterOffSayTheyAreUnranked(t *testing.T) {
 func TestFreePicksChesterFailureKeepsTomTomsCandidates(t *testing.T) {
 	tt := newTT(t)
 	tt.alongBody["coffee shop"] = coffeeRes
-	tt.alongBody["fried chicken"] = `{"results":[]}`
-	tt.alongBody["state park"] = `{"results":[]}`
 	stub := newAPIStub(t, apiError(400, "invalid_request_error", "nope "+stubKey))
 	app, c := picksApp(t, tt, stub)
 	o := findPicks(t, app, c, true)
@@ -382,5 +557,18 @@ func TestFreePicksNeedAFixAndADestination(t *testing.T) {
 	}
 	if tt.along.Load() != 0 {
 		t.Fatal("no along-route call without a fix and a destination")
+	}
+}
+
+func TestEveryStopPageOffersWazeGoogleAndApple(t *testing.T) {
+	app := testApp(t)
+	c := asUser(t, app, "kris", roleAdmin)
+	for _, path := range []string{"/", "/driver"} {
+		body := doAs(t, app, c, "GET", path, nil).Body.String()
+		for _, want := range []string{"waze.com/ul?", "google.com/maps/dir/?api=1&amp;destination=", "maps.apple.com/?daddr="} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s lacks %s", path, want)
+			}
+		}
 	}
 }

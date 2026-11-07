@@ -46,6 +46,8 @@ type hudView struct {
 	NextName  string `json:"next_name"`
 	NextMiles string `json:"next_miles"`
 	Waze      string `json:"waze"`
+	Google    string `json:"google"`
+	Apple     string `json:"apple"`
 
 	Hazards []hazardChip `json:"hazards,omitempty"`
 
@@ -165,9 +167,11 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64) hudView 
 		}
 		// A private place is a snapped cell; Waze gets its name, never the cell.
 		if c.Precision == precisionFuzzed {
-			h.Waze = wazeLink(c.Name, 0, 0)
+			nav := mapLinks(0, 0, c.Name)
+			h.Waze, h.Google, h.Apple = nav.Waze, nav.Google, nav.Apple
 		} else {
-			h.Waze = wazeLink(c.Name, c.Lat, c.Lng)
+			nav := mapLinks(c.Lat, c.Lng, c.Name)
+			h.Waze, h.Google, h.Apple = nav.Waze, nav.Google, nav.Apple
 		}
 		// Do the clocks change somewhere ahead on this leg?
 		here := now.In(loadLoc(curTZ)).Format("MST")

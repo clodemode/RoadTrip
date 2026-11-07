@@ -68,6 +68,8 @@ func localFmt(utc, tz, layout string) string {
 func (a *App) funcs() template.FuncMap {
 	return template.FuncMap{
 		"waze":       func(name string, lat, lng float64) string { return wazeLink(name, lat, lng) },
+		"gmaps":      func(name string, lat, lng float64) string { return mapLinks(lat, lng, name).Google },
+		"applemaps":  func(name string, lat, lng float64) string { return mapLinks(lat, lng, name).Apple },
 		"askChester": askChesterLink,
 		"json": func(v any) template.JS {
 			b, err := json.Marshal(v)

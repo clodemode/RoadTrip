@@ -31,6 +31,7 @@
     <p class="hud-s" id="free-delay" hidden></p>
     <p class="hud-free-msg" id="free-msg" role="status" aria-live="polite"></p>
     <a class="btn btn-primary hud-waze" id="free-waze" href="#" rel="noopener" hidden>Navigate in Waze</a>
+    <p class="nav-alt" id="free-nav-alt" hidden><a class="btn btn-sm btn-outline-dark" id="free-google" href="#" rel="noopener">Google Maps</a> <a class="btn btn-sm btn-outline-dark" id="free-apple" href="#" rel="noopener">Apple Maps</a></p>
     <ul class="hud-chips" id="hud-chips" aria-label="Hazards on this route" aria-live="polite">
       <li class="hud-chip unknown">Weather: checking&hellip;</li>
       <li class="hud-chip unknown">Traffic: checking&hellip;</li>
@@ -48,6 +49,7 @@
     <h1 class="hud-next" id="hud-next">{{if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</h1>
     <p class="hud-dist"><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
     <a class="btn btn-primary hud-waze" id="hud-waze" href="{{if .H.HasNext}}{{.H.Waze}}{{else}}#{{end}}" rel="noopener"{{if not .H.HasNext}} hidden{{end}}>Navigate in Waze</a>
+    <p class="nav-alt" id="hud-nav-alt"{{if not .H.HasNext}} hidden{{end}}><a class="btn btn-sm btn-outline-dark" id="hud-google" href="{{if .H.HasNext}}{{.H.Google}}{{else}}#{{end}}" rel="noopener">Google Maps</a> <a class="btn btn-sm btn-outline-dark" id="hud-apple" href="{{if .H.HasNext}}{{.H.Apple}}{{else}}#{{end}}" rel="noopener">Apple Maps</a></p>
     <ul class="hud-chips" id="hud-chips" aria-label="Hazards on this leg" aria-live="polite">
       <li class="hud-chip unknown">Weather: checking&hellip;</li>
       <li class="hud-chip unknown">Traffic: checking&hellip;</li>

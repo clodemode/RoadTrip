@@ -41,26 +41,59 @@ const (
 	modeTrip     = "trip"
 	modeDestined = "destined"
 
-	freeCacheTTL     = 10 * time.Minute // geocode, route, picks: per user and destination
+	freeCacheTTL     = 10 * time.Minute // geocode and route: per user and destination
+	freePlaceTTL     = 24 * time.Hour   // along-route candidates and Chester's notes: places do not change in a day
+	freeEveningKm    = 80.0             // "near the end of the day's drive" for evening music
+	freeEveningHour  = 16               // an ETA at or after this local hour is "evening"
+	freeCandCap      = 10               // candidates per category shown to Chester
 	freeTimeout      = 5 * time.Second  // per TomTom call
 	freeOffRouteKm   = 5.0              // a fix further than this from the cached route asks for a new one
 	freeMaxDest      = 120
-	freePerCategory  = 5 // candidates asked of TomTom per category
+	freePerCategory  = 5 // candidates asked of TomTom per query
 	freeMaxPoints    = 100
 	freeDetourSecs   = 900 // maxDetourTime for along-route search
 	freePicksMaxUses = 3   // web searches Chester may run for one Find picks
-	freePicksVersion = "freelance-picks-1"
+	freePicksVersion = "freelance-picks-2"
 )
 
-// freeCat is one kind of pick. The list is fixed and small on purpose: add a
-// line to extend it. Query is what TomTom is asked for; Taste is what Chester
-// is told the driver likes.
-type freeCat struct{ Key, Label, Query, Taste string }
+// freeCat is one kind of pick. The list is data: add a line to extend it.
+// Queries are what TomTom is asked for (one along-route search each, merged
+// and de-duplicated); Taste is what Chester is told the driver likes. Daily
+// marks live-music picks, which are cached only to the end of the local day
+// (every other category lasts freePlaceTTL). Evening marks a category asked
+// only when the stop is near the end of the day's drive and the ETA is evening.
+type freeCat struct {
+	Key, Label, Taste string
+	Queries           []string
+	Daily, Evening    bool
+}
 
 var freeCats = []freeCat{
-	{"coffee", "Coffee", "coffee shop", "authentic local coffee, not chains"},
-	{"chicken", "Fried chicken", "fried chicken", "great fried chicken"},
-	{"swim", "Swimming / state parks", "state park", "free state park with good swimming"},
+	{Key: "coffee", Label: "Coffee", Queries: []string{"coffee shop"},
+		Taste: "great, authentic local coffee, not chains"},
+	{Key: "food", Label: "Standout food",
+		Queries: []string{"barbecue", "fried chicken", "indian restaurant", "asian restaurant", "diner"},
+		Taste:   "standout food worth a detour: Asian, Indian, BBQ, fried chicken, local diners; judge for yourself what is amazing and drop the merely ok"},
+	{Key: "music", Label: "Live music & happy hour", Daily: true, Queries: []string{"live music bar", "pub"},
+		Taste: "low-cost live music, or a good happy hour, at any time of day"},
+	{Key: "evening", Label: "Live music tonight", Daily: true, Evening: true, Queries: []string{"live music venue"},
+		Taste: "live music this evening near where the day's drive ends"},
+	{Key: "outdoors", Label: "Outdoors", Queries: []string{"state park", "swimming area", "scenic overlook"},
+		Taste: "state parks, free swimming, scenic stops"},
+	{Key: "culture", Label: "Culture", Queries: []string{"museum", "historic site"},
+		Taste: "museums, historic sites, local landmarks"},
+}
+
+// active is the categories asked for this tap.
+func activeCats(arrival time.Time, leftKm float64) []freeCat {
+	var out []freeCat
+	for _, c := range freeCats {
+		if c.Evening && !(leftKm <= freeEveningKm && arrival.Hour() >= freeEveningHour) {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 type freeState struct {
@@ -82,20 +115,21 @@ type freeRoute struct {
 }
 
 type freeEntry[T any] struct {
-	at  time.Time
+	exp time.Time
 	val T
 }
 
 type freeCache[T any] struct {
-	mu sync.Mutex
-	m  map[string]freeEntry[T]
+	mu  sync.Mutex
+	m   map[string]freeEntry[T]
+	ttl time.Duration // zero means freeCacheTTL
 }
 
 func (c *freeCache[T]) get(k string, now time.Time) (T, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	e, ok := c.m[k]
-	if !ok || now.Sub(e.at) >= freeCacheTTL {
+	if !ok || !now.Before(e.exp) {
 		var z T
 		return z, false
 	}
@@ -103,17 +137,25 @@ func (c *freeCache[T]) get(k string, now time.Time) (T, bool) {
 }
 
 func (c *freeCache[T]) put(k string, v T, now time.Time) {
+	ttl := c.ttl
+	if ttl == 0 {
+		ttl = freeCacheTTL
+	}
+	c.putUntil(k, v, now, now.Add(ttl))
+}
+
+func (c *freeCache[T]) putUntil(k string, v T, now, exp time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.m == nil {
 		c.m = map[string]freeEntry[T]{}
 	}
 	for kk, e := range c.m {
-		if now.Sub(e.at) >= freeCacheTTL {
+		if !now.Before(e.exp) {
 			delete(c.m, kk)
 		}
 	}
-	c.m[k] = freeEntry[T]{now, v}
+	c.m[k] = freeEntry[T]{exp, v}
 }
 
 func (c *freeCache[T]) drop(k string) {
@@ -134,12 +176,21 @@ type freeSvc struct {
 
 	geo    freeCache[freeState]
 	routes freeCache[freeRoute]
-	picks  freeCache[freePicksOut]
+	// Places are shared by every user and keyed by area and category, not by
+	// person: raw TomTom candidates, and Chester's annotated result.
+	cands  freeCache[[]freePick]
+	places freeCache[freeCatOut]
 }
 
 func newFreeSvc(key string) *freeSvc {
-	return &freeSvc{ttBase: "https://api.tomtom.com", key: key, client: &http.Client{},
-		timeout: freeTimeout, now: time.Now, state: map[string]*freeState{}}
+	return initPlaceTTL(&freeSvc{ttBase: "https://api.tomtom.com", key: key, client: &http.Client{},
+		timeout: freeTimeout, now: time.Now, state: map[string]*freeState{}})
+}
+
+// initPlaceTTL is newFreeSvc with the place caches set to their long life.
+func initPlaceTTL(s *freeSvc) *freeSvc {
+	s.cands.ttl, s.places.ttl = freePlaceTTL, freePlaceTTL
+	return s
 }
 
 func (a *App) freeSvc() *freeSvc {
@@ -368,6 +419,8 @@ type freeView struct {
 	ETA      string `json:"eta"`
 	Delay    string `json:"delay,omitempty"`
 	Waze     string `json:"waze,omitempty"`
+	Google   string `json:"google,omitempty"`
+	Apple    string `json:"apple,omitempty"`
 	CanPicks bool   `json:"can_picks"`
 }
 
@@ -390,7 +443,8 @@ func (a *App) freeHUD(ctx context.Context, user string, st freeState, lat, lng *
 		}
 		return v, nil
 	}
-	v.Waze = wazeLink(st.Label, st.Lat, st.Lng)
+	nav := mapLinks(st.Lat, st.Lng, st.Label)
+	v.Waze, v.Google, v.Apple = nav.Waze, nav.Google, nav.Apple
 	if lat == nil || lng == nil {
 		v.State = "no_fix"
 		v.Text = "No position fix yet, so there is no distance or arrival time. Waze can still take you there."
@@ -465,6 +519,8 @@ type freePick struct {
 	Detour string  `json:"detour,omitempty"`
 	Note   string  `json:"note,omitempty"`
 	Waze   string  `json:"waze"`
+	Google string  `json:"google"`
+	Apple  string  `json:"apple"`
 	secs   float64 // detour, for ordering
 	lat    float64
 	lng    float64
@@ -476,6 +532,10 @@ type freeCatOut struct {
 	State string     `json:"state"` // items, empty, unavailable
 	Text  string     `json:"text,omitempty"`
 	Picks []freePick `json:"picks,omitempty"`
+
+	taste  string // what Chester is told, kept so a mixed cached/fresh set is ranked right
+	cached bool   // Chester's annotations came from the cache; not ranked again
+	cat    freeCat
 }
 
 type freePicksOut struct {
@@ -487,8 +547,8 @@ type freePicksOut struct {
 	Cached  bool         `json:"cached,omitempty"`
 }
 
-// alongRoute asks TomTom for one category's places along the route ahead.
-func (s *freeSvc) alongRoute(ctx context.Context, c freeCat, pts []ll) ([]freePick, error) {
+// alongQuery asks TomTom for one query's places along the route ahead.
+func (s *freeSvc) alongQuery(ctx context.Context, query string, pts []ll) ([]freePick, error) {
 	type pt struct {
 		Lat float64 `json:"lat"`
 		Lon float64 `json:"lon"`
@@ -510,13 +570,13 @@ func (s *freeSvc) alongRoute(ctx context.Context, c freeCat, pts []ll) ([]freePi
 			DetourTime float64                    `json:"detourTime"`
 		} `json:"results"`
 	}
-	u := s.ttBase + "/search/2/searchAlongRoute/" + url.PathEscape(c.Query) + ".json?" + s.q(url.Values{
+	u := s.ttBase + "/search/2/searchAlongRoute/" + url.PathEscape(query) + ".json?" + s.q(url.Values{
 		"maxDetourTime": {strconv.Itoa(freeDetourSecs)}, "limit": {strconv.Itoa(freePerCategory)}})
 	if err := s.call(ctx, http.MethodPost, u, map[string]any{"route": route}, &body); err != nil {
 		return nil, err
 	}
 	var out []freePick
-	for i, r := range body.Results {
+	for _, r := range body.Results {
 		if r.POI.Name == "" {
 			continue
 		}
@@ -524,16 +584,76 @@ func (s *freeSvc) alongRoute(ctx context.Context, c freeCat, pts []ll) ([]freePi
 		if town != "" && r.Address.Region != "" {
 			town += ", " + r.Address.Region
 		}
-		p := freePick{ID: fmt.Sprintf("%s-%d", c.Key, i+1), Name: cleanLine(r.POI.Name, 100), Town: cleanLine(town, 80),
-			secs: r.DetourTime, lat: r.Position.Lat, lng: r.Position.Lon}
-		if r.DetourTime > 0 {
-			p.Detour = fmt.Sprintf("%d min detour", int(math.Max(1, math.Round(r.DetourTime/60))))
-		}
-		p.Waze = wazeLink(p.Name+" "+p.Town, p.lat, p.lng)
-		out = append(out, p)
+		out = append(out, freePick{Name: cleanLine(r.POI.Name, 100), Town: cleanLine(town, 80),
+			secs: r.DetourTime, lat: r.Position.Lat, lng: r.Position.Lon})
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].secs < out[j].secs })
 	return out, nil
+}
+
+// alongCat runs a category's queries together and merges them: one place
+// found twice is kept once, nearest first, at most freeCandCap. It fails only
+// when a query failed and nothing else answered.
+func (s *freeSvc) alongCat(ctx context.Context, c freeCat, pts []ll) ([]freePick, error) {
+	res := make([][]freePick, len(c.Queries))
+	errs := make([]error, len(c.Queries))
+	var wg sync.WaitGroup
+	for i, q := range c.Queries {
+		wg.Add(1)
+		go func(i int, q string) {
+			defer wg.Done()
+			res[i], errs[i] = s.alongQuery(ctx, q, pts)
+		}(i, q)
+	}
+	wg.Wait()
+	var all []freePick
+	seen := map[string]bool{}
+	for _, r := range res {
+		for _, p := range r {
+			k := fmt.Sprintf("%s|%.4f|%.4f", strings.ToLower(p.Name), p.lat, p.lng)
+			if !seen[k] {
+				seen[k] = true
+				all = append(all, p)
+			}
+		}
+	}
+	if len(all) == 0 {
+		for _, e := range errs {
+			if e != nil {
+				return nil, e
+			}
+		}
+		return nil, nil
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].secs < all[j].secs })
+	if len(all) > freeCandCap {
+		all = all[:freeCandCap]
+	}
+	for i := range all {
+		p := &all[i]
+		p.ID = fmt.Sprintf("%s-%d", c.Key, i+1)
+		if p.secs > 0 {
+			p.Detour = fmt.Sprintf("%d min detour", int(math.Max(1, math.Round(p.secs/60))))
+		}
+		nav := mapLinks(p.lat, p.lng, p.Name+" "+p.Town)
+		p.Waze, p.Google, p.Apple = nav.Waze, nav.Google, nav.Apple
+	}
+	return all, nil
+}
+
+// corridorKey names a stretch of road by its rounded shape (about 11 km), so
+// the same stretch asked again, by anyone, finds the same places.
+func corridorKey(ahead []ll) string {
+	var sb strings.Builder
+	for _, p := range evenPoints(ahead, 6) {
+		fmt.Fprintf(&sb, "%.1f,%.1f;", p.Lat, p.Lng)
+	}
+	return sb.String()
+}
+
+// endOfLocalDay is the next midnight in the ETA's own zone.
+func endOfLocalDay(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d+1, 0, 0, 0, 0, t.Location())
 }
 
 // freePicks is POST /driver/freelance/picks: only on a tap, never on a HUD
@@ -556,11 +676,6 @@ func (a *App) buildPicks(r *http.Request) freePicksOut {
 	if lat == nil || lng == nil {
 		return freePicksOut{State: "no_fix", Text: "No position fix yet, so there is no route to search along."}
 	}
-	ck := user + "|" + strings.ToLower(st.Query)
-	if c, ok := s.picks.get(ck, s.now()); ok {
-		c.Cached = true
-		return c
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
 	rt, err := s.route(ctx, user, st, *lat, *lng)
@@ -568,15 +683,39 @@ func (a *App) buildPicks(r *http.Request) freePicksOut {
 		return freePicksOut{State: "route_unavailable", Text: "No route to search along: " + freeWhy(err) + "."}
 	}
 	ahead := aheadOf(rt.Points, *lat, *lng)
+	left, _ := remainingKm(rt.Points, *lat, *lng)
+	todo := activeCats(rt.Arrival, left)
+	corridor := corridorKey(ahead)
+	now := s.now()
+	// Live music lasts until the end of the day at the place; the rest a day.
+	expiry := func(c freeCat) time.Time {
+		if c.Daily {
+			return endOfLocalDay(rt.Arrival)
+		}
+		return now.Add(freePlaceTTL)
+	}
 
-	cats := make([]freeCatOut, len(freeCats))
+	cats := make([]freeCatOut, len(todo))
 	var wg sync.WaitGroup
-	for i, c := range freeCats {
+	for i, c := range todo {
+		pk := c.Key + "|" + corridor
+		if hit, ok := s.places.get(pk, now); ok {
+			hit.cached = true
+			cats[i] = hit
+			continue
+		}
 		wg.Add(1)
-		go func(i int, c freeCat) {
+		go func(i int, c freeCat, pk string) {
 			defer wg.Done()
-			picks, err := s.alongRoute(ctx, c, ahead)
-			co := freeCatOut{Key: c.Key, Label: c.Label}
+			co := freeCatOut{Key: c.Key, Label: c.Label, taste: c.Taste, cat: c}
+			picks, ok := s.cands.get(pk, now)
+			var err error
+			if !ok {
+				picks, err = s.alongCat(ctx, c, ahead)
+				if err == nil {
+					s.cands.putUntil(pk, picks, now, expiry(c))
+				}
+			}
 			switch {
 			case err != nil:
 				co.State, co.Text = "unavailable", c.Label+" picks unavailable: "+freeWhy(err)+"."
@@ -586,33 +725,37 @@ func (a *App) buildPicks(r *http.Request) freePicksOut {
 				co.State, co.Picks = "items", picks
 			}
 			cats[i] = co
-		}(i, c)
+		}(i, c, pk)
 	}
 	wg.Wait()
 
 	out := freePicksOut{State: "ok", Cats: cats}
-	a.enrichPicks(ctx, &out)
-	// An answer in which something was unavailable is not worth holding for
-	// ten minutes: the retry should be able to succeed.
-	cacheable := out.Chester == "ok"
+	allCached := true
 	for _, c := range cats {
-		if c.State == "unavailable" {
-			cacheable = false
-		}
+		allCached = allCached && c.cached
 	}
-	if cacheable {
-		s.picks.put(ck, out, s.now())
+	out.Cached = allCached
+	a.enrichPicks(ctx, &out)
+	// What Chester ranked is a place's note, and lasts like the place. A
+	// category that was unavailable, or that Chester did not get to, is not
+	// held: the retry should be able to succeed.
+	if out.Chester == "ok" {
+		for i, c := range cats {
+			if !c.cached && c.State != "unavailable" {
+				s.places.putUntil(c.Key+"|"+corridor, c, now, expiry(todo[i]))
+			}
+		}
 	}
 	return out
 }
 
-const freePicksSystem = `You help a driver choose stops along a route. You are given candidate places found by a map search, each with an id, a category and a detour. For each category keep the best candidates that fit the driver's taste, at most three, best first, and drop poor fits (for example chains when the taste says not chains). You may use web search, a few times at most, to check a place. Use only the ids you were given and never invent a place.
+const freePicksSystem = `You help a driver choose stops along a route. You are given candidate places found by a map search, each with an id, a category and a detour. For each category keep the best candidates that fit the driver's taste, at most three, best first, and drop poor fits and dull ones (for example chains when the taste says not chains); you decide what counts as amazing, and a category may end up with none. You may use web search, a few times at most, to check a place. Use only the ids you were given and never invent a place.
 Reply with ONLY a JSON object, no other words: {"picks":[{"id":"<id>","note":"<one plain sentence under 140 characters on why it fits, or what to check>"}]}`
 
 func (a *App) enrichPicks(ctx context.Context, out *freePicksOut) {
 	haveAny := false
 	for _, c := range out.Cats {
-		if c.State == "items" {
+		if c.State == "items" && !c.cached {
 			haveAny = true
 		}
 	}
@@ -643,8 +786,13 @@ func (a *App) enrichPicks(ctx context.Context, out *freePicksOut) {
 	var sb strings.Builder
 	sb.WriteString("Candidates found along the route:\n")
 	known := map[string]bool{}
-	for i, c := range out.Cats {
-		sb.WriteString("\nCATEGORY " + c.Key + " (" + c.Label + "). Taste: " + freeCats[i].Taste + "\n")
+	var keys []string
+	for _, c := range out.Cats {
+		if c.State != "items" || c.cached {
+			continue
+		}
+		keys = append(keys, c.Key)
+		sb.WriteString("\nCATEGORY " + c.Key + " (" + c.Label + "). Taste: " + c.taste + "\n")
 		for _, p := range c.Picks {
 			known[p.ID] = true
 			sb.WriteString("- id " + p.ID + ": " + p.Name)
@@ -674,7 +822,7 @@ func (a *App) enrichPicks(ctx context.Context, out *freePicksOut) {
 	msg, err := a.chester.client.Beta.Messages.New(rctx, params)
 	ms := time.Since(start).Milliseconds()
 	row := &ChesterQuery{Ride: a.activeSlug(), AskedAt: utcString(now), TZ: "UTC", Mode: "picks",
-		Question: "along-route picks: " + freeCatKeys(), PromptVersion: freePicksVersion, Model: m.Model,
+		Question: "along-route picks: " + strings.Join(keys, ", "), PromptVersion: freePicksVersion, Model: m.Model,
 		Effort: m.Effort, TotalMS: ms, PosSource: "none"}
 	var text string
 	if err != nil {
@@ -710,14 +858,6 @@ func (a *App) enrichPicks(ctx context.Context, out *freePicksOut) {
 		log.Printf("ERROR chester: the picks call could not be logged: %v", err)
 	}
 	log.Printf("chester: a picks call ended (%s) in %d ms, %d search(es), %s", out.Chester, ms, row.Searches, usd4(row.USD))
-}
-
-func freeCatKeys() string {
-	var ks []string
-	for _, c := range freeCats {
-		ks = append(ks, c.Key)
-	}
-	return strings.Join(ks, ", ")
 }
 
 func reasonOf(ctx context.Context, err error) string {
@@ -759,7 +899,7 @@ func parsePickNotes(text string, known map[string]bool) ([]struct{ ID, Note stri
 func applyPickNotes(out *freePicksOut, notes []struct{ ID, Note string }) {
 	for ci := range out.Cats {
 		c := &out.Cats[ci]
-		if c.State != "items" {
+		if c.State != "items" || c.cached {
 			continue
 		}
 		byID := map[string]freePick{}

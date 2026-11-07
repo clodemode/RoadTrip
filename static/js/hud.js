@@ -39,6 +39,9 @@
     var w = $('free-waze');
     w.hidden = !f.waze;
     if (f.waze) w.setAttribute('href', f.waze);
+    var alt = $('free-nav-alt');
+    alt.hidden = !f.google;
+    if (f.google) { $('free-google').setAttribute('href', f.google); $('free-apple').setAttribute('href', f.apple); }
     $('free-find').disabled = !f.can_picks;
   }
 
@@ -59,6 +62,9 @@
     var w = $('hud-waze');
     w.hidden = !h.has_next;
     if (h.has_next && h.waze) w.setAttribute('href', h.waze);
+    var alt = $('hud-nav-alt');
+    alt.hidden = !h.has_next;
+    if (h.has_next && h.google) { $('hud-google').setAttribute('href', h.google); $('hud-apple').setAttribute('href', h.apple); }
     paintChips(h);
   }
 
@@ -110,7 +116,7 @@
     var msg = [];
     if (o.text) msg.push(o.text);
     if (o.note) msg.push(o.note);
-    if (o.cached) msg.push('Shown from the last search (under 10 minutes old).');
+    if (o.cached) msg.push('Shown from a recent search of this stretch (places are kept up to a day; live music until tonight ends).');
     setText('free-picks-msg', msg.join(' '));
     (o.cats || []).forEach(function (c) {
       var sec = document.createElement('section');
@@ -133,12 +139,18 @@
         var meta = [k.town, k.detour].filter(Boolean).join(' \u00b7 ');
         if (meta) { var m = document.createElement('span'); m.className = 'hud-s'; m.textContent = meta; card.appendChild(m); }
         if (k.note) { var t = document.createElement('span'); t.textContent = k.note; card.appendChild(t); }
-        var a = document.createElement('a');
-        a.className = 'btn btn-primary btn-sm';
-        a.setAttribute('href', k.waze);
-        a.setAttribute('rel', 'noopener');
-        a.textContent = 'Waze';
-        card.appendChild(a);
+        var nav = document.createElement('div');
+        nav.className = 'nav-alt';
+        [['Waze', k.waze, 'btn-primary'], ['Google Maps', k.google, 'btn-outline-dark'], ['Apple Maps', k.apple, 'btn-outline-dark']].forEach(function (l) {
+          if (!l[1]) return;
+          var a = document.createElement('a');
+          a.className = 'btn btn-sm ' + l[2];
+          a.setAttribute('href', l[1]);
+          a.setAttribute('rel', 'noopener');
+          a.textContent = l[0];
+          nav.appendChild(a);
+        });
+        card.appendChild(nav);
         sec.appendChild(card);
       });
       box.appendChild(sec);
