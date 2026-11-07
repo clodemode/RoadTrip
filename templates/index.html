@@ -20,7 +20,7 @@
     {{range .Legs}}
     <li class="leg-chip{{if and $.Day.Today (eq $.Day.Today.ID .ID)}} today{{end}}" style="--leg:{{legColor .Ord}}">
       <a href="/legs/{{.Slug}}">
-        <span class="leg-n">{{.Ord}}</span>
+        {{if $.Multi}}<span class="leg-n">d{{.Ord}}</span>{{end}}
         <span class="leg-name">{{.Name}}</span>
         <span class="leg-sub figure">{{day .Date}} &middot; {{num .EstMiles}} mi</span>
       </a>
@@ -28,6 +28,8 @@
     {{end}}
   </ol>
 </section>
+
+{{template "hours_bar" .HoursBars}}
 
 <div id="map" data-mode="ride"></div>
 
@@ -42,7 +44,8 @@
         <span class="cp-label muted">{{.Label}}{{if eq .Precision "fuzzed"}} &middot; approximate{{end}}</span>
       </span>
       <span class="cp-time">
-        {{if .ArrivedAt}}<span class="arrived-at">Arrived {{local .ArrivedAt .TZ}}</span>
+        {{if .ArrivedAt}}<span class="arrived-at">{{if eq .Ord 1}}Left{{else}}Arrived{{end}} {{local .ArrivedAt .TZ}}</span>
+        {{else if .SkippedAt}}<span class="skipped-at muted">{{if eq .SkipReason "rerouted"}}Rerouted around{{else}}Missed{{end}}</span>
         {{else if .PlannedArrive}}<span class="muted">Plan: arrive {{clock .PlannedArrive .TZ}}</span>
         {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
         {{if $.Driver}}

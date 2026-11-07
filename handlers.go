@@ -744,6 +744,11 @@ type legJS struct {
 	Date  string          `json:"date"`
 	Color string          `json:"color"`
 	Line  json.RawMessage `json:"line"`
+	// Hours are the whole-hour points ON the planned line and HoursLine the
+	// stretch they measure, for the muted stick beside the route. Both are
+	// published-line points; see hoursbar.go.
+	Hours     []hourPoint `json:"hours,omitempty"`
+	HoursLine [][]float64 `json:"hours_line,omitempty"`
 }
 
 type cpJS struct {
@@ -876,10 +881,12 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	if dl := defaultLeg(rv.Legs, di); dl != nil {
 		pageLeg = dl.Slug
 	}
+	bars := a.hoursBars(rv.Ride.Slug, rv.Legs, allIndexes(len(rv.Legs)), len(rv.Legs) > 1)
 	data := map[string]any{
 		"Title": "", "Ride": rv.Ride, "Legs": rv.Legs, "Posts": posts,
-		"Day": di, "PageLeg": pageLeg,
-		"Map": buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts))}
+		"Day": di, "PageLeg": pageLeg, "Multi": len(rv.Legs) > 1,
+		"HoursBars": bars,
+		"Map":       withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
 	// The checklist in one line, n of m done. Counts only.
 	if sum, ok := a.store.ChecklistSummary(rv.Ride.Slug); ok {
 		data["Checklist"] = sum
@@ -916,12 +923,14 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	di := dayOf(rv.Ride, rv.Legs, time.Now())
+	bars := a.hoursBars(rv.Ride.Slug, rv.Legs, []int{legIndex(rv.Legs, leg)}, false)
 	a.render(w, r, "leg.html", map[string]any{
 		"Title": leg.Name, "Ride": rv.Ride, "Leg": leg, "Prev": prev, "Next": next,
-		"Posts": posts, "Day": di, "Total": len(rv.Legs),
+		"Posts": posts, "Day": di, "Total": len(rv.Legs), "Multi": len(rv.Legs) > 1,
+		"HoursBars": bars,
 		// The tracks are computed over the whole ride so this leg's own track
 		// still begins where the day before it ended.
-		"Map":     buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)),
+		"Map":     withHours(buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars),
 		"PageLeg": leg.Slug})
 }
 
