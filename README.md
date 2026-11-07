@@ -794,6 +794,10 @@ The photo is shown for recognition but is not editable: media is
 content-addressed and the store stays append-only, so replacing a photo is a
 delete and a re-post.
 
+### Testing the driver screen without driving
+
+`/driver?sim=1|10|100` (the rung, in miles) swaps the browser's GPS for a fake one from `static/js/sim.js`, with `x=` time compression and `mph=`; nothing is stored. Add `corridor=kgn-yyz` and the car drives a randomized Highway 401 route from Kingston to Toronto instead of a straight line (`from=` and `to=` are ignored, and the real position is never read), and `sim=all` drives the whole corridor. `seed=N` repeats a run exactly; without it a random seed is chosen at page load and shown in the banner.
+
 ## Shipping it
 
 Two GitHub Actions workflows, and the split between them is the point.
