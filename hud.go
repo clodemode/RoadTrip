@@ -45,9 +45,14 @@ type hudView struct {
 	HasNext   bool   `json:"has_next"`
 	NextName  string `json:"next_name"`
 	NextMiles string `json:"next_miles"`
-	Waze      string `json:"waze"`
-	Google    string `json:"google"`
-	Apple     string `json:"apple"`
+	// NextLat/NextLng are the next stop's position, only for a precise place
+	// (a private one is a snapped cell and never leaves the server). The
+	// simulated drive uses them as its default destination.
+	NextLat *float64 `json:"next_lat,omitempty"`
+	NextLng *float64 `json:"next_lng,omitempty"`
+	Waze    string   `json:"waze"`
+	Google  string   `json:"google"`
+	Apple   string   `json:"apple"`
 
 	Hazards []hazardChip `json:"hazards,omitempty"`
 
@@ -175,6 +180,8 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64) hudView 
 		} else {
 			nav := mapLinks(c.Lat, c.Lng, c.Name)
 			h.Waze, h.Google, h.Apple = nav.Waze, nav.Google, nav.Apple
+			la, ln := c.Lat, c.Lng
+			h.NextLat, h.NextLng = &la, &ln
 		}
 		// Do the clocks change somewhere ahead on this leg?
 		here := now.In(loadLoc(curTZ)).Format("MST")
