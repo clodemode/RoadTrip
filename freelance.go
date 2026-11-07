@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -549,8 +550,30 @@ type freePicksOut struct {
 	Cached  bool         `json:"cached,omitempty"`
 }
 
-// alongQuery asks TomTom for one query's places along the route ahead.
+// freeMinAlong is the fewest points searchAlongRoute can be given.
+const freeMinAlong = 2
+
+// freeFuzzed is the active ride's private places, each as the store's
+// snapped point. No ride means none to keep out; a ride that cannot be read
+// is an error, and the caller sends nothing.
+func (a *App) freeFuzzed() ([]Checkpoint, error) {
+	rv, err := a.loadRide()
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return fuzzedOf(rideCheckpoints(rv.Legs)), nil
+}
+
+// alongQuery asks TomTom for one query's places along the route ahead. It
+// sends nothing for fewer than freeMinAlong points, which only a caller that
+// skipped the private-place mask could hand it.
 func (s *freeSvc) alongQuery(ctx context.Context, query string, pts []ll) ([]freePick, error) {
+	if len(pts) < freeMinAlong {
+		return nil, errors.New("no route")
+	}
 	type pt struct {
 		Lat float64 `json:"lat"`
 		Lon float64 `json:"lon"`
@@ -689,6 +712,18 @@ func (a *App) buildPicks(r *http.Request) freePicksOut {
 		return freePicksOut{State: "route_unavailable", Text: "No route to search along: " + freeWhy(err) + "."}
 	}
 	ahead := aheadOf(rt.Points, *lat, *lng)
+	// The route starts at the car and may end at a destination near a private
+	// place: TomTom is never sent a point within lineMaskKm of one, as with
+	// the hazard lookups. Too few points left, or a ride that cannot be read,
+	// means no search at all.
+	fuzzed, err := a.freeFuzzed()
+	if err != nil {
+		return freePicksOut{State: "route_unavailable", Text: "No route to search along: the ride could not be read to keep private places out of the search."}
+	}
+	ahead = dropNearFuzzed(ahead, fuzzed)
+	if len(ahead) < freeMinAlong {
+		return freePicksOut{State: "route_unavailable", Text: "No route to search along: too much of it is near a private place to search without showing where it is."}
+	}
 	left, _ := remainingKm(rt.Points, *lat, *lng)
 	todo := activeCats(rt.Arrival, left)
 	corridor := corridorKey(ahead)
