@@ -45,8 +45,29 @@
     $('free-find').disabled = !f.can_picks;
   }
 
+  // FreeLance: Aimless. The miles and a sentence, as text; picks on a fix.
+  function paintAimless(f) {
+    setText('free-miles', f.miles);
+    setText('free-msg', f.text || '');
+    $('free-find').disabled = !f.can_picks;
+    paintClock();
+  }
+
+  // The phone's own clock and zone: Aimless has no route to take a zone from.
+  function paintClock() {
+    if (!$('aim-clock')) return;
+    setText('aim-clock', clock());
+    var z = '';
+    try { z = new Date().toLocaleTimeString([], { timeZoneName: 'short' }).split(' ').pop(); } catch (e) { z = ''; }
+    setText('aim-tz', z);
+  }
+
   function paint(h) {
-    if (h.free) { paintChips(h); paintFree(h.free); return; }
+    if (h.free) {
+      paintChips(h);
+      if (h.free.state === 'aimless') paintAimless(h.free); else paintFree(h.free);
+      return;
+    }
     setText('hud-day', h.day_n ? h.day_n + ' of ' + h.day_total : '—');
     setText('hud-leg', h.leg_name);
     setText('hud-done', h.miles_done);
@@ -104,7 +125,7 @@
   function askPicks(extra) {
     if (!fix) { setText('free-picks-msg', 'No position fix yet.'); return; }
     find.disabled = true;
-    setText('free-picks-msg', 'Looking along the route\u2026 this can take half a minute.');
+    setText('free-picks-msg', ($('hud-aimless') ? 'Looking around you' : 'Looking along the route') + '\u2026 this can take half a minute.');
     var body = new URLSearchParams({ lat: fix.latitude.toFixed(4), lng: fix.longitude.toFixed(4) });
     Object.keys(extra || {}).forEach(function (k) { body.set(k, extra[k]); });
     fetch('/driver/freelance/picks', { method: 'POST', credentials: 'same-origin', body: body,
@@ -218,6 +239,8 @@
     });
   }
 
+  paintClock();
+  setInterval(paintClock, 20000);
   refresh();
   setInterval(function () { if (!document.hidden && navigator.onLine !== false) refresh(); }, 120000);
 })();

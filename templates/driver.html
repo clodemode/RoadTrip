@@ -1,7 +1,7 @@
 {{template "head" .}}
 <section class="hud" id="hud" data-url="/driver/hud.json">
 
-  {{if not .Destined}}<header class="hud-top" aria-label="Gauges">
+  {{if not (or .Destined .Aimless)}}<header class="hud-top" aria-label="Gauges">
     <div class="hud-gauge"><span class="hud-k">Day</span><b class="hud-v" id="hud-day">{{if .H.DayN}}{{.H.DayN}} of {{.H.DayTotal}}{{else}}—{{end}}</b><span class="hud-s" id="hud-leg">{{.H.LegName}}</span></div>
     <div class="hud-gauge"><span class="hud-k">Done</span><b class="hud-v" id="hud-done">{{.H.MilesDone}}</b></div>
     <div class="hud-gauge"><span class="hud-k">Left</span><b class="hud-v" id="hud-left">{{.H.MilesLeft}}</b></div>
@@ -15,10 +15,42 @@
     {{if .ChesterOn}}<a class="hud-tool" href="/chester"><span class="hud-ico" aria-hidden="true">&#128172;</span>Ask Chester</a>{{end}}
   </nav>
 
-  {{if .Destined}}<section class="hud-road hud-free" id="hud-free" aria-label="FreeLance drive">
+  {{if .Aimless}}<section class="hud-road hud-free" id="hud-aimless" aria-label="FreeLance drive, no destination">
+    <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
+      {{if .Driver}}<button class="btn btn-sm btn-outline-dark" name="mode" value="trip">Trip</button>{{end}}
+      <button class="btn btn-sm btn-outline-dark" name="mode" value="destined">FreeLance: Destined</button>
+      <button class="btn btn-sm btn-dark" name="mode" value="aimless" aria-current="true">FreeLance: Aimless</button>
+    </form>
+    <p class="hud-k">Aimless</p>
+    <h1 class="hud-next">Just driving</h1>
+    <p class="hud-dist"><b id="aim-clock">—</b> <span class="hud-s" id="aim-tz"></span></p>
+    <p class="hud-dist"><b id="free-miles">0 mi</b> driven this session <span class="hud-s">(counted from GPS, forgotten when you leave this mode)</span></p>
+    <p class="hud-free-msg" id="free-msg" role="status" aria-live="polite"></p>
+    <ul class="hud-chips" id="hud-chips" aria-label="Hazards around you" aria-live="polite">
+      <li class="hud-chip unknown">Weather: checking&hellip;</li>
+      <li class="hud-chip unknown">Traffic: checking&hellip;</li>
+    </ul>
+    <h2 class="hud-k">Near you</h2>
+    <button type="button" class="btn btn-outline-dark" id="free-find" disabled>Find picks nearby</button>
+    <p class="hud-s" id="free-picks-msg" role="status" aria-live="polite"></p>
+    <form class="hud-dest" id="free-reask" hidden>
+      <input class="form-control" type="text" id="free-want" maxlength="120" placeholder="Tell Chester: hungry now, need a stretch&hellip;" aria-label="What you want right now (optional)" autocomplete="off">
+      <button type="submit" class="btn btn-outline-dark" id="free-reask-go">Re-ask Chester</button>
+    </form>
+    <div id="free-picks"></div>
+    {{if .TracksOn}}<h2 class="hud-k">RoadTracks</h2>
+    <form class="hud-dest" id="rt-form" role="search" aria-label="RoadTracks">
+      <input class="form-control" id="rt-q" type="search" placeholder="Album or artist" autocomplete="off" aria-label="Search the music library">
+      <button class="btn btn-outline-dark" type="submit">Search</button>
+    </form>
+    <p class="hud-s" id="rt-msg" role="status" aria-live="polite"></p>
+    <ul class="rt-list" id="rt-list"></ul>{{end}}
+    {{if .ChesterOn}}<p class="hud-s"><a href="/driver/chester/memory">What Chester remembers about you</a></p>{{end}}
+  </section>{{else if .Destined}}<section class="hud-road hud-free" id="hud-free" aria-label="FreeLance drive">
     <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
       {{if .Driver}}<button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>{{end}}
       <button class="btn btn-sm {{if .Destined}}btn-dark{{else}}btn-outline-dark{{end}}" name="mode" value="destined"{{if .Destined}} aria-current="true"{{end}}>FreeLance: Destined</button>
+      <button class="btn btn-sm btn-outline-dark" name="mode" value="aimless">FreeLance: Aimless</button>
     </form>
     <form class="hud-dest" method="post" action="/driver/freelance/dest">
       <input class="form-control" type="text" name="dest" maxlength="120" placeholder="Where to? Town, place or address" value="{{.FreeLabel}}" aria-label="Destination" autocomplete="off">
@@ -56,6 +88,7 @@
     <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
       {{if .Driver}}<button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>{{end}}
       <button class="btn btn-sm {{if .Destined}}btn-dark{{else}}btn-outline-dark{{end}}" name="mode" value="destined"{{if .Destined}} aria-current="true"{{end}}>FreeLance: Destined</button>
+      <button class="btn btn-sm btn-outline-dark" name="mode" value="aimless">FreeLance: Aimless</button>
     </form>
     <p class="hud-k">Next</p>
     <h1 class="hud-next" id="hud-next">{{if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</h1>

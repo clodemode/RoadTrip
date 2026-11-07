@@ -41,6 +41,7 @@ import (
 const (
 	modeTrip     = "trip"
 	modeDestined = "destined"
+	modeAimless  = "aimless"
 
 	freeCacheTTL     = 10 * time.Minute // geocode and route: per user and destination
 	freePlaceTTL     = 24 * time.Hour   // along-route candidates: places do not change in a day
@@ -57,6 +58,12 @@ const (
 	freeDetourSecs   = 900 // maxDetourTime for along-route search
 	freePicksMaxUses = 3   // web searches Chester may run for one Find picks
 	freePicksVersion = "freelance-picks-3"
+
+	freeNearRadiusM = 16000     // Aimless: how far around the car TomTom is asked to look (about 10 miles)
+	freeNearTTL     = time.Hour // Aimless: nearby candidates and rankings, keyed by a 0.1 degree cell
+	freeStepMinKm   = 0.03      // Aimless: a move shorter than this is GPS jitter, not driving
+	freeBoxLat      = 0.1       // Aimless: hazard points sit this far (degrees) N and S of the fix
+	freeBoxLng      = 0.12      // and this far E and W: about 11 km each way
 )
 
 // freeCat is one kind of pick. The list is data: add a line to extend it.
@@ -107,6 +114,22 @@ type freeState struct {
 	Lng   float64
 	Have  bool
 	Err   string // plain sentence when the last destination could not be found
+
+	// Aimless only: the miles driven since the mode was entered, summed from
+	// the fixes the HUD sends, and the last fix. Held in memory for this user,
+	// zeroed on any mode change, never stored.
+	DrivenKm         float64
+	LastLat, LastLng float64
+	HaveLast         bool
+}
+
+// enter makes mode the user's mode. A change of mode starts a new Aimless
+// session: the miles and the last fix are dropped.
+func (st *freeState) enter(mode string) {
+	if st.Mode != mode {
+		st.DrivenKm, st.LastLat, st.LastLng, st.HaveLast = 0, 0, 0, false
+	}
+	st.Mode = mode
 }
 
 type freeRoute struct {
@@ -221,6 +244,30 @@ func (s *freeSvc) set(user string, f func(*freeState)) {
 		s.state[user] = st
 	}
 	f(st)
+}
+
+// drive adds the step from the last fix to this one to the user's Aimless
+// miles and returns the total in km. A step under freeStepMinKm is jitter and
+// is neither counted nor remembered. No fix leaves the total as it is.
+func (s *freeSvc) drive(user string, lat, lng *float64) float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.state[user]
+	if st == nil {
+		return 0
+	}
+	if lat == nil || lng == nil {
+		return st.DrivenKm
+	}
+	if !st.HaveLast {
+		st.LastLat, st.LastLng, st.HaveLast = *lat, *lng, true
+		return st.DrivenKm
+	}
+	if d := haversineKm(st.LastLat, st.LastLng, *lat, *lng); d >= freeStepMinKm {
+		st.DrivenKm += d
+		st.LastLat, st.LastLng = *lat, *lng
+	}
+	return st.DrivenKm
 }
 
 // call does one TomTom request under the per-call timeout. Every error it
@@ -415,7 +462,7 @@ func evenPoints(pts []ll, n int) []ll {
 // --- the HUD's view -----------------------------------------------------------
 
 type freeView struct {
-	State    string `json:"state"` // need_dest, no_fix, route_unavailable, ok
+	State    string `json:"state"` // need_dest, no_fix, route_unavailable, ok, aimless
 	Dest     string `json:"dest"`
 	Text     string `json:"text,omitempty"` // a plain sentence for any state but ok
 	Miles    string `json:"miles"`
@@ -472,15 +519,45 @@ func (a *App) freeHUD(ctx context.Context, user string, st freeState, lat, lng *
 	return v, evenPoints(aheadOf(rt.Points, *lat, *lng), 4)
 }
 
+// aimlessHUD is the view of a drive with no destination: the miles driven
+// since Aimless began and nothing else. There is no route, so no arrival time,
+// and nothing from the plan. Picks are on offer once there is a fix.
+func (a *App) aimlessHUD(user string, lat, lng *float64) *freeView {
+	km := a.freeSvc().drive(user, lat, lng)
+	v := &freeView{State: "aimless", Miles: hudMiles(km * kmToMi), ETA: "—", CanPicks: lat != nil && lng != nil}
+	if !v.CanPicks {
+		v.Text = "No position fix yet, so no miles are counted."
+	}
+	return v
+}
+
+// aimlessPoints are the sample points the hazard chips are asked about: the
+// fix and four around it, about 11 km out, less any near a private place. A
+// ride that cannot be read leaves none, and the chips say so.
+func (a *App) aimlessPoints(lat, lng *float64) []ll {
+	if lat == nil || lng == nil {
+		return nil
+	}
+	fuzzed, err := a.freeFuzzed()
+	if err != nil {
+		return nil
+	}
+	pts := []ll{{*lat, *lng}, {*lat + freeBoxLat, *lng}, {*lat - freeBoxLat, *lng}, {*lat, *lng + freeBoxLng}, {*lat, *lng - freeBoxLng}}
+	return dropNearFuzzed(pts, fuzzed)
+}
+
 // --- handlers -----------------------------------------------------------------
 
 func (a *App) freeMode(w http.ResponseWriter, r *http.Request) {
 	user := a.userOf(r)
 	mode := modeTrip
-	if r.FormValue("mode") == modeDestined {
+	switch r.FormValue("mode") {
+	case modeDestined:
 		mode = modeDestined
+	case modeAimless:
+		mode = modeAimless
 	}
-	a.freeSvc().set(user, func(s *freeState) { s.Mode = mode })
+	a.freeSvc().set(user, func(s *freeState) { s.enter(mode) })
 	http.Redirect(w, r, "/driver", http.StatusSeeOther)
 }
 
@@ -490,15 +567,15 @@ func (a *App) freeDest(w http.ResponseWriter, r *http.Request) {
 	s := a.freeSvc()
 	switch {
 	case text == "":
-		s.set(user, func(st *freeState) { st.Mode, st.Err = modeDestined, "Type a destination to start." })
+		s.set(user, func(st *freeState) { st.enter(modeDestined); st.Err = "Type a destination to start." })
 	case len(text) > freeMaxDest:
-		s.set(user, func(st *freeState) { st.Mode, st.Err = modeDestined, "That destination is too long." })
+		s.set(user, func(st *freeState) { st.enter(modeDestined); st.Err = "That destination is too long." })
 	default:
 		ctx, cancel := context.WithTimeout(r.Context(), 2*freeTimeout)
 		found, err := s.geocode(ctx, user, text)
 		cancel()
 		s.set(user, func(st *freeState) {
-			st.Mode = modeDestined
+			st.enter(modeDestined)
 			switch {
 			case err == nil:
 				*st = found
@@ -525,6 +602,7 @@ type freePick struct {
 	Google string  `json:"google"`
 	Apple  string  `json:"apple"`
 	secs   float64 // detour, for ordering
+	distM  float64 // Aimless: metres from the car, for ordering
 	lat    float64
 	lng    float64
 }
@@ -619,6 +697,54 @@ func (s *freeSvc) alongQuery(ctx context.Context, query string, pts []ll) ([]fre
 // found twice is kept once, nearest first, at most freeCandCap. It fails only
 // when a query failed and nothing else answered.
 func (s *freeSvc) alongCat(ctx context.Context, c freeCat, pts []ll) ([]freePick, error) {
+	return mergeCat(c, func(q string) ([]freePick, error) { return s.alongQuery(ctx, q, pts) })
+}
+
+// nearQuery asks TomTom for one query's places around a point (Search API,
+// POI search with a centre and a radius). The caller has already kept the
+// point away from private places.
+func (s *freeSvc) nearQuery(ctx context.Context, query string, lat, lng float64) ([]freePick, error) {
+	var body struct {
+		Results []struct {
+			POI     struct{ Name string } `json:"poi"`
+			Address struct {
+				Municipality string `json:"municipality"`
+				Region       string `json:"countrySubdivision"`
+			} `json:"address"`
+			Position struct{ Lat, Lon float64 } `json:"position"`
+			Dist     float64                    `json:"dist"`
+		} `json:"results"`
+	}
+	u := s.ttBase + "/search/2/poiSearch/" + url.PathEscape(query) + ".json?" + s.q(url.Values{
+		"lat": {strconv.FormatFloat(lat, 'f', 4, 64)}, "lon": {strconv.FormatFloat(lng, 'f', 4, 64)},
+		"radius": {strconv.Itoa(freeNearRadiusM)}, "limit": {strconv.Itoa(freePerCategory)}})
+	if err := s.call(ctx, http.MethodGet, u, nil, &body); err != nil {
+		return nil, err
+	}
+	var out []freePick
+	for _, r := range body.Results {
+		if r.POI.Name == "" {
+			continue
+		}
+		town := r.Address.Municipality
+		if town != "" && r.Address.Region != "" {
+			town += ", " + r.Address.Region
+		}
+		out = append(out, freePick{Name: cleanLine(r.POI.Name, 100), Town: cleanLine(town, 80),
+			distM: r.Dist, lat: r.Position.Lat, lng: r.Position.Lon})
+	}
+	return out, nil
+}
+
+// nearCat is alongCat for places around a point.
+func (s *freeSvc) nearCat(ctx context.Context, c freeCat, lat, lng float64) ([]freePick, error) {
+	return mergeCat(c, func(q string) ([]freePick, error) { return s.nearQuery(ctx, q, lat, lng) })
+}
+
+// mergeCat runs a category's queries together and merges them: one place
+// found twice is kept once, nearest first, at most freeCandCap. It fails only
+// when a query failed and nothing else answered.
+func mergeCat(c freeCat, fetch func(q string) ([]freePick, error)) ([]freePick, error) {
 	res := make([][]freePick, len(c.Queries))
 	errs := make([]error, len(c.Queries))
 	var wg sync.WaitGroup
@@ -626,7 +752,7 @@ func (s *freeSvc) alongCat(ctx context.Context, c freeCat, pts []ll) ([]freePick
 		wg.Add(1)
 		go func(i int, q string) {
 			defer wg.Done()
-			res[i], errs[i] = s.alongQuery(ctx, q, pts)
+			res[i], errs[i] = fetch(q)
 		}(i, q)
 	}
 	wg.Wait()
@@ -649,7 +775,14 @@ func (s *freeSvc) alongCat(ctx context.Context, c freeCat, pts []ll) ([]freePick
 		}
 		return nil, nil
 	}
-	sort.SliceStable(all, func(i, j int) bool { return all[i].secs < all[j].secs })
+	// Nearest first: by detour time along a route, by distance around a point.
+	near := func(p freePick) float64 {
+		if p.distM > 0 {
+			return p.distM
+		}
+		return p.secs
+	}
+	sort.SliceStable(all, func(i, j int) bool { return near(all[i]) < near(all[j]) })
 	if len(all) > freeCandCap {
 		all = all[:freeCandCap]
 	}
@@ -658,6 +791,9 @@ func (s *freeSvc) alongCat(ctx context.Context, c freeCat, pts []ll) ([]freePick
 		p.ID = fmt.Sprintf("%s-%d", c.Key, i+1)
 		if p.secs > 0 {
 			p.Detour = fmt.Sprintf("%d min detour", int(math.Max(1, math.Round(p.secs/60))))
+		}
+		if p.distM > 0 {
+			p.Detour = fmt.Sprintf("%.1f mi away", p.distM/1000*kmToMi)
 		}
 		nav := mapLinks(p.lat, p.lng, p.Name+" "+p.Town)
 		p.Waze, p.Google, p.Apple = nav.Waze, nav.Google, nav.Apple
@@ -694,6 +830,9 @@ func (a *App) buildPicks(r *http.Request) freePicksOut {
 	user := a.userOf(r)
 	s := a.freeSvc()
 	st := s.get(user)
+	if st.Mode == modeAimless {
+		return a.buildNearPicks(r, user)
+	}
 	if st.Mode != modeDestined || !st.Have {
 		return freePicksOut{State: "need_dest", Text: "Pick a destination first."}
 	}
@@ -725,16 +864,65 @@ func (a *App) buildPicks(r *http.Request) freePicksOut {
 		return freePicksOut{State: "route_unavailable", Text: "No route to search along: too much of it is near a private place to search without showing where it is."}
 	}
 	left, _ := remainingKm(rt.Points, *lat, *lng)
-	todo := activeCats(rt.Arrival, left)
-	corridor := corridorKey(ahead)
 	now := s.now()
-	// Live music lasts until the end of the day at the place; the rest a day.
-	expiry := func(c freeCat) time.Time {
-		if c.Daily {
-			return endOfLocalDay(rt.Arrival)
-		}
-		return now.Add(freePlaceTTL)
+	return a.runPicks(ctx, user, lat, lng, want, force, picksPlan{
+		cats:     activeCats(rt.Arrival, left),
+		corridor: corridorKey(ahead),
+		fetch:    func(ctx context.Context, c freeCat) ([]freePick, error) { return s.alongCat(ctx, c, ahead) },
+		// Live music lasts until the end of the day at the place; the rest a day.
+		expiry: func(c freeCat) time.Time {
+			if c.Daily {
+				return endOfLocalDay(rt.Arrival)
+			}
+			return now.Add(freePlaceTTL)
+		},
+	})
+}
+
+// buildNearPicks is Find picks in Aimless: no route, so the candidates are
+// the places around the car. The car's position goes to TomTom as the centre
+// of the search, so it is never sent from within lineMaskKm of a private place
+// of the active ride; a ride that cannot be read sends nothing either.
+func (a *App) buildNearPicks(r *http.Request, user string) freePicksOut {
+	s := a.freeSvc()
+	lat, lng := formCoord(r, "lat", 90), formCoord(r, "lng", 180)
+	force := r.FormValue("force") == "1"
+	want := cleanLine(r.FormValue("want"), freeWantMax)
+	if lat == nil || lng == nil {
+		return freePicksOut{State: "no_fix", Text: "No position fix yet, so there is nowhere to search around."}
 	}
+	fuzzed, err := a.freeFuzzed()
+	if err != nil {
+		return freePicksOut{State: "route_unavailable", Text: "No search nearby: the ride could not be read to keep private places out of the search."}
+	}
+	if nearFuzzed(*lat, *lng, fuzzed) {
+		return freePicksOut{State: "route_unavailable", Text: "No search nearby: you are too close to a private place to search around you without showing where it is."}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+	now := s.now()
+	return a.runPicks(ctx, user, lat, lng, want, force, picksPlan{
+		cats:     activeCats(now, math.Inf(1)), // no end of the day's drive, so no evening picks
+		corridor: fmt.Sprintf("near|%.1f,%.1f", *lat, *lng),
+		fetch:    func(ctx context.Context, c freeCat) ([]freePick, error) { return s.nearCat(ctx, c, *lat, *lng) },
+		expiry:   func(freeCat) time.Time { return now.Add(freeNearTTL) },
+	})
+}
+
+// picksPlan is what differs between Destined (places along a route) and
+// Aimless (places around the car): the categories asked, the cache cell, how a
+// category's candidates are fetched and how long they are kept.
+type picksPlan struct {
+	cats     []freeCat
+	corridor string
+	fetch    func(context.Context, freeCat) ([]freePick, error)
+	expiry   func(freeCat) time.Time
+}
+
+func (a *App) runPicks(ctx context.Context, user string, lat, lng *float64, want string, force bool, p picksPlan) freePicksOut {
+	s := a.freeSvc()
+	todo, corridor, expiry := p.cats, p.corridor, p.expiry
+	now := s.now()
 
 	cats := make([]freeCatOut, len(todo))
 	var wg sync.WaitGroup
@@ -752,7 +940,7 @@ func (a *App) buildPicks(r *http.Request) freePicksOut {
 			picks, ok := s.cands.get(pk, now)
 			var err error
 			if !ok {
-				picks, err = s.alongCat(ctx, c, ahead)
+				picks, err = p.fetch(ctx, c)
 				if err == nil {
 					s.cands.putUntil(pk, picks, now, expiry(c))
 				}

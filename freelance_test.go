@@ -19,6 +19,9 @@ const ttKey = "tt-key-for-tests-only"
 type ttStub struct {
 	srv                  *httptest.Server
 	geo, route, along    atomic.Int32
+	near                 atomic.Int32
+	nearBody             map[string]string   // poiSearch answers by query word
+	nearReq              []map[string]string // lat, lon, radius of each poiSearch call
 	geoBody, routeStatus string
 	routeBody            string
 	alongBody            map[string]string // by query word; "500" is a failure
@@ -33,7 +36,7 @@ const routeOK = `{"routes":[{"summary":{"lengthInMeters":24140,"travelTimeInSeco
  "legs":[{"points":[{"latitude":30.20,"longitude":-97.80},{"latitude":30.25,"longitude":-97.84},{"latitude":30.30,"longitude":-97.88},{"latitude":30.35,"longitude":-97.90},{"latitude":30.40,"longitude":-97.90}]}]}]}`
 
 func newTT(t *testing.T) *ttStub {
-	s := &ttStub{geoBody: geoOK, alongBody: map[string]string{}}
+	s := &ttStub{geoBody: geoOK, alongBody: map[string]string{}, nearBody: map[string]string{}}
 	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("key") == ttKey {
 			s.sawKey.Store(true)
@@ -64,6 +67,19 @@ func newTT(t *testing.T) *ttStub {
 			if body == "500" {
 				http.Error(w, "boom "+r.URL.RawQuery, 500)
 				return
+			}
+			w.Write([]byte(body))
+		case strings.HasPrefix(p, "/search/2/poiSearch/"):
+			s.near.Add(1)
+			q := strings.TrimSuffix(strings.TrimPrefix(p, "/search/2/poiSearch/"), ".json")
+			q, _ = url.PathUnescape(q)
+			qs := r.URL.Query()
+			s.mu.Lock()
+			s.nearReq = append(s.nearReq, map[string]string{"q": q, "lat": qs.Get("lat"), "lon": qs.Get("lon"), "radius": qs.Get("radius")})
+			s.mu.Unlock()
+			body, known := s.nearBody[q]
+			if !known {
+				body = `{"results":[]}`
 			}
 			w.Write([]byte(body))
 		case strings.HasPrefix(p, "/search/2/search/"):
@@ -672,5 +688,219 @@ func TestAlongRouteSearchFarFromAnyPrivatePlaceSendsThePointsAsTheyAre(t *testin
 				t.Errorf("point %d changed: %v vs %v", i, p, route[i])
 			}
 		}
+	}
+}
+
+// --- FreeLance: Aimless ---------------------------------------------------------
+
+const nearRes = `{"results":[
+ {"poi":{"name":"Far Chain Coffee"},"address":{"municipality":"Leander","countrySubdivision":"TX"},"position":{"lat":35.05,"lon":-90.05},"dist":6400},
+ {"poi":{"name":"Corner Roasters"},"address":{"municipality":"Liberty Hill","countrySubdivision":"TX"},"position":{"lat":35.01,"lon":-90.01},"dist":1200}]}`
+
+func goAimless(t *testing.T, app *App, c *http.Cookie) {
+	t.Helper()
+	if w := doAs(t, app, c, "POST", "/driver/freelance/mode", url.Values{"mode": {"aimless"}}); w.Code != http.StatusSeeOther {
+		t.Fatalf("mode: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// aimlessApp is an app on the fixture trip (so there are private places to
+// keep out of the search) with kris in Aimless.
+func aimlessApp(t *testing.T, tt *ttStub) (*App, *http.Cookie) {
+	t.Helper()
+	t.Setenv("PUSH_TOKEN", testToken)
+	app, c := freeApp(t, tt)
+	if w := pushTrip(t, app, fixtureTrip(t), "?activate=1"); w.Code != http.StatusOK {
+		t.Fatalf("push fixture: %d %s", w.Code, w.Body.String())
+	}
+	tt.nearBody["coffee shop"] = nearRes
+	goAimless(t, app, c)
+	return app, c
+}
+
+func TestAimlessModeIsPerUserAndDrawsItsOwnScreen(t *testing.T) {
+	tt := newTT(t)
+	app, kris := freeApp(t, tt)
+	other := asUser(t, app, "lars", roleAdmin)
+	if body := doAs(t, app, kris, "GET", "/driver", nil).Body.String(); !strings.Contains(body, `value="aimless"`) ||
+		strings.Contains(body, `value="aimless" aria-current="true"`) {
+		t.Fatal("Trip must offer the Aimless button without marking it current")
+	}
+	goAimless(t, app, kris)
+	body := doAs(t, app, kris, "GET", "/driver", nil).Body.String()
+	for _, want := range []string{"FreeLance: Aimless", `value="aimless" aria-current="true"`, `id="hud-aimless"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the Aimless screen lacks %q", want)
+		}
+	}
+	for _, not := range []string{`id="hud-free"`, `id="hud-day"`, `id="hud-next"`, `value="destined" aria-current`, `value="trip" aria-current`} {
+		if strings.Contains(body, not) {
+			t.Errorf("the Aimless screen carries %q", not)
+		}
+	}
+	if o := doAs(t, app, other, "GET", "/driver", nil).Body.String(); strings.Contains(o, `id="hud-aimless"`) {
+		t.Fatal("another user's mode must not follow kris")
+	}
+	if h := hudAt(t, app, other, ""); h.Free != nil || h.LegSlug == "" {
+		t.Fatalf("the other user still sees the planned ride: %+v", h)
+	}
+}
+
+func TestAimlessHUDShowsNoPlanNextNoETAAndHazardsAroundTheFix(t *testing.T) {
+	tt := newTT(t)
+	app, c := freeApp(t, tt)
+	var pts []string
+	var mu sync.Mutex
+	nws := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		pts = append(pts, r.URL.Query().Get("point"))
+		mu.Unlock()
+		w.Write([]byte(`{"features":[{"properties":{"id":"a","event":"Flood Watch","areaDesc":"Travis"}}]}`))
+	}))
+	defer nws.Close()
+	app.hazards = hazardSvcFor(nws, tt.srv, ttKey)
+	goAimless(t, app, c)
+	h := hudAt(t, app, c, "?lat=35.0000&lng=-90.0000")
+	if h.Free == nil || h.Free.State != "aimless" {
+		t.Fatalf("free view: %+v", h.Free)
+	}
+	if h.HasNext || h.NextName != "" || h.NextMiles != "" || h.ETA != "" || h.LegSlug != "" || h.TonightName != "" || h.Waze != "" {
+		t.Fatalf("Aimless must carry nothing from the plan: %+v", h)
+	}
+	if h.Free.ETA != "—" || h.Free.Waze != "" || h.Free.CanPicks != true {
+		t.Fatalf("no ETA and no route, but picks on offer with a fix: %+v", h.Free)
+	}
+	if !strings.Contains(chipTexts(h.Hazards), "Flood Watch") {
+		t.Fatalf("hazards: %s", chipTexts(h.Hazards))
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(pts) == 0 {
+		t.Fatal("weather was not asked around the fix")
+	}
+	for _, p := range pts {
+		var la, ln float64
+		parts := strings.Split(p, ",")
+		la, _ = strconv.ParseFloat(parts[0], 64)
+		ln, _ = strconv.ParseFloat(parts[1], 64)
+		if haversineKm(la, ln, 35.0, -90.0) > 30 {
+			t.Errorf("weather point %q is not around the fix", p)
+		}
+	}
+	if tt.route.Load() != 0 || tt.geo.Load() != 0 || tt.along.Load() != 0 || tt.near.Load() != 0 {
+		t.Fatal("a plain Aimless HUD refresh must not route, geocode or search")
+	}
+	if nofix := hudAt(t, app, c, ""); nofix.Free == nil || nofix.Free.State != "aimless" || nofix.Free.CanPicks || nofix.NextName != "" {
+		t.Fatalf("without a fix: %+v", nofix.Free)
+	}
+}
+
+func TestAimlessMilesAddUpBetweenFixesAndResetOnAModeChange(t *testing.T) {
+	tt := newTT(t)
+	app, c := freeApp(t, tt)
+	goAimless(t, app, c)
+	miles := func(at string) string { return hudAt(t, app, c, at).Free.Miles }
+	if m := miles("?lat=35.0000&lng=-90.0000"); m != "0 mi" {
+		t.Fatalf("first fix: %q", m)
+	}
+	if m := miles("?lat=35.1000&lng=-90.0000"); m != "7 mi" {
+		t.Fatalf("0.1 degree north is about 7 miles: %q", m)
+	}
+	if m := miles("?lat=35.1000&lng=-90.0000"); m != "7 mi" {
+		t.Fatalf("the same fix again adds nothing: %q", m)
+	}
+	if m := miles("?lat=35.2000&lng=-90.0000"); m != "14 mi" {
+		t.Fatalf("two legs: %q", m)
+	}
+	doAs(t, app, c, "POST", "/driver/freelance/mode", url.Values{"mode": {"trip"}})
+	goAimless(t, app, c)
+	if m := miles("?lat=35.3000&lng=-90.0000"); m != "0 mi" {
+		t.Fatalf("a mode change starts a new session: %q", m)
+	}
+	if m := miles("?lat=35.4000&lng=-90.0000"); m != "7 mi" {
+		t.Fatalf("after the reset: %q", m)
+	}
+}
+
+func TestAimlessFindPicksNearbyAsksTomTomAroundTheFixAndNotAlongARoute(t *testing.T) {
+	tt := newTT(t)
+	app, c := aimlessApp(t, tt)
+	o := findPicksAt(t, app, c, "35.0000", "-90.0000")
+	if o.State != "ok" || tt.near.Load() == 0 {
+		t.Fatalf("a fix far from private places must be searched: %+v near=%d", o, tt.near.Load())
+	}
+	if tt.along.Load() != 0 || tt.route.Load() != 0 || tt.geo.Load() != 0 {
+		t.Fatal("Aimless has no route: only the nearby search is asked")
+	}
+	tt.mu.Lock()
+	for _, r := range tt.nearReq {
+		if r["lat"] != "35.0000" || r["lon"] != "-90.0000" || r["radius"] == "" {
+			t.Errorf("nearby search was sent %v, want the fix and a radius", r)
+		}
+	}
+	tt.mu.Unlock()
+	var coffee *freeCatOut
+	for i := range o.Cats {
+		if o.Cats[i].Key == "coffee" {
+			coffee = &o.Cats[i]
+		}
+	}
+	if coffee == nil || coffee.State != "items" || len(coffee.Picks) != 2 || coffee.Picks[0].Name != "Corner Roasters" ||
+		!strings.Contains(coffee.Picks[0].Detour, "away") {
+		t.Fatalf("coffee, nearest first with a distance: %+v", coffee)
+	}
+	if got := catKeys(o); strings.Contains(got, "evening") {
+		t.Fatalf("no evening category without a route to the end of a day: %s", got)
+	}
+}
+
+func TestAimlessFindPicksFailsClosedNearAPrivatePlace(t *testing.T) {
+	for _, fix := range [][2]string{{"40.1000", "-100.4500"}, {"40.1500", "-100.4000"}, {"44.3000", "-106.3000"}} {
+		tt := newTT(t)
+		app, c := aimlessApp(t, tt)
+		o := findPicksAt(t, app, c, fix[0], fix[1])
+		if tt.near.Load() != 0 || tt.along.Load() != 0 {
+			t.Fatalf("fix %v: %d TomTom searches were made from inside a private radius", fix, tt.near.Load())
+		}
+		if o.State != "route_unavailable" || len(o.Cats) != 0 || o.Text == "" {
+			t.Fatalf("fix %v: want the fail-closed state, got %+v", fix, o)
+		}
+	}
+}
+
+func TestAimlessFindPicksNeedsAFixAndTheModeItself(t *testing.T) {
+	tt := newTT(t)
+	app, c := aimlessApp(t, tt)
+	w := doAs(t, app, c, "POST", "/driver/freelance/picks", url.Values{})
+	var o freePicksOut
+	if json.Unmarshal(w.Body.Bytes(), &o) != nil || o.State != "no_fix" || tt.near.Load() != 0 {
+		t.Fatalf("no fix: %+v near=%d", o, tt.near.Load())
+	}
+	other := asUser(t, app, "lars", roleAdmin)
+	w = doAs(t, app, other, "POST", "/driver/freelance/picks", url.Values{"lat": {"35.0"}, "lng": {"-90.0"}})
+	if json.Unmarshal(w.Body.Bytes(), &o) != nil || o.State != "need_dest" || tt.near.Load() != 0 {
+		t.Fatalf("a user not in Aimless must not search: %+v", o)
+	}
+}
+
+func TestAimlessLeavesThePlannedRideUntouched(t *testing.T) {
+	tt := newTT(t)
+	app, c := aimlessApp(t, tt)
+	snap := func() string {
+		rv, err := app.loadRide()
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := json.Marshal(rv)
+		return string(b)
+	}
+	before := snap()
+	for _, at := range []string{"?lat=35.0000&lng=-90.0000", "?lat=35.1000&lng=-90.0000", ""} {
+		hudAt(t, app, c, at)
+	}
+	findPicksAt(t, app, c, "35.0000", "-90.0000")
+	doAs(t, app, c, "GET", "/driver", nil)
+	if after := snap(); after != before {
+		t.Fatal("an Aimless session changed the planned ride")
 	}
 }

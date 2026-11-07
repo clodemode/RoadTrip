@@ -221,8 +221,10 @@ func parseFix(r *http.Request) (lat, lng *float64) {
 func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 	st := a.freeSvc().get(a.userOf(r))
 	onRide := a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
+	aimless := st.Mode == modeAimless
 	var h hudView
-	if onRide {
+	// Aimless is not the plan: its screen is drawn without the ride's numbers.
+	if onRide && !aimless {
 		var err error
 		if h, _, err = a.hudData(time.Now(), nil, nil); err != nil {
 			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
@@ -231,11 +233,11 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 	}
 	// A driver on no ride has only FreeLance Destined, which has no ride; the
 	// screen is drawn that way, so the mode it polls for is set to match.
-	if !onRide && st.Mode != modeDestined {
-		a.freeSvc().set(a.userOf(r), func(s *freeState) { s.Mode = modeDestined })
+	if !onRide && st.Mode != modeDestined && !aimless {
+		a.freeSvc().set(a.userOf(r), func(s *freeState) { s.enter(modeDestined) })
 	}
 	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h,
-		"TracksOn": a.tracks != nil, "Destined": st.Mode == modeDestined || !onRide, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
+		"TracksOn": a.tracks != nil, "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 
 // hudJSON is the live HUD: position-aware, with the hazard chips of the leg.
@@ -245,13 +247,15 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	// The trip HUD is the ride's; a driver off the ride gets only FreeLance
 	// Destined, with none of the ride's numbers.
 	onRide := a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
-	if !onRide && a.freeSvc().get(a.userOf(r)).Mode != modeDestined {
+	mode := a.freeSvc().get(a.userOf(r)).Mode
+	if !onRide && mode != modeDestined && mode != modeAimless {
 		a.refuseRide(w, r)
 		return
 	}
 	var h hudView
 	var legs []Leg
-	if onRide {
+	// Aimless never reads the plan, so nothing of it can show.
+	if onRide && mode != modeAimless {
 		var err error
 		if h, legs, err = a.hudData(time.Now(), lat, lng); err != nil {
 			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
@@ -265,7 +269,21 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	if hz == nil {
 		hz = newHazardSvc("")
 	}
-	if user := a.userOf(r); a.freeSvc().get(user).Mode == modeDestined {
+	if user := a.userOf(r); mode == modeAimless {
+		h.Free = a.aimlessHUD(user, lat, lng)
+		key := "free:" + user + "|aimless|nofix"
+		if lat != nil && lng != nil {
+			key = fmt.Sprintf("free:%s|aimless|%.1f,%.1f", user, *lat, *lng)
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 2*hazardTimeout)
+		defer cancel()
+		h.Hazards = hz.ForLeg(ctx, key, a.aimlessPoints(lat, lng))
+		w.Header().Set("Cache-Control", "private, no-store")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(h)
+		return
+	}
+	if user := a.userOf(r); mode == modeDestined {
 		st := a.freeSvc().get(user)
 		fctx, fcancel := context.WithTimeout(r.Context(), 3*freeTimeout)
 		defer fcancel()
