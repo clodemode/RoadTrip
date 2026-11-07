@@ -31,6 +31,9 @@ type postWorld struct {
 	body  string
 	last  *httptest.ResponseRecorder
 	pred  time.Time
+	// lenient is set by the start-and-check-in feature's Background: its
+	// "the request is refused" steps name the reason in a step of their own.
+	lenient bool
 }
 
 // rawPrivateLat/Lng is where the trip file puts milestone C. The fuzzed flag
@@ -69,11 +72,16 @@ func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) {
 	sc.Step(`^the bus carries an eta_hit record for B with no latitude and no longitude$`, p.busHit)
 	sc.Step(`^each offered milestone carries its published position as data attributes$`, p.attrsPresent)
 	sc.Step(`^a milestone that is a private place carries its snapped cell, never its point$`, p.privateSnapped)
+	initStartCheckinScenarios(sc, p)
 }
 
 // trip pushes a small trip (the fixture's first leg: Alder, Birch Gate, Cedar
 // Camp) as the active one, makes C a private place, and stamps A arrived.
-func (p *postWorld) trip() error {
+func (p *postWorld) trip() error { return p.tripWith(true) }
+
+// tripWith is trip with A's arrival optional: the start-and-check-in feature
+// begins before the drive has started.
+func (p *postWorld) tripWith(arriveA bool) error {
 	var doc map[string]any
 	if err := json.Unmarshal(fixtureTrip(p.t), &doc); err != nil {
 		return err
@@ -108,8 +116,10 @@ func (p *postWorld) trip() error {
 	if len(p.cps) != 3 {
 		return fmt.Errorf("want 3 milestones, the trip has %d", len(p.cps))
 	}
-	if err := p.sim.app.store.SetArrived(p.cps[0].ID, time.Date(2026, 11, 6, 9, 0, 0, 0, time.UTC), nil); err != nil {
-		return err
+	if arriveA {
+		if err := p.sim.app.store.SetArrived(p.cps[0].ID, time.Date(2026, 11, 6, 9, 0, 0, 0, time.UTC), nil); err != nil {
+			return err
+		}
 	}
 	p.arrA = p.cp(0).ArrivedAt
 	return nil
@@ -219,6 +229,13 @@ func (p *postWorld) post(milestone string) error {
 	_ = mw.WriteField("leg_id", strconv.FormatInt(p.cps[0].LegID, 10))
 	_ = mw.WriteField("kind", "photo")
 	_ = mw.WriteField("milestone_id", milestone)
+	// A check-in needs a position: the phone is at the stop it names.
+	for _, c := range p.cps {
+		if milestone != "" && strconv.FormatInt(c.ID, 10) == milestone {
+			_ = mw.WriteField("lat", strconv.FormatFloat(c.Lat, 'f', 4, 64))
+			_ = mw.WriteField("lng", strconv.FormatFloat(c.Lng, 'f', 4, 64))
+		}
+	}
 	fw, _ := mw.CreateFormFile("photo", "p.jpg")
 	_, _ = fw.Write(p.photo)
 	_ = mw.Close()
@@ -279,6 +296,9 @@ func (p *postWorld) cArrivedNow() error {
 }
 
 func (p *postWorld) refused() error {
+	if p.lenient && p.last.Code == http.StatusBadRequest {
+		return nil
+	}
 	if p.last.Code != http.StatusBadRequest || !strings.Contains(p.last.Body.String(), "milestone already reached or unknown") {
 		return fmt.Errorf("answer %d: %s", p.last.Code, p.last.Body.String())
 	}
