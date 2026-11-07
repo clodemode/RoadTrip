@@ -246,6 +246,9 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 		h.Free = fv
 		ctx, cancel := context.WithTimeout(r.Context(), 2*hazardTimeout)
 		defer cancel()
+		// A routed line can end at a private place's door; hazards are never
+		// asked about points near one, as on a planned leg.
+		fpts = dropNearFuzzed(fpts, fuzzedOf(rideCheckpoints(legs)))
 		h.Hazards = hz.ForLeg(ctx, "free:"+user+"|"+strings.ToLower(st.Query), fpts)
 		w.Header().Set("Cache-Control", "private, no-store")
 		w.Header().Set("Content-Type", "application/json")

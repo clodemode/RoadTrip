@@ -414,15 +414,30 @@ func legSamples(line json.RawMessage, n int, fuzzed []Checkpoint) []ll {
 		if len(p) < 2 {
 			continue
 		}
-		near := false
-		for _, f := range fuzzed {
-			if haversineKm(p[1], p[0], f.Lat, f.Lng) < lineMaskKm {
-				near = true
-				break
-			}
-		}
-		if !near {
+		if !nearFuzzed(p[1], p[0], fuzzed) {
 			out = append(out, ll{p[1], p[0]})
+		}
+	}
+	return out
+}
+
+// nearFuzzed reports whether a point is within lineMaskKm of a private place.
+func nearFuzzed(lat, lng float64, fuzzed []Checkpoint) bool {
+	for _, f := range fuzzed {
+		if haversineKm(lat, lng, f.Lat, f.Lng) < lineMaskKm {
+			return true
+		}
+	}
+	return false
+}
+
+// dropNearFuzzed removes the points a hazard lookup must not be asked about:
+// the same rule legSamples applies to a planned leg, for a routed line.
+func dropNearFuzzed(pts []ll, fuzzed []Checkpoint) []ll {
+	var out []ll
+	for _, p := range pts {
+		if !nearFuzzed(p.Lat, p.Lng, fuzzed) {
+			out = append(out, p)
 		}
 	}
 	return out

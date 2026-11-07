@@ -192,6 +192,11 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Every call says which drive it is part of, and what Chester remembers
+	// of this traveller: both after the cache breakpoint, in the volatile part.
+	user := a.userOf(r)
+	cx.Volatile += a.driveNote(r.Context(), user, now, lat, lng) + a.memoryNote(user)
+
 	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -205,6 +210,9 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := a.chester.ask(r.Context(), mode, cx, question, emit)
+	if res.Err == "" && !res.Synth && res.Answer != "" {
+		a.remember(user, question, res.Answer, res.Leanings, now)
+	}
 	// The row keeps the API's own usage for every request, and its tokens,
 	// searches and dollars are read back out of exactly what it keeps.
 	usageJSON := chesterUsageJSON(res.Requests)
@@ -224,7 +232,7 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	note := strings.Join(notes, "; ")
 	row := &ChesterQuery{
-		Ride: cx.Ride, AskedAt: utcString(now), TZ: cx.TZ, Mode: mode, Preset: preset, Question: question,
+		User: user, Ride: cx.Ride, AskedAt: utcString(now), TZ: cx.TZ, Mode: mode, Preset: preset, Question: question,
 		PromptVersion: chesterPromptVersion, Model: m.Model, ServedModel: res.Served, Effort: m.Effort,
 		TotalMS: res.TotalMS, TokensIn: used.In, TokensOut: used.Out,
 		CacheRead: used.CacheRead, CacheWrite: used.CacheWrite, Searches: used.Searches,
@@ -316,7 +324,8 @@ const chesterPricesNote = "Dollars are worked out from each response's own token
 // every question with its figures, its answer, its places and the form that
 // rules on it in place.
 func (a *App) chesterLog(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.store.ChesterQueries(0)
+	user := a.userOf(r)
+	rows, err := a.store.ChesterQueriesOf(user)
 	if err != nil {
 		log.Printf("ERROR chester log: %v", err)
 		http.Error(w, "the log could not be read", http.StatusInternalServerError)
@@ -327,8 +336,13 @@ func (a *App) chesterLog(w http.ResponseWriter, r *http.Request) {
 	if len(shown) > chesterLogLimit {
 		shown = shown[:chesterLogLimit]
 	}
+	var others []chesterOther
+	if a.auth.IsAdmin(r) {
+		others, _ = a.store.ChesterOthers(user)
+	}
 	a.render(w, r, "chester_log.html", map[string]any{
-		"Title": "Chester log", "Rows": shown, "Sum": sum, "Hidden": len(rows) - len(shown),
+		"Others": others,
+		"Title":  "Chester log", "Rows": shown, "Sum": sum, "Hidden": len(rows) - len(shown),
 		"Verdicts": chesterVerdicts, "Checks": chesterChecks, "Units": chesterUnits,
 		"PricesNote": chesterPricesNote,
 		"Error":      chesterRefusals[r.URL.Query().Get("error")],
@@ -339,12 +353,18 @@ func (a *App) chesterLog(w http.ResponseWriter, r *http.Request) {
 // chesterLogJSON is the whole log as data, for the signed-in trip-keeper and
 // the push token only.
 func (a *App) chesterLogJSON(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.store.ChesterQueries(0)
+	user := a.userOf(r)
+	rows, err := a.store.ChesterQueriesOf(user)
 	if err != nil {
 		http.Error(w, "the log could not be read", http.StatusInternalServerError)
 		return
 	}
+	others := []chesterOther{}
+	if a.auth.IsAdmin(r) {
+		others, _ = a.store.ChesterOthers(user)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"others":         others,
 		"prompt_version": chesterPromptVersion, "prices_note": chesterPricesNote,
 		"summary": summarizeChester(rows), "queries": rows,
 	})
@@ -393,7 +413,8 @@ func (a *App) chesterVerdict(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusBadRequest, chErrForm)
 		return
 	}
-	if _, err := a.store.ChesterQuery(id); err != nil {
+	// Only the driver who asked may rule: to rule is to read the answer.
+	if q, err := a.store.ChesterQuery(id); err != nil || q.User == "" || q.User != a.userOf(r) {
 		refuse(http.StatusNotFound, chErrMissing)
 		return
 	}
