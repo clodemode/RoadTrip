@@ -80,3 +80,28 @@ test('a server-held simulated drive never asks the phone and asks without a posi
   assert.equal(watched, 0, 'navigator.geolocation is not called');
   assert.equal(calls[0], '/driver/hud.json');
 });
+
+function loadExports() {
+  const mod = { exports: {} };
+  const ctx = { module: mod, document: { getElementById: () => null, addEventListener() {} }, window: { addEventListener() {} }, navigator: {} };
+  vm.runInNewContext(readFileSync(new URL('./hud.js', import.meta.url), 'utf8'), ctx);
+  return mod.exports;
+}
+
+test('isMoving: speed above 2 m/s, or more than 200 m in the last 120 s, and not otherwise', () => {
+  const { isMoving } = loadExports();
+  const a = { lat: 44.2, lng: -76.5, t: 0 };
+  assert.equal(isMoving(null, { ...a, t: 5, speed: 3 }), true, 'speed alone');
+  assert.equal(isMoving(null, { ...a, t: 5, speed: 1.9 }), false, 'slow and no history');
+  assert.equal(isMoving(a, { lat: 44.2, lng: -76.5, t: 60000, speed: 0 }), false, 'parked');
+  assert.equal(isMoving(a, { lat: 44.2, lng: -76.497, t: 60000, speed: null }), true, 'about 240 m east in a minute');
+  assert.equal(isMoving(a, { lat: 44.2, lng: -76.45, t: 130000, speed: null }), false, 'too long ago to count');
+  assert.equal(isMoving(a, { lat: 44.2, lng: -76.4995, t: 60000, speed: null }), false, 'under 200 m is drift');
+});
+
+test('the nav tap and its outcome are two shapes, and the tap no longer carries hidden', () => {
+  const { navTapBody, navResultBody } = loadExports();
+  assert.deepEqual(JSON.parse(navTapBody('waze', 'trip')), { event: 'nav_tap', fields: { app: 'waze', mode: 'trip' } });
+  assert.deepEqual(JSON.parse(navResultBody('apple', 'destined', true)), { event: 'nav_result', fields: { app: 'apple', mode: 'destined', hidden: true } });
+  assert.equal(JSON.parse(navResultBody('google', 'trip', false)).fields.hidden, false);
+});

@@ -21,10 +21,11 @@ const (
 
 // teleKinds: event -> field -> kind (s string, b bool, i int).
 var teleKinds = map[string]map[string]byte{
-	"nav_tap":   {"app": 's', "mode": 's', "hidden": 'b'},
-	"geo_error": {"code": 'i'},
-	"js_error":  {"msg": 's', "src": 's', "line": 'i'},
-	"page_view": {"path": 's'},
+	"nav_tap":    {"app": 's', "mode": 's'},
+	"nav_result": {"app": 's', "mode": 's', "hidden": 'b'},
+	"geo_error":  {"code": 'i'},
+	"js_error":   {"msg": 's', "src": 's', "line": 'i'},
+	"page_view":  {"path": 's'},
 }
 
 var teleEnums = map[string]map[string]bool{

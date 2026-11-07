@@ -22,17 +22,35 @@
     if (hasBanned(fields)) return null;
     return JSON.stringify({ event: event, fields: fields });
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody };
-  function send(event, fields) {
-    var b = telemetryBody(event, fields);
+  // Is the car moving? The phone's own speed above 2 m/s, or more than 200 m
+  // covered since the oldest fix of the last 120 s. Pure; exported for node.
+  function distM(a, b) {
+    var R = 6371000, r = Math.PI / 180;
+    var dLa = (b.lat - a.lat) * r, dLo = (b.lng - a.lng) * r;
+    var h = Math.sin(dLa / 2) * Math.sin(dLa / 2) +
+      Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) * Math.sin(dLo / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  function isMoving(prev, cur) {
+    if (!cur) return false;
+    if (typeof cur.speed === 'number' && cur.speed > 2) return true;
+    if (!prev || cur.t - prev.t > 120000 || cur.t <= prev.t) return false;
+    return distM(prev, cur) > 200;
+  }
+  // The two nav telemetry bodies: the tap, sent at once, and its outcome.
+  function navTapBody(app, mode) { return telemetryBody('nav_tap', { app: app, mode: mode }); }
+  function navResultBody(app, mode, hidden) { return telemetryBody('nav_result', { app: app, mode: mode, hidden: !!hidden }); }
+  if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody, isMoving: isMoving, navTapBody: navTapBody, navResultBody: navResultBody };
+  function sendBody(b) {
     if (b === null) return;
     try { if (navigator.sendBeacon) navigator.sendBeacon('/driver/telemetry', b); } catch (e) { /* telemetry never breaks the page */ }
   }
+  function send(event, fields) { sendBody(telemetryBody(event, fields)); }
 
   var root = document.getElementById('hud');
   if (!root) return;
   var $ = function (id) { return document.getElementById(id); };
-  var fix = null, lastAsk = 0, busy = false, again = false;
+  var fix = null, lastAsk = 0, busy = false, again = false, moving = false, hist = [];
   // A simulated drive is held by the server (sim.go): the page never asks the
   // phone for a position and never sends one. Every ask goes without lat/lng.
   var simOn = root.getAttribute('data-sim') === '1';
@@ -97,6 +115,12 @@
     setText('hud-left', h.miles_left);
     setText('hud-tonight', h.tonight_name);
     setText('hud-eta', h.eta);
+    setText('hud-pace', h.eta ? (h.eta_pace || '') : '');
+    var off = $('hud-offroute');
+    if (off) {
+      off.textContent = h.off_route ? 'Off route, ' + h.off_route_miles + ' mi from the plan' : '';
+      off.hidden = !h.off_route;
+    }
     setText('hud-tz', h.tz);
     var cross = $('hud-cross');
     cross.textContent = h.crossing || '';
@@ -126,6 +150,7 @@
     var url = root.getAttribute('data-url');
     var q = [];
     if (fix) q.push('lat=' + encodeURIComponent(fix.latitude.toFixed(4)), 'lng=' + encodeURIComponent(fix.longitude.toFixed(4)));
+    if (fix && moving) q.push('moving=1');
     if (q.length) url += '?' + q.join('&');
     lastAsk = Date.now();
     fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
@@ -223,6 +248,10 @@
     navigator.geolocation.watchPosition(function (p) {
       var first = !fix;
       fix = p.coords;
+      var cur = { lat: p.coords.latitude, lng: p.coords.longitude, t: Date.now(), speed: p.coords.speed };
+      hist.push(cur);
+      while (hist.length > 1 && cur.t - hist[0].t > 120000) hist.shift();
+      moving = isMoving(hist[0] === cur ? null : hist[0], cur);
       gps.textContent = 'fix, within ' + Math.round(p.coords.accuracy * 3.28084) + ' ft';
       if (first || Date.now() - lastAsk > 60000) refresh();
     }, function (e) {
@@ -268,8 +297,9 @@
   }
 
   // --- telemetry: nav taps, script errors, the page view -------------------------
-  // A nav tap is judged by whether the page goes hidden within 1.5 s (the phone
-  // opened the app) or not (the tap did nothing). The link still navigates.
+  // The tap is sent at once (a beacon survives the page going away); how it
+  // came out follows: nav_result hidden:true if the page went hidden within
+  // 1.5 s (the phone opened the app), hidden:false if it did not.
   var tapped = null;
   ['hud-waze', 'hud-google', 'hud-apple', 'free-waze', 'free-google', 'free-apple'].forEach(function (id) {
     var el = $(id);
@@ -279,8 +309,9 @@
       if (tapped) return;
       var t = { app: app, mode: $('hud-free') ? 'destined' : 'trip', done: false };
       tapped = t;
+      sendBody(navTapBody(t.app, t.mode));
       setTimeout(function () {
-        if (!t.done) { t.done = true; send('nav_tap', { app: t.app, mode: t.mode, hidden: false }); }
+        if (!t.done) { t.done = true; sendBody(navResultBody(t.app, t.mode, false)); }
         if (tapped === t) tapped = null;
       }, 1500);
     });
@@ -288,7 +319,7 @@
   document.addEventListener('visibilitychange', function () {
     if (document.hidden && tapped && !tapped.done) {
       tapped.done = true;
-      send('nav_tap', { app: tapped.app, mode: tapped.mode, hidden: true });
+      sendBody(navResultBody(tapped.app, tapped.mode, true));
     }
   });
   window.addEventListener('error', function (e) {

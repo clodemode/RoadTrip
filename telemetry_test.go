@@ -23,7 +23,7 @@ func TestTelemetryAllowlistedEventLands(t *testing.T) {
 	app := testApp(t)
 	app.melt = newMelt(f.addr(), "kate")
 	c := signedInCookie(t, app)
-	rec := postTelemetry(app, c, `{"event":"nav_tap","fields":{"app":"waze","mode":"trip","hidden":false}}`)
+	rec := postTelemetry(app, c, `{"event":"nav_result","fields":{"app":"waze","mode":"trip","hidden":false}}`)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
@@ -32,13 +32,21 @@ func TestTelemetryAllowlistedEventLands(t *testing.T) {
 	if err := json.Unmarshal([]byte(cmds[0][2]), &rec2); err != nil {
 		t.Fatal(err)
 	}
-	if rec2["event"] != "nav_tap" || rec2["origin"] != "phone" || rec2["app"] != "waze" || rec2["hidden"] != false || rec2["user"] == "" {
+	if rec2["event"] != "nav_result" || rec2["origin"] != "phone" || rec2["app"] != "waze" || rec2["hidden"] != false || rec2["user"] == "" {
 		t.Fatalf("record %v", rec2)
 	}
+	// The tap itself is sent at once and carries no outcome; hidden is refused on it.
+	if rec := postTelemetry(app, c, `{"event":"nav_tap","fields":{"app":"waze","mode":"trip"}}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("nav_tap status %d: %s", rec.Code, rec.Body)
+	}
+	if rec := postTelemetry(app, c, `{"event":"nav_tap","fields":{"app":"waze","mode":"trip","hidden":false}}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("nav_tap with hidden should be refused, got %d", rec.Code)
+	}
+	f.wait(t, 4)
 	// js_error: msg truncated, src stripped to a path.
 	postTelemetry(app, c, `{"event":"js_error","fields":{"msg":"`+strings.Repeat("x", 300)+`","src":"/static/js/hud.js?v=3","line":12}}`)
 	var je map[string]any
-	_ = json.Unmarshal([]byte(f.wait(t, 4)[2][2]), &je)
+	_ = json.Unmarshal([]byte(f.wait(t, 6)[4][2]), &je)
 	if len(je["msg"].(string)) != 200 || je["src"] != "/static/js/hud.js" {
 		t.Fatalf("js_error %v", je)
 	}
