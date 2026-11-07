@@ -192,6 +192,11 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Every call says which drive it is part of, and what Chester remembers
+	// of this traveller: both after the cache breakpoint, in the volatile part.
+	user := a.userOf(r)
+	cx.Volatile += a.driveNote(r.Context(), user, now, lat, lng) + a.memoryNote(user)
+
 	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -205,6 +210,9 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := a.chester.ask(r.Context(), mode, cx, question, emit)
+	if res.Err == "" && !res.Synth && res.Answer != "" {
+		a.remember(user, question, res.Answer, res.Leanings, now)
+	}
 	// The row keeps the API's own usage for every request, and its tokens,
 	// searches and dollars are read back out of exactly what it keeps.
 	usageJSON := chesterUsageJSON(res.Requests)

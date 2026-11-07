@@ -502,8 +502,8 @@ func TestChesterQuickQuestionEndToEnd(t *testing.T) {
 		}
 	}
 	tools, _ := req["tools"].([]any)
-	if len(tools) != 2 {
-		t.Fatalf("%d tools, want the web search and the place cards", len(tools))
+	if len(tools) != 3 || js(tools[2].(map[string]any)["name"]) != `"`+chesterRememberTool+`"` {
+		t.Fatalf("%d tools, want the web search, the place cards and the memory note", len(tools))
 	}
 	search, places := tools[0].(map[string]any), tools[1].(map[string]any)
 	if search["type"] != "web_search_20260209" || search["name"] != "web_search" || search["max_uses"] != float64(2) {

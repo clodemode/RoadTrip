@@ -313,6 +313,21 @@ CREATE TABLE IF NOT EXISTS chester_queries (
   usage_json      TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS chester_asked ON chester_queries(asked_at);
+CREATE TABLE IF NOT EXISTS chester_turns (
+  id    INTEGER PRIMARY KEY,
+  user  TEXT NOT NULL,
+  at    TEXT NOT NULL,
+  q     TEXT NOT NULL,
+  a     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS chester_turns_user ON chester_turns(user, id);
+CREATE TABLE IF NOT EXISTS chester_leanings (
+  id    INTEGER PRIMARY KEY,
+  user  TEXT NOT NULL,
+  at    TEXT NOT NULL,
+  note  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chester_leanings_user ON chester_leanings(user, id);
 `
 
 type Store struct{ db *sql.DB }
