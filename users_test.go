@@ -273,3 +273,38 @@ func testAdminUser(t *testing.T, app *App) string {
 	asUser(t, app, "kris", roleAdmin)
 	return "kris"
 }
+
+func TestChecklistTapBoxesAreForSignedInOnly(t *testing.T) {
+	app := checklistApp(t)
+	markOK(t, app, clStep, "call-ahead", url.Values{})
+	anon := doAs(t, app, nil, "GET", "/checklist", nil).Body.String()
+	if strings.Contains(anon, "cl-check") || strings.Contains(anon, "checklist.js") {
+		t.Fatal("a visitor must see no checkbox and no script")
+	}
+	if !strings.Contains(anon, "Done") {
+		t.Fatal("a visitor still sees the read-only state")
+	}
+	c := asUser(t, app, "pat", roleEditor)
+	in := doAs(t, app, c, "GET", "/checklist", nil).Body.String()
+	if !strings.Contains(in, `data-kind="step" data-id="call-ahead"`) || !strings.Contains(in, "checklist.js") {
+		t.Fatal("signed-in page has no tap box for a step")
+	}
+	if !strings.Contains(in, `data-id="call-ahead" checked`) {
+		t.Fatal("a done step's box is not checked")
+	}
+	if strings.Contains(in, `data-kind="question"`) {
+		t.Fatal("questions need an answer, not a tap")
+	}
+	// The tap is a fetch to the mark route, answered in JSON.
+	req := httptest.NewRequest("POST", "/driver/checklist/step/deposit", strings.NewReader(""))
+	req.Header.Set("Accept", "application/json")
+	req.AddCookie(c)
+	w := httptest.NewRecorder()
+	app.routes().ServeHTTP(w, req)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"done": true`) && !strings.Contains(w.Body.String(), `"done":true`) {
+		t.Fatalf("tap = %d %s", w.Code, w.Body.String())
+	}
+	if w := doAs(t, app, nil, "GET", "/static/js/checklist.js", nil); w.Code != 200 || !strings.Contains(w.Body.String(), "/driver/checklist/") {
+		t.Fatalf("checklist.js = %d", w.Code)
+	}
+}
