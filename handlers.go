@@ -163,6 +163,7 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/freelance/mode", a.requireAuth(a.freeMode))
 	mux.Handle("POST /driver/freelance/dest", a.requireAuth(a.freeDest))
 	mux.Handle("POST /driver/freelance/picks", a.requireAuth(a.freePicks))
+	mux.Handle("GET /driver/roadtracks/search", a.requireAuth(a.roadtracksSearch))
 	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
 	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))

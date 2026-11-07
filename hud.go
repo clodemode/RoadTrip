@@ -54,6 +54,9 @@ type hudView struct {
 	// Free is set instead of the trip fields being believed when the signed-in
 	// user is on a FreeLance drive.
 	Free *freeView `json:"free,omitempty"`
+
+	// Tracks says whether the RoadTracks card is on; nothing else about it.
+	Tracks *tracksView `json:"tracks,omitempty"`
 }
 
 func hudMiles(mi float64) string { return strconv.Itoa(int(math.Round(mi))) + " mi" }
@@ -225,7 +228,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 		a.freeSvc().set(a.userOf(r), func(s *freeState) { s.Mode = modeDestined })
 	}
 	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h,
-		"Destined": st.Mode == modeDestined || !onRide, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
+		"TracksOn": a.tracks != nil, "Destined": st.Mode == modeDestined || !onRide, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 
 // hudJSON is the live HUD: position-aware, with the hazard chips of the leg.
@@ -247,6 +250,9 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
 			return
 		}
+	}
+	if a.tracks != nil {
+		h.Tracks = &tracksView{Enabled: true}
 	}
 	hz := a.hazards
 	if hz == nil {
