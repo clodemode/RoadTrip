@@ -1,0 +1,38 @@
+entries:
+- slug: truth-roadtrip-2026-11-07-driver-aids-round-on-a-local-kate-melt-sink-server-held-sim-eta-policy-post-a-photo-shipped-prs-22-to-27
+  title: 'roadtrip 2026-11-07: the driver-aids round shipped as PRs 22 to 27 on trunk 3f4f054 (MELT sink
+    + phone telemetry, sim corridor, CI trim, one server-held sim position per driver, ETA only while
+    driving and rounded with a scored ledger, Post a Photo with milestone bullets); proven on a local
+    KATE, nothing deployed to Fly (v41 stays ba595e8)'
+  domain: truth
+  lore_type: truth
+  app_scope: roadtrip
+  lair: all
+  character_slug: krispy
+  tags:
+  - thread-end
+  - driver
+  - kate
+  - melt
+  - sim
+  - eta
+  - photos
+  - gherkin
+  - '2026-11-07'
+  status: design
+  description: |-
+    Thread RT:driver aids on KATE + MELT (local_4949f241-1a02-4701-8557-ccfbc63af26c), 19:16 to ~20:50 UTC 2026-11-07, six Sonnet CODIs, every PR merged by Kris within minutes of being handed over.
+    SHIPPED on clodemode/RoadTrip: PR 22 sim corridor kgn-yyz with seed (node tests 26); PR 23 melt.go (MELT_REDIS_ADDR, MELT_VENUE; LPUSH+LTRIM onto clode:state:melt:roadtrip:{events,errors}; privacy guard refuses lat/lng/dest/label/note keys), POST /driver/telemetry (nav_tap, nav_result, geo_error, js_error, page_view; 20/s per user), server events hud_served/free_mode_set/free_dest_set/picks_asked/roadtracks_search/post_created/checkpoint_arrived/login; PR 24 ci.yml runs the Go suite on push to trunk only; PR 25 sim.go: one server-held simulated position per signed-in driver (SIM_ALLOWED=1, POST /driver/sim/start|stop, GET /driver/sim.json), the HUD and Chester's ask fall back to it, server-rendered banner on every page, client fake GPS retired, godog harness features/sim_position.feature (8 scenarios); PR 26 ETA only when moving and on the leg, aboutClock 5-minute rounding, off_route + off_route_miles line, eta_predictions table with RecordETA/ScoreETA/ETALedger, GET /driver/eta.json, eta_hit MELT event, nav_tap beacon at once + nav_result, features/eta_policy.feature (8); PR 27 Post a Photo: arrive-strip removed, Milestone (optional) radios of unarrived stops, arrival at the photo's EXIF time via one arriveCheckpoint helper, suggestMilestone within 2 km pre-highlights, features/post_a_photo.feature (8). Gherkin total 24 scenarios green, each wave RED first with a RED control.
+    KATE: docker image from the branch under test, container roadtrip-kate on about_default, -p 8089:8080, --env-file roadtrip/data/kate.env (KATE_PASSWORD, ADMIN_PASSWORD_HASH, SESSION_KEY, RIDE_SLUG, COOKIE_SECURE=0, SIM_ALLOWED=1, MELT_REDIS_ADDR=redis:6379, MELT_VENUE=kate, TomTom + Anthropic keys from .env, no SITE_URL), -v roadtrip/data/kate:/data. Phone on the LAN: http://192.168.40.176:8089 (plain HTTP, no real GPS, sim supplies position). Active ride on the KATE is the test trip kgn-yyz-test (data/kate/trips/kgn-yyz-test.geojson: one leg along the 401, stops Kingston, Napanee, Belleville, Trenton, Cobourg, Oshawa, Toronto, start 2026-11-07), set with POST /driver/ride/active; the real trip ygk-atx-2026-11 is the fallback.
+    RULED by Kris today: no ETA until driving, never over-precise (5-minute 'about'), a telemetry store for ETA accuracy; shared state (a sim position, a player) lives on the server per driver, never per tab or in browser storage, Gherkin first ("tab control and coordination already haunts my musicorgan player. Please get it right at the beginning. Go Gherkin"); the post form is Post a Photo, default just a photo, milestone bullets optional; builders on thin tokens (Sonnet, named files and line ranges, one RED/GREEN, short reports); E then C; finish the round before thread end; the next thread starts on Opus.
+    OBSERVED: Apple Maps worked on his phone after the first dead tap (hrefs were valid throughout); hazard chips read 'unknown (error)' on the Canadian test route; 150 traffic closure chips on the real Day 1 leg; the Fly machine has no Redis so MELT is off on prod.
+  dont: 'DONT read Fly v41 as carrying any of this: the whole round lives on trunk and the KATE only;
+    the first deploy of the round is the successor''s call with Kris. DONT start a sim on prod: SIM_ALLOWED
+    is unset there by design. DONT read hud_served''s ''source'' as plan|fix; that is the sink''s producer
+    tag, the position source is ''pos_source''.'
+  do_this: 'VERIFY on the KATE (roadtrip-kate, :8089, image built from trunk): sign in, open /driver?sim=all&corridor=kgn-yyz&x=3&seed=5,
+    the banner reads SIMULATED GPS with the seed, the HUD reads Day 1 of 1 Kingston → Toronto with Napanee
+    next and an ETA ''about H:MM PM EST''; open /chester, the same banner shows; mcp__clode__melt_tail(source=''roadtrip'')
+    shows hud_served {sim:true, pos_source:''fix'', eta_shown} and page_view records and no coordinate
+    anywhere; /driver/post reads Post a Photo with ''Just a photo'' checked and the unarrived stops as
+    radios; /driver/eta.json lists predictions once an ETA was shown.'

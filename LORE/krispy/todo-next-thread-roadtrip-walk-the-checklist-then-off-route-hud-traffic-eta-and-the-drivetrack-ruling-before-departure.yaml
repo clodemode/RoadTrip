@@ -11,11 +11,15 @@ entries:
   - next-thread
   - driver
   - checklist
-  status: design
+  status: shipped
   description: |-
     agent_start(app_scope='roadtrip', lair='all', tag='driver'). STATE at 2026-11-07 ~13:10 CST (19:10 UTC): clodemode/RoadTrip trunk ba595e8 deployed as Fly v41 through deploy.yml (gates incl. node --test static/js/*_test.mjs), health passing. Shipped this day by thread RT:driver screen phone test (local_80713a5e-ad5c-4e7e-a05d-eb42753549c1): PR 15 ?sim= fake GPS, PR 16+17 HUD first-fix race (real cause hud.js busy drop), PR 18 along-route privacy mask, PR 19 FreeLance Aimless (+ chester-rt-7, freelance-picks-4), PR 20 ticking a checklist step opens its Mark done form. Truth stone: truth-roadtrip-2026-11-07-driver-screen-live-on-v41-trailer-test-passed-freelance-aimless-shipped-and-checklist-tick-opens-mark-done. All worktrees and merged branches were removed; local trunk is ba595e8.
     Kris is now working through the checklist himself on /checklist (1 of 20 done at hand-off). NEXT, in order: (1) fix anything he hits on the checklist; (2) todo-roadtrip-driver-screen-says-off-route-instead-of-silently-showing-todays-plan-leg-when-the-fix-is-far-from-every-leg; (3) todo-roadtrip-driver-screen-traffic-aware-eta-via-tomtom-routing-instead-of-plan-pace; (4) ask Kris to rule the proposed close on todo-roadtrip-drivetrack-soundtrack-from-musicorgan-shared-key-so-chester-can-pick-live-and-planned-driving-music (superseded by RoadTracks PR 11 + the Chester RoadTracks tool row); (5) todo-roadtrip-ci-runs-the-go-race-suite-on-every-branch-push-and-again-on-every-pr-so-each-change-pays-github-minutes-two-or-three-times. Ruled 2026-11-07: calculateRoute origin stays raw. Test drives: https://roadtrip.opeongo.net/driver?sim=1|10|100&from=30.2672,-97.7431&to=... ; the mode buttons redirect to plain /driver, so re-open the ?sim URL after switching mode. Workflow: one PR per change, test first with a RED control, deploy via gh workflow run deploy.yml --ref trunk -f mode=apply; Kris merged PR 20 by asking this thread to merge it.
+
+    Picked-up: 2026-11-07, 7b2638fc-5a6e-405a-825f-1bff380b29a7: consumed at pickup by lore_pickup; the picking thread now carries this work
   depends_on:
   - spec-clode-an-unmerged-pr-is-held-and-stacked-it-goes-draft-the-moment-new-work-is-found-for-it-and-ready-only-when-done-and-checked
   - todo-roadtrip-driver-screen-says-off-route-instead-of-silently-showing-todays-plan-leg-when-the-fix-is-far-from-every-leg
   - todo-roadtrip-driver-screen-traffic-aware-eta-via-tomtom-routing-instead-of-plan-pace
+  closed_at: '2026-11-07T19:17:22.516467+00:00'
+  closed_by_actor: 7b2638fc-5a6e-405a-825f-1bff380b29a7

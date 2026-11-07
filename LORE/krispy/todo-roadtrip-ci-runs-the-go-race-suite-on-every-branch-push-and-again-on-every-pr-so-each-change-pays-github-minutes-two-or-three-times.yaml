@@ -10,11 +10,14 @@ entries:
   tags:
   - ci
   - github-minutes
-  status: design
+  status: shipped
   description: 'Measured 2026-11-07: ci.yml triggers on push branches [''**''] and pull_request; PR 15''s
     change produced CI runs 42386799158 (push) and 42386803326 (pull_request) 3 s apart, then 42387867192
     on the trunk merge push, each ~3-4 min with go test -race -count=1, and Deploy run 42387905394 runs
     its own go-test gate. Kris rule (2026-11-05): test on local hosts, preserve GitHub minutes, never
-    gate a merge on PR CI; a PR-triggered suite is a todo to remove.'
+    gate a merge on PR CI; a PR-triggered suite is a todo to remove. Shipped: 2026-11-07, PR 24 on clodemode/RoadTrip
+    (codi-roadtrip-ci-trigger-trim-2026-11-07), awaiting Kris merge.'
   do_this: Drop the pull_request trigger and narrow push to trunk only (or remove CI entirely, leaving
     deploy.yml's gate plus local runs); keep node --check and go vet in the deploy gate.
+  closed_at: '2026-11-07T19:40:31.414490+00:00'
+  closed_by_actor: codi-roadtrip-ci-trigger-trim-2026-11-07
