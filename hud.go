@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -37,10 +38,13 @@ type hudView struct {
 	MilesDone  string  `json:"miles_done"`
 	MilesLeft  string  `json:"miles_left"`
 
-	TonightName string `json:"tonight_name"`
-	ETA         string `json:"eta"`
-	TZ          string `json:"tz"`
-	Crossing    string `json:"crossing"`
+	TonightName   string `json:"tonight_name"`
+	ETA           string `json:"eta"`
+	ETAPace       string `json:"eta_pace,omitempty"`
+	OffRoute      bool   `json:"off_route,omitempty"`
+	OffRouteMiles int    `json:"off_route_miles,omitempty"`
+	TZ            string `json:"tz"`
+	Crossing      string `json:"crossing"`
 
 	HasNext   bool   `json:"has_next"`
 	NextName  string `json:"next_name"`
@@ -56,6 +60,11 @@ type hudView struct {
 
 	Hazards []hazardChip `json:"hazards,omitempty"`
 
+	// What the ETA is a promise about: the stop and the time, for the ledger.
+	// Never sent to the phone.
+	etaCP int64
+	etaAt time.Time
+
 	// Free is set instead of the trip fields being believed when the signed-in
 	// user is on a FreeLance drive.
 	Free *freeView `json:"free,omitempty"`
@@ -67,7 +76,7 @@ type hudView struct {
 func hudMiles(mi float64) string { return strconv.Itoa(int(math.Round(mi))) + " mi" }
 
 // buildHUD is pure: the ride, the clock and, optionally, a position.
-func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64) hudView {
+func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving bool) hudView {
 	h := hudView{Source: "plan", MilesDone: "—", MilesLeft: "—", ETA: "—", NextMiles: "—"}
 	if len(legs) == 0 {
 		return h
@@ -75,16 +84,26 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64) hudView 
 	h.DayTotal = len(legs)
 
 	// Which leg: the one whose line the fix is on, else today's by date.
-	li, posAlong, onLine := -1, 0.0, false
+	li, posAlong, onLine, offRoute := -1, 0.0, false, false
 	if lat != nil && lng != nil {
-		best := math.Inf(1)
+		best, nearest := math.Inf(1), math.Inf(1)
 		for i := range legs {
 			along, _, off, ok := alongLine(legs[i].Line, *lat, *lng)
+			if ok && off < nearest {
+				nearest = off
+			}
 			if ok && off < best && off < hudOffRouteKm {
 				best, li, posAlong = off, i, along
 			}
 		}
 		onLine = li >= 0
+		// A fix far from every leg is said to be off the plan, and the plan's
+		// own figures are not drawn from it. The distance is worked out here;
+		// the fix goes nowhere.
+		if !onLine && !math.IsInf(nearest, 1) {
+			offRoute = true
+			h.OffRoute, h.OffRouteMiles = true, int(math.Round(nearest*kmToMi))
+		}
 	}
 	di := dayOf(ride, legs, now)
 	if onLine {
@@ -115,7 +134,7 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64) hudView 
 	}
 	// Without a fix, the furthest arrival on this leg stands in for "where we are".
 	haveBase := onLine
-	if !onLine && haveLine {
+	if !onLine && !offRoute && haveLine {
 		for i, c := range cps {
 			if c.ArrivedAt != "" && alongs[i] >= posAlong {
 				posAlong, haveBase = alongs[i], true
@@ -147,15 +166,14 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64) hudView 
 	}
 	h.TZ = now.In(loadLoc(curTZ)).Format("MST")
 
-	// ETA at plan pace, only when it means something: we know where we are, or
-	// the leg is today's.
-	if end != nil && leg.EstHours > 0 && haveLine && totalKm > 0 && (haveBase || (di.Today != nil && di.Today.ID == leg.ID)) {
-		leftFrac := 1.0
-		if haveBase {
-			leftFrac = math.Max(0, (totalKm-posAlong)/totalKm)
-		}
+	// ETA at plan pace, only while the car is moving and we know where it is:
+	// a promise made to a parked car, or from a guess at today's leg, is not
+	// one to make.
+	if moving && onLine && end != nil && leg.EstHours > 0 && haveLine && totalKm > 0 {
+		leftFrac := math.Max(0, (totalKm-posAlong)/totalKm)
 		eta := now.Add(time.Duration(leg.EstHours * leftFrac * float64(time.Hour)))
-		h.ETA = eta.In(loadLoc(end.TZ)).Format("3:04 PM MST")
+		h.ETA, h.ETAPace = aboutClock(eta, loadLoc(end.TZ)), "plan pace"
+		h.etaCP, h.etaAt = end.ID, eta
 	}
 
 	// The next stop: the first checkpoint ahead that nobody has arrived at.
@@ -199,12 +217,12 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64) hudView 
 }
 
 // hudData loads the ride and builds the view for one request.
-func (a *App) hudData(now time.Time, lat, lng *float64) (hudView, []Leg, error) {
+func (a *App) hudData(now time.Time, lat, lng *float64, moving bool) (hudView, []Leg, error) {
 	rv, err := a.loadRide()
 	if err != nil {
 		return hudView{}, nil, err
 	}
-	return buildHUD(rv.Ride, rv.Legs, now, lat, lng), rv.Legs, nil
+	return buildHUD(rv.Ride, rv.Legs, now, lat, lng, moving), rv.Legs, nil
 }
 
 func parseFix(r *http.Request) (lat, lng *float64) {
@@ -226,7 +244,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 	// Aimless is not the plan: its screen is drawn without the ride's numbers.
 	if onRide && !aimless {
 		var err error
-		if h, _, err = a.hudData(time.Now(), nil, nil); err != nil {
+		if h, _, err = a.hudData(time.Now(), nil, nil, false); err != nil {
 			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
 			return
 		}
@@ -247,9 +265,14 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	// No position from the browser and a simulated drive running for this
 	// driver: the server's own position stands in, as a phone fix would.
 	simUsed := false
+	// Moving is the phone's word (hud.js sends moving=1 from its speed or its
+	// last two minutes of fixes) or, for the server-held drive, a speed above 0.
+	moving := lat != nil && r.URL.Query().Get("moving") == "1"
 	if lat == nil {
 		if sl, sg := a.simFix(r); sl != nil {
 			lat, lng, simUsed = sl, sg, true
+			_, _, _, mph, _, _ := a.sim.PositionAt(a.userOf(r), a.sim.now())
+			moving = mph > 0
 		}
 	}
 	// The trip HUD is the ride's; a driver off the ride gets only FreeLance
@@ -265,9 +288,16 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	// Aimless never reads the plan, so nothing of it can show.
 	if onRide && mode != modeAimless {
 		var err error
-		if h, legs, err = a.hudData(time.Now(), lat, lng); err != nil {
+		now := time.Now()
+		if h, legs, err = a.hudData(now, lat, lng, moving); err != nil {
 			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
 			return
+		}
+		// Every ETA shown is kept, to be scored when the stop is reached.
+		if mode == modeTrip && h.etaCP != 0 {
+			if _, err := a.store.RecordETA(a.activeSlug(), h.etaCP, a.userOf(r), now, h.etaAt, "plan"); err != nil {
+				log.Printf("eta ledger: %v", err)
+			}
 		}
 	}
 	if a.tracks != nil {

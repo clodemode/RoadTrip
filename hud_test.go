@@ -37,7 +37,7 @@ func TestHUDFallsBackToThePlanByDate(t *testing.T) {
 	loc := loadLoc(leg.TZ)
 	d, _ := time.ParseInLocation("2006-01-02", leg.Date, loc)
 	now := d.Add(12 * time.Hour)
-	h := buildHUD(rv.Ride, rv.Legs, now, nil, nil)
+	h := buildHUD(rv.Ride, rv.Legs, now, nil, nil, false)
 	if h.Source != "plan" || h.DayN != 2 || h.LegSlug != leg.Slug || h.DayTotal != len(rv.Legs) {
 		t.Fatalf("plan fallback: %+v", h)
 	}
@@ -57,7 +57,7 @@ func TestHUDPositionPicksTheLegAndSplitsMiles(t *testing.T) {
 	leg := rv.Legs[2]
 	lat, lng := midVertex(t, leg)
 	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC) // the date points elsewhere
-	h := buildHUD(rv.Ride, rv.Legs, now, &lat, &lng)
+	h := buildHUD(rv.Ride, rv.Legs, now, &lat, &lng, false)
 	if h.Source != "position" || h.LegSlug != leg.Slug {
 		t.Fatalf("a fix on leg 3's line must pick leg 3: %+v", h)
 	}
@@ -66,7 +66,7 @@ func TestHUDPositionPicksTheLegAndSplitsMiles(t *testing.T) {
 	}
 	// A fix nowhere near the line falls back to the plan and claims no miles.
 	far, farLng := 0.0, 0.0
-	h = buildHUD(rv.Ride, rv.Legs, now, &far, &farLng)
+	h = buildHUD(rv.Ride, rv.Legs, now, &far, &farLng, false)
 	if h.Source != "plan" {
 		t.Fatalf("off-route fix must not be believed: %+v", h)
 	}
@@ -75,7 +75,7 @@ func TestHUDPositionPicksTheLegAndSplitsMiles(t *testing.T) {
 func TestHUDNoMilesIsDashNotZero(t *testing.T) {
 	_, rv := hudRide(t)
 	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC) // before the ride
-	h := buildHUD(rv.Ride, rv.Legs, now, nil, nil)
+	h := buildHUD(rv.Ride, rv.Legs, now, nil, nil, false)
 	if h.HaveMiles || h.MilesDone != "—" {
 		t.Fatalf("without a fix or an arrival the done figure is unknown, not 0: %+v", h)
 	}
@@ -87,7 +87,7 @@ func TestHUDCallsOutAZoneChange(t *testing.T) {
 	found := false
 	for _, l := range rv.Legs {
 		d, _ := time.ParseInLocation("2006-01-02", l.Date, loadLoc(l.TZ))
-		h := buildHUD(rv.Ride, rv.Legs, d.Add(12*time.Hour), nil, nil)
+		h := buildHUD(rv.Ride, rv.Legs, d.Add(12*time.Hour), nil, nil, false)
 		if h.Crossing != "" {
 			found = true
 			if !strings.Contains(h.Crossing, "→") {

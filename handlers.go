@@ -161,6 +161,7 @@ func (a *App) routes() http.Handler {
 	mux.Handle("GET /driver", a.requireAuth(a.driverHome))
 	mux.Handle("GET /driver/hud.json", a.requireAuth(a.hudJSON)) // gates itself: FreeLance has no ride
 	mux.Handle("POST /driver/telemetry", a.requireAuth(a.telemetry))
+	mux.Handle("GET /driver/eta.json", a.requireAuth(a.etaJSON)) // every ETA shown, scored at arrival
 	// The simulated drive: one server-held position per signed-in user (sim.go).
 	mux.Handle("POST /driver/sim/start", a.requireAuth(a.simStart))
 	mux.Handle("POST /driver/sim/stop", a.requireAuth(a.simStop))
@@ -1720,6 +1721,7 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 			delta = int(at.Sub(pa).Round(time.Minute) / time.Minute)
 		}
 		a.melt.Event("checkpoint_arrived", map[string]any{"name": cp.Name, "delta_min": delta})
+		a.scoreETAs(cp, at)
 	}
 	switch {
 	case clearing:
@@ -1732,6 +1734,26 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 		log.Printf("checkpoint %d (%s): arrived%s, location adopted → precision exact", cp.Ord, cp.Name, when)
 	}
 	http.Redirect(w, r, backTo(r, "/driver/post"), http.StatusSeeOther)
+}
+
+// scoreETAs scores the ETAs the screen showed for this stop and tells the bus
+// how they did: names and minutes, never a position.
+func (a *App) scoreETAs(cp *Checkpoint, at time.Time) {
+	rows, err := a.store.ScoreETA(a.activeSlug(), cp.ID, at)
+	if err != nil {
+		log.Printf("eta ledger: scoring %s: %v", cp.Name, err)
+		return
+	}
+	if len(rows) == 0 {
+		return
+	}
+	latest, sum := rows[len(rows)-1], 0.0
+	for _, r := range rows {
+		sum += math.Abs(float64(*r.ErrorMin))
+	}
+	e := *latest.ErrorMin
+	a.melt.Event("eta_hit", map[string]any{"checkpoint": cp.Name, "n": len(rows), "error_min": e,
+		"mean_abs_error_min": math.Round(sum/float64(len(rows))*10) / 10, "within_10": e >= -10 && e <= 10})
 }
 
 // --- the census ------------------------------------------------------------------

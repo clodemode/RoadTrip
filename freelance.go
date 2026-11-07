@@ -512,7 +512,7 @@ func (a *App) freeHUD(ctx context.Context, user string, st freeState, lat, lng *
 	left, _ := remainingKm(rt.Points, *lat, *lng)
 	v.State, v.CanPicks = "ok", true
 	v.Miles = hudMiles(left * kmToMi)
-	v.ETA = rt.Arrival.Format("3:04 PM")
+	v.ETA = aboutClock(rt.Arrival, rt.Arrival.Location())
 	if rt.DelayS >= 60 {
 		v.Delay = fmt.Sprintf("includes about %d min of traffic", int(math.Round(rt.DelayS/60)))
 	}

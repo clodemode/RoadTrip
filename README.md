@@ -796,6 +796,10 @@ The photo is shown for recognition but is not editable: media is
 content-addressed and the store stays append-only, so replacing a photo is a
 delete and a re-post.
 
+### ETA policy
+
+The driver screen makes no arrival promise until the car is moving. The phone says so with `moving=1` on `/driver/hud.json` (its speed above 2 m/s, or more than 200 m covered in the last two minutes; a server-held simulated drive is moving while its speed is above 0), and the ETA is worked out only then and only from a fix on the leg, never from a guess at today's leg. It is written "about 4:35 PM EST", rounded to the nearest five minutes. A fix further than 50 km from every leg is shown as "Off route, N mi from the plan" (the distance is worked out on the server), with no ETA and no miles done. Every ETA the screen shows is kept in the `eta_predictions` table, once per five minutes per stop, and scored when that stop is marked arrived: `/driver/eta.json` (signed in) lists the predictions with their error in minutes and the share within ten minutes, and each scoring publishes an `eta_hit` MELT record (stop name and minutes, no position). Spec: `features/eta_policy.feature`.
+
 ### Testing the driver screen without driving
 
 A simulated drive is **one position per signed-in driver, held on the server**, so every page and every device signed in as that driver sees the same car at the same instant. Nothing ticks in a tab and nothing is kept in browser storage: the position is computed at request time from the corridor, the seed, the start instant and the compression (`sim.go`, a port of the pure helpers in `static/js/sim.js`), and is only ever consumed server-side or handed to the HUD and Chester the way a phone fix is.
