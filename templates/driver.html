@@ -40,6 +40,13 @@
     <button type="button" class="btn btn-outline-dark" id="free-find" disabled>Find picks</button>
     <p class="hud-s" id="free-picks-msg" role="status" aria-live="polite"></p>
     <div id="free-picks"></div>
+    {{if .TracksOn}}<h2 class="hud-k">RoadTracks</h2>
+    <form class="hud-dest" id="rt-form" role="search" aria-label="RoadTracks">
+      <input class="form-control" id="rt-q" type="search" placeholder="Album or artist" autocomplete="off" aria-label="Search the music library">
+      <button class="btn btn-outline-dark" type="submit">Search</button>
+    </form>
+    <p class="hud-s" id="rt-msg" role="status" aria-live="polite"></p>
+    <ul class="rt-list" id="rt-list"></ul>{{end}}
   </section>{{else}}<section class="hud-road" aria-label="Road ahead">
     <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
       <button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>
@@ -54,6 +61,13 @@
       <li class="hud-chip unknown">Weather: checking&hellip;</li>
       <li class="hud-chip unknown">Traffic: checking&hellip;</li>
     </ul>
+    {{if .TracksOn}}<h2 class="hud-k">RoadTracks</h2>
+    <form class="hud-dest" id="rt-form" role="search" aria-label="RoadTracks">
+      <input class="form-control" id="rt-q" type="search" placeholder="Album or artist" autocomplete="off" aria-label="Search the music library">
+      <button class="btn btn-outline-dark" type="submit">Search</button>
+    </form>
+    <p class="hud-s" id="rt-msg" role="status" aria-live="polite"></p>
+    <ul class="rt-list" id="rt-list"></ul>{{end}}
   </section>{{end}}
 
   <nav class="hud-tools hud-right" aria-label="Driver tools, right">

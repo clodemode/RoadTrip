@@ -99,6 +99,8 @@ type App struct {
 	// free is the FreeLance drive: per-user mode and destination, in memory,
 	// and the TomTom search and routing it needs. nil is built on first use.
 	free *freeSvc
+	// tracks is the RoadTracks search; nil is the feature off.
+	tracks *roadtracksSvc
 }
 
 // PIN_PRECISION values. See App.pinPrecision.
@@ -300,6 +302,11 @@ func main() {
 		log.Print("traffic: TOMTOM_API_KEY unset, the driver screen will say traffic is unknown")
 	} else {
 		log.Print("traffic: TOMTOM_API_KEY set")
+	}
+	if app.tracks = newRoadtracks(os.Getenv("ROADTRACKS_TOKEN"), os.Getenv("ROADTRACKS_BASE")); app.tracks == nil {
+		log.Print("roadtracks: ROADTRACKS_TOKEN unset, the RoadTracks card is off")
+	} else {
+		log.Print("roadtracks: enabled")
 	}
 	if cfg, why := chesterConfigFrom(os.Getenv); cfg == nil {
 		log.Printf("chester: disabled (%s)", why)

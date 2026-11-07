@@ -182,6 +182,32 @@
   window.addEventListener('offline', net);
   setText('hud-net', navigator.onLine !== false ? 'online' : 'offline');
 
+  // --- RoadTracks: search the music library; a tap opens its player in a new tab ---
+  var rtForm = $('rt-form');
+  if (rtForm) {
+    rtForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var q = ($('rt-q').value || '').trim(), list = $('rt-list');
+      list.textContent = '';
+      if (!q) { setText('rt-msg', 'Type something to search.'); return; }
+      setText('rt-msg', 'Searching\u2026');
+      fetch('/driver/roadtracks/search?q=' + encodeURIComponent(q), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (o) { return { ok: r.ok, o: o }; }); })
+        .then(function (x) {
+          if (!x.ok) { setText('rt-msg', (x.o && x.o.error) || 'Music library unavailable'); return; }
+          var albums = x.o.albums || [];
+          setText('rt-msg', albums.length ? '' : 'No albums found.');
+          albums.forEach(function (a) {
+            var li = document.createElement('li'), l = document.createElement('a');
+            l.href = a.url; l.target = '_blank'; l.rel = 'noopener';
+            l.textContent = a.album + ' \u2014 ' + a.albumartist + (a.year ? ' (' + a.year + ')' : '');
+            li.appendChild(l); list.appendChild(li);
+          });
+        })
+        .catch(function () { setText('rt-msg', 'Music library unavailable'); });
+    });
+  }
+
   refresh();
   setInterval(function () { if (!document.hidden && navigator.onLine !== false) refresh(); }, 120000);
 })();
