@@ -94,21 +94,27 @@
   }
 
   // --- Find picks: only on a tap, never on a refresh -------------------------------
-  var find = $('free-find');
-  if (find) {
-    find.addEventListener('click', function () {
-      if (!fix) { setText('free-picks-msg', 'No position fix yet.'); return; }
-      find.disabled = true;
-      setText('free-picks-msg', 'Looking along the route\u2026 this can take half a minute.');
-      var body = new URLSearchParams({ lat: fix.latitude.toFixed(4), lng: fix.longitude.toFixed(4) });
-      fetch('/driver/freelance/picks', { method: 'POST', credentials: 'same-origin', body: body,
-        headers: { 'Accept': 'application/json' } })
-        .then(function (r) { if (!r.ok) throw new Error('status ' + r.status); return r.json(); })
-        .then(paintPicks)
-        .catch(function () { setText('free-picks-msg', 'Picks unavailable: could not reach the server.'); })
-        .then(function () { find.disabled = false; });
-    });
+  var find = $('free-find'), reask = $('free-reask');
+  // askPicks is the one request: a plain Find picks, or a re-ask that always
+  // asks Chester fresh and carries the driver's own line, if any.
+  function askPicks(extra) {
+    if (!fix) { setText('free-picks-msg', 'No position fix yet.'); return; }
+    find.disabled = true;
+    setText('free-picks-msg', 'Looking along the route\u2026 this can take half a minute.');
+    var body = new URLSearchParams({ lat: fix.latitude.toFixed(4), lng: fix.longitude.toFixed(4) });
+    Object.keys(extra || {}).forEach(function (k) { body.set(k, extra[k]); });
+    fetch('/driver/freelance/picks', { method: 'POST', credentials: 'same-origin', body: body,
+      headers: { 'Accept': 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error('status ' + r.status); return r.json(); })
+      .then(function (o) { if (reask) reask.hidden = false; paintPicks(o); })
+      .catch(function () { setText('free-picks-msg', 'Picks unavailable: could not reach the server.'); })
+      .then(function () { find.disabled = false; });
   }
+  if (find) find.addEventListener('click', function () { askPicks(); });
+  if (reask) reask.addEventListener('submit', function (e) {
+    e.preventDefault();
+    askPicks({ force: '1', want: $('free-want').value });
+  });
 
   function paintPicks(o) {
     var box = $('free-picks');
@@ -116,7 +122,7 @@
     var msg = [];
     if (o.text) msg.push(o.text);
     if (o.note) msg.push(o.note);
-    if (o.cached) msg.push('Shown from a recent search of this stretch (places are kept up to a day; live music until tonight ends).');
+    if (o.cached) msg.push('Shown from a recent search of this stretch (places are kept up to a day, Chester's notes about half an hour). Re-ask Chester for a fresh look.');
     setText('free-picks-msg', msg.join(' '));
     (o.cats || []).forEach(function (c) {
       var sec = document.createElement('section');

@@ -310,9 +310,25 @@ CREATE TABLE IF NOT EXISTS chester_queries (
   partial         TEXT NOT NULL DEFAULT '',
   usd_estimated   INTEGER NOT NULL DEFAULT 0,
   answer_synth    INTEGER NOT NULL DEFAULT 0,
-  usage_json      TEXT NOT NULL DEFAULT '[]'
+  usage_json      TEXT NOT NULL DEFAULT '[]',
+  user            TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS chester_asked ON chester_queries(asked_at);
+CREATE TABLE IF NOT EXISTS chester_turns (
+  id    INTEGER PRIMARY KEY,
+  user  TEXT NOT NULL,
+  at    TEXT NOT NULL,
+  q     TEXT NOT NULL,
+  a     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS chester_turns_user ON chester_turns(user, id);
+CREATE TABLE IF NOT EXISTS chester_leanings (
+  id    INTEGER PRIMARY KEY,
+  user  TEXT NOT NULL,
+  at    TEXT NOT NULL,
+  note  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chester_leanings_user ON chester_leanings(user, id);
 `
 
 type Store struct{ db *sql.DB }
@@ -352,6 +368,7 @@ func (s *Store) migrate() error {
 	if err := s.addColumns("chester_queries", []string{
 		"partial TEXT NOT NULL DEFAULT ''", "usd_estimated INTEGER NOT NULL DEFAULT 0",
 		"answer_synth INTEGER NOT NULL DEFAULT 0", "usage_json TEXT NOT NULL DEFAULT '[]'",
+		"user TEXT NOT NULL DEFAULT ''",
 	}); err != nil {
 		return err
 	}

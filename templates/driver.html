@@ -39,7 +39,12 @@
     <h2 class="hud-k">Along the way</h2>
     <button type="button" class="btn btn-outline-dark" id="free-find" disabled>Find picks</button>
     <p class="hud-s" id="free-picks-msg" role="status" aria-live="polite"></p>
+    <form class="hud-dest" id="free-reask" hidden>
+      <input class="form-control" type="text" id="free-want" maxlength="120" placeholder="Tell Chester: hungry now, need a stretch&hellip;" aria-label="What you want right now (optional)" autocomplete="off">
+      <button type="submit" class="btn btn-outline-dark" id="free-reask-go">Re-ask Chester</button>
+    </form>
     <div id="free-picks"></div>
+    {{if .ChesterOn}}<p class="hud-s"><a href="/driver/chester/memory">What Chester remembers about you</a></p>{{end}}
   </section>{{else}}<section class="hud-road" aria-label="Road ahead">
     <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
       <button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>
