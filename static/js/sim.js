@@ -63,7 +63,14 @@
     var d = Math.min(cap, o.mph * o.x * elapsed / 3600);
     return { d: d, pos: pointAt(o.from[0], o.from[1], o.to[0], o.to[1], d), done: d >= cap };
   }
-  function mayFetch(last, now) { return now - last >= 5000; }
+  // mayFetch: whether a HUD ask goes to the server. The first ask that carries a
+  // position always does: hud.js asks once on load with none, then again on the
+  // first fix, and answering that from the no-position reply froze the HUD on
+  // plan pace until hud.js next asked, a minute later.
+  function mayFetch(last, now, lastHadPos, hasPos) {
+    if (hasPos && !lastHadPos) return true;
+    return now - last >= 5000;
+  }
 
   var api = { haversine: haversine, bearing: bearing, pointAt: pointAt, defaultX: defaultX,
     parse: parse, stopUrl: stopUrl, walk: walk, mayFetch: mayFetch };
@@ -95,15 +102,16 @@
   say('waiting for a start point');
 
   // At most one HUD fetch per ~5 s, however often hud.js asks.
-  var realFetch = root.fetch ? root.fetch.bind(root) : null, lastHud = 0, lastBody = null;
+  var realFetch = root.fetch ? root.fetch.bind(root) : null, lastHud = 0, lastBody = null, lastHadPos = false;
   if (realFetch) {
     root.fetch = function (url, init) {
       if (String(url).indexOf('/driver/hud.json') !== 0) return realFetch(url, init);
-      var now = Date.now();
-      if (lastBody !== null && !mayFetch(lastHud, now)) {
+      var now = Date.now(), hasPos = /[?&]lat=/.test(String(url));
+      if (lastBody !== null && !mayFetch(lastHud, now, lastHadPos, hasPos)) {
         return Promise.resolve(new Response(lastBody, { status: 200, headers: { 'Content-Type': 'application/json' } }));
       }
       lastHud = now;
+      lastHadPos = hasPos;
       return realFetch(url, init).then(function (r) {
         return r.clone().text().then(function (t) { if (r.ok) lastBody = t; return r; });
       });
