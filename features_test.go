@@ -12,7 +12,7 @@ import (
 // step bindings are in sim_steps_test.go.
 func TestFeatures(t *testing.T) {
 	suite := godog.TestSuite{
-		ScenarioInitializer: func(sc *godog.ScenarioContext) { initSimScenarios(t, sc) },
+		ScenarioInitializer: func(sc *godog.ScenarioContext) { initEtaScenarios(t, sc, initSimScenarios(t, sc)) },
 		Options: &godog.Options{
 			Format:   "pretty",
 			Paths:    []string{"features"},

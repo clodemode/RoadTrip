@@ -186,7 +186,7 @@ func TestFreeDestinedHUDGivesDistanceETAWazeAndHazardsAlongTheRoute(t *testing.T
 	if f == nil || f.State != "ok" || !f.CanPicks {
 		t.Fatalf("free view: %+v", f)
 	}
-	if f.ETA != "3:40 PM" || !strings.HasSuffix(f.Miles, " mi") || f.Miles == "0 mi" || !strings.Contains(f.Delay, "5 min") {
+	if f.ETA != "about 3:40 PM" || !strings.HasSuffix(f.Miles, " mi") || f.Miles == "0 mi" || !strings.Contains(f.Delay, "5 min") {
 		t.Fatalf("distance/eta/delay: %+v", f)
 	}
 	if !strings.HasPrefix(f.Waze, "https://waze.com/ul?") || !strings.Contains(f.Waze, "ll=30.4%2C-97.9") {

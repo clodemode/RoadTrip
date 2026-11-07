@@ -35,7 +35,7 @@ type simWorld struct {
 
 type simPos struct{ lat, lng, miles float64 }
 
-func initSimScenarios(t *testing.T, sc *godog.ScenarioContext) {
+func initSimScenarios(t *testing.T, sc *godog.ScenarioContext) *simWorld {
 	w := &simWorld{}
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		*w = simWorld{t: t, x: 60, cookies: map[string]*http.Cookie{},
@@ -70,6 +70,7 @@ func initSimScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the HUD is asked with no browser position$`, w.hudAsked)
 	sc.Step(`^the MELT record for that HUD serve says sim true$`, w.meltSaysSim)
 	sc.Step(`^it carries no latitude and no longitude$`, w.meltHasNoCoordinates)
+	return w
 }
 
 func (w *simWorld) signIn(name string) { w.cookies[name] = asUser(w.t, w.app, name, roleAdmin) }

@@ -237,6 +237,18 @@ CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS eta_predictions (
+  id                INTEGER PRIMARY KEY,
+  ride_slug         TEXT NOT NULL,
+  checkpoint_id     INTEGER NOT NULL,
+  user              TEXT NOT NULL DEFAULT '',
+  predicted_at      TEXT NOT NULL,
+  predicted_arrival TEXT NOT NULL,
+  source            TEXT NOT NULL DEFAULT 'plan',
+  actual_arrival    TEXT,
+  error_min         INTEGER
+);
+CREATE INDEX IF NOT EXISTS eta_predictions_stop ON eta_predictions(ride_slug, checkpoint_id);
 CREATE TABLE IF NOT EXISTS checklists (
   ride_slug  TEXT PRIMARY KEY REFERENCES rides(slug) ON DELETE CASCADE,
   title      TEXT NOT NULL DEFAULT '',
