@@ -11,12 +11,15 @@ entries:
   - driver
   - freelance
   - privacy
-  status: design
+  status: shipped
   description: Found while closing the hazard-sampling privacy gap (PR 9). freelance.go alongQuery posts
     the route ahead (corridor points) to TomTom; unlike hazard sampling, those points are not filtered
     with dropNearFuzzed against the ride's fuzzed checkpoints. Also the geocode/route calls take the raw
     position. Decide whether picks near a private place should be masked or are the traveller's own typed
-    route.
+    route. Fix in PR 18, 2026-11-07 (along-route masked with the hazards rule, fail closed under 2 points;
+    calculateRoute still takes the raw position and typed destination, see follow-up todo).
   effort: S
   triaged_at: '2026-11-07T13:58:18.275399+00:00'
   triaged_by: clode
+  closed_at: '2026-11-07T18:34:56.701878+00:00'
+  closed_by_actor: 70acc5b3-b7de-4927-9090-e6ea89962d13

@@ -1,0 +1,27 @@
+entries:
+- slug: todo-roadtrip-driver-screen-says-off-route-instead-of-silently-showing-todays-plan-leg-when-the-fix-is-far-from-every-leg
+  title: 'roadtrip /driver: when the fix is more than hudOffRouteKm from every leg, the HUD silently falls
+    back to today''s plan leg (before departure: Day 1, Kingston, Next Thousand Islands) with no sign
+    that the car is off route'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: surface
+  character_slug: krispy
+  tags:
+  - driver
+  - trailer-test
+  - hud
+  status: design
+  description: 'Trailer Test rung 100 on v40, 2026-11-07 ~10:40 CST: ?sim=100 from Austin 30.2672,-97.7431
+    to San Antonio 29.4241,-98.4936. At 0 s the fix is on leg d4 (Day 4 of 4, 471 mi done, Hudson Bend
+    6 mi ahead). At 61 s (29.5687,-98.3661, about 60 mi off route) /driver/hud.json returned source=plan,
+    day_n=1, leg Kingston -> Pittsburgh, next Thousand Islands, miles_done ''—'', and the screen showed
+    that with the GPS line reading ''fix, within 33 ft''. hud.go buildHUD treats an off-route fix as no
+    fix and uses defaultLeg by date. On a real trip a detour beyond hudOffRouteKm flips the screen to
+    a leg that reads as if the car were there.'
+  dont: DONT send the raw off-route coordinate anywhere new; the distance is computed server side only.
+  do_this: Add an off_route flag (and distance to the nearest leg) to hudView when a fix exists but no
+    leg is within hudOffRouteKm; show an 'Off route, N mi from the plan' line in place of the miles/ETA
+    tiles; Go test first in hud_test.go with a fix far from every leg; consider whether AIMLESS mode is
+    the right default there.

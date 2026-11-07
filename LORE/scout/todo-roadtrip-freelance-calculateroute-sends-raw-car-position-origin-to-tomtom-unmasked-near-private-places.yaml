@@ -1,0 +1,21 @@
+entries:
+- slug: todo-roadtrip-freelance-calculateroute-sends-raw-car-position-origin-to-tomtom-unmasked-near-private-places
+  title: 'roadtrip: FreeLance calculateRoute sends the car''s raw position (origin) and the typed destination
+    to TomTom, unmasked near private places'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: surface
+  character_slug: scout
+  tags:
+  - driver
+  - freelance
+  - privacy
+  status: abandoned
+  description: |-
+    Left after PR 18 (along-route masking). freelance.go route() builds calculateRoute/lat,lng:destLat,destLng from the car's raw fix; a drive starting at a private place sends its doorstep as origin. Routing needs the true origin, so masking it (as the along-route and hazard points are) would turn the Destined HUD off near home. Also geocode sends the typed destination text only.
+
+    RULED 2026-11-07 by Kris: leave it raw ("Car routing is precise"). The car's own position goes to TomTom routing as the origin, unsnapped; only the along-route search and hazard lookups are masked (PR 18, merged). Do not add a snap or offset to calculateRoute's origin.
+  dont: 'DONT snap, offset or mask the calculateRoute origin: ruled 2026-11-07, car routing is precise.'
+  closed_at: '2026-11-07T18:34:54.959366+00:00'
+  closed_by_actor: 70acc5b3-b7de-4927-9090-e6ea89962d13

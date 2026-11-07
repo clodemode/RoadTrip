@@ -1,0 +1,20 @@
+entries:
+- slug: todo-roadtrip-ci-runs-the-go-race-suite-on-every-branch-push-and-again-on-every-pr-so-each-change-pays-github-minutes-two-or-three-times
+  title: 'roadtrip CI: ci.yml runs on push to every branch AND on pull_request, so one change runs go
+    test -race 2-3 times (branch push, PR, trunk push) plus again in deploy.yml''s gate'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: all
+  character_slug: krispy
+  tags:
+  - ci
+  - github-minutes
+  status: design
+  description: 'Measured 2026-11-07: ci.yml triggers on push branches [''**''] and pull_request; PR 15''s
+    change produced CI runs 42386799158 (push) and 42386803326 (pull_request) 3 s apart, then 42387867192
+    on the trunk merge push, each ~3-4 min with go test -race -count=1, and Deploy run 42387905394 runs
+    its own go-test gate. Kris rule (2026-11-05): test on local hosts, preserve GitHub minutes, never
+    gate a merge on PR CI; a PR-triggered suite is a todo to remove.'
+  do_this: Drop the pull_request trigger and narrow push to trunk only (or remove CI entirely, leaving
+    deploy.yml's gate plus local runs); keep node --check and go vet in the deploy gate.

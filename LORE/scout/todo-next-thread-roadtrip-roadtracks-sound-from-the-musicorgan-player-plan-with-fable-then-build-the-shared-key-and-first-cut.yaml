@@ -1,0 +1,34 @@
+entries:
+- slug: todo-next-thread-roadtrip-roadtracks-sound-from-the-musicorgan-player-plan-with-fable-then-build-the-shared-key-and-first-cut
+  title: 'TODO-NEXT, roadtrip + musicorgan: kick off RoadTracks, sound for the drive from the music.opeongo.net
+    player; a light Fable plan first, then a shared read-only key and a first-cut RoadTracks card on /driver'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: scout
+  tags:
+  - next-thread
+  - roadtracks
+  - drivetrack
+  - musicorgan
+  - chester
+  - driver
+  status: shipped
+  description: |-
+    Open with agent_start(session=<harness id>, app_scope='roadtrip', tag='roadtracks', thread_title='RT:🔧:RoadTracks sound'). Kris 2026-11-07: RoadTrip (Go on Fly, roadtrip.opeongo.net) plays RoadTracks from MusicOrgan, the cloud-hosted music player at music.opeongo.net, and Chester helps choose music live and plans a soundtrack per leg. Work row: todo-roadtrip-drivetrack-soundtrack-from-musicorgan-shared-key-so-chester-can-pick-live-and-planned-driving-music. Kris is near his weekly token limit: keep the planning light. STEP 1, one Fable planning pass, short: verify what MusicOrgan already exposes (search, playlists, player deep links, auth), then a plan of at most two builder CODIs. STEP 2 builders on a cheaper model, never Fable. State on 2026-11-07: RoadTrip trunk has /driver HUD, FreeLance Destined is in open PR 8 (picks, three map links); nothing of RoadTracks is built.
+
+    Picked-up: 2026-11-07, e378ea9a-eb18-4248-b587-5e6f1c5f6efc: consumed at pickup by lore_pickup; the picking thread now carries this work
+  dont: DONT give RoadTrip a MusicOrgan user login; one scoped read-only service key only. DONT stream
+    audio through RoadTrip; link or embed the player. DONT use Fable for building. DONT touch /driver
+    files while PR 8 is unmerged.
+  do_this: Fable verifies the MusicOrgan API and plans; builders do the MusicOrgan read-only endpoint
+    first, then the RoadTrip RoadTracks card; Chester suggestions last.
+  depends_on:
+  - todo-roadtrip-drivetrack-soundtrack-from-musicorgan-shared-key-so-chester-can-pick-live-and-planned-driving-music
+  effort: L
+  impact: high
+  triaged_at: '2026-11-07T13:22:38.807268+00:00'
+  triaged_by: scout
+  closed_at: '2026-11-07T13:23:36.311458+00:00'
+  closed_by_actor: e378ea9a-eb18-4248-b587-5e6f1c5f6efc
