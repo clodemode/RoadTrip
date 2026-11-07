@@ -67,7 +67,14 @@ test('walk: a destination nearer than the rung ends the drive at the destination
   assert.ok(Math.abs(w.pos[0] - 30.01) < 1e-6);
 });
 test('throttle: at most one HUD fetch per five seconds', () => {
-  assert.equal(sim.mayFetch(0, 10000), true);
-  assert.equal(sim.mayFetch(1000, 5999), false);
-  assert.equal(sim.mayFetch(1000, 6000), true);
+  assert.equal(sim.mayFetch(0, 10000, true, true), true);
+  assert.equal(sim.mayFetch(1000, 5999, true, true), false);
+  assert.equal(sim.mayFetch(1000, 6000, true, true), true);
+});
+test('mayFetch: the first request that carries a position always goes through', () => {
+  // hud.js asks once on load (no position) and again on the first fix; the
+  // throttle must not answer the first-fix ask with the no-position reply.
+  assert.equal(sim.mayFetch(1000, 2000, false, true), true);
+  assert.equal(sim.mayFetch(1000, 2000, true, true), false);
+  assert.equal(sim.mayFetch(1000, 2000, false, false), false);
 });
