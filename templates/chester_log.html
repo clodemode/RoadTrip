@@ -29,6 +29,16 @@
   <p class="muted small">{{.PricesNote}} The whole log as data: <a href="/driver/chester/log.json">log.json</a> (signed in only).</p>
 </section>
 
+{{if .Others}}
+<section class="ch-others">
+  <h2>Other drivers</h2>
+  <p class="muted small">Each driver's questions and answers are private to them. As an admin you see only when, what it cost and the token counts.</p>
+  <ul class="ch-sum-list">
+    {{range .Others}}<li class="ch-sum"><b>{{.User}}</b> <time datetime="{{.AskedAt}}">{{local .AskedAt .TZ}}</time> <span>{{usd .USD}}</span> <span>{{.TokensIn}} in / {{.TokensOut}} out</span></li>{{end}}
+  </ul>
+</section>
+{{end}}
+
 <section class="ch-log">
   <h2>Questions</h2>
   {{if .Hidden}}<p class="muted small">The newest {{len .Rows}} are listed. {{.Hidden}} older one(s) are in log.json.</p>{{end}}

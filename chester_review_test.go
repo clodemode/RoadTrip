@@ -296,7 +296,7 @@ func TestChesterRefusesAQuestionThatCouldPassTheLimit(t *testing.T) {
 	now := time.Now().UTC()
 	spend := func(usd float64) {
 		t.Helper()
-		if err := app.store.InsertChesterQuery(&ChesterQuery{AskedAt: utcString(now), Mode: chesterQuick,
+		if err := app.store.InsertChesterQuery(&ChesterQuery{User: "push-token", AskedAt: utcString(now), Mode: chesterQuick,
 			Question: "earlier", Model: stubModel, USD: usd, PosSource: "none"}); err != nil {
 			t.Fatal(err)
 		}
@@ -485,7 +485,7 @@ func TestChesterCachedPrefixDoesNotMoveWithTheCar(t *testing.T) {
 	// The search tool still carries a location, and it is the day's zone
 	// alone: no town, no region, no number.
 	var tools []map[string]any
-	if err := json.Unmarshal(rawField(t, a, "tools"), &tools); err != nil || len(tools) != 2 {
+	if err := json.Unmarshal(rawField(t, a, "tools"), &tools); err != nil || len(tools) != 3 {
 		t.Fatalf("the tools: %v", err)
 	}
 	if loc := js(tools[0]["user_location"]); loc != `{"timezone":"America/Chicago","type":"approximate"}` {
@@ -511,7 +511,7 @@ func TestChesterCachedPrefixDoesNotMoveWithTheCar(t *testing.T) {
 			t.Errorf("the tools carry %q, which moves with the car", moving)
 		}
 	}
-	if east.PromptVersion != "chester-rt-4" {
+	if east.PromptVersion != "chester-rt-6" {
 		t.Errorf("the prompt version is %q; the tool and the context block changed, so it must have too", east.PromptVersion)
 	}
 }
@@ -717,9 +717,16 @@ func TestSignedInWritesMustComeFromThisSite(t *testing.T) {
 	}
 
 	// A verdict: it writes to the log.
-	id := logRow(t, app, chesterQuick, 1000, 0.01)
+	id := logAs(t, app, testAdminUser(t, app), "a question", "an answer", 0.01)
+	tokenID := logAs(t, app, "push-token", "a question", "an answer", 0.01)
 	target := "/driver/chester/log/" + strconv.FormatInt(id, 10)
 	for _, c := range cases {
+		// The token alone is its own driver; the cookie is the signed-in one.
+		if c.token != "" && !c.cookie {
+			target = "/driver/chester/log/" + strconv.FormatInt(tokenID, 10)
+		} else {
+			target = "/driver/chester/log/" + strconv.FormatInt(id, 10)
+		}
 		verdict := "right"
 		if c.want != http.StatusOK {
 			verdict = "wrong"

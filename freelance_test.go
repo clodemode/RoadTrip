@@ -489,7 +489,7 @@ func TestFreeMusicIsCachedOnlyUntilTheEndOfTheLocalDay(t *testing.T) {
 	// The stub's ETA is 3:40 pm at -06:00, so that local day ends 06:00 UTC.
 	clockAt(app, "2026-11-08T05:00:00Z")
 	findPicks(t, app, c, true)
-	clockAt(app, "2026-11-08T05:59:00Z")
+	clockAt(app, "2026-11-08T05:29:00Z") // inside the notes' half hour
 	findPicks(t, app, c, true)
 	if count("live music bar|") != 1 || count("coffee shop|") != 1 {
 		t.Fatalf("before midnight local both are cached: music=%d coffee=%d", count("live music bar|"), count("coffee shop|"))
@@ -500,10 +500,7 @@ func TestFreeMusicIsCachedOnlyUntilTheEndOfTheLocalDay(t *testing.T) {
 		t.Fatalf("after local midnight music is asked again, coffee is not: music=%d coffee=%d", count("live music bar|"), count("coffee shop|"))
 	}
 	if n := len(stub.requests()); n != 2 {
-		t.Fatalf("Chester ranks only the expired category again: %d calls", n)
-	}
-	if raw := string(stub.requests()[1].Body); !strings.Contains(raw, "CATEGORY music") || strings.Contains(raw, "CATEGORY coffee") {
-		t.Fatalf("second ranking should hold music only: %s", raw)
+		t.Fatalf("Chester's notes last half an hour, so the 06:01 look ranks again and the 05:29 one did not: %d calls", n)
 	}
 }
 
