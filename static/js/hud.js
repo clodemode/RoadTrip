@@ -12,7 +12,7 @@
   var root = document.getElementById('hud');
   if (!root) return;
   var $ = function (id) { return document.getElementById(id); };
-  var fix = null, lastAsk = 0, busy = false;
+  var fix = null, lastAsk = 0, busy = false, again = false;
 
   function setText(id, v) { var el = $(id); if (el && v !== undefined && v !== null) el.textContent = v; }
 
@@ -72,9 +72,13 @@
     return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
 
+  // A refresh asked for while one is in flight runs once it returns: the first
+  // fix can land during the page-load request, and dropping it left the screen
+  // on plan pace until the next ask a minute later.
   function refresh() {
-    if (busy) return;
+    if (busy) { again = true; return; }
     busy = true;
+    again = false;
     var url = root.getAttribute('data-url');
     if (fix) url += '?lat=' + encodeURIComponent(fix.latitude.toFixed(4)) + '&lng=' + encodeURIComponent(fix.longitude.toFixed(4));
     lastAsk = Date.now();
@@ -90,7 +94,7 @@
         li.textContent = 'Hazards: unknown (could not reach the server)';
         ul.appendChild(li);
       })
-      .then(function () { busy = false; });
+      .then(function () { busy = false; if (again) refresh(); });
   }
 
   // --- Find picks: only on a tap, never on a refresh -------------------------------
