@@ -96,6 +96,9 @@ type App struct {
 	// hazards asks the weather and traffic sources for the driver screen. nil
 	// (tests, mostly) behaves as a service with no TomTom key.
 	hazards *hazardSvc
+	// free is the FreeLance drive: per-user mode and destination, in memory,
+	// and the TomTom search and routing it needs. nil is built on first use.
+	free *freeSvc
 }
 
 // PIN_PRECISION values. See App.pinPrecision.
@@ -292,6 +295,7 @@ func main() {
 	// The driver screen's hazard sources. No TOMTOM_API_KEY is a supported
 	// state: the traffic chip then says so instead of staying quiet.
 	app.hazards = newHazardSvc(os.Getenv("TOMTOM_API_KEY"))
+	app.free = newFreeSvc(os.Getenv("TOMTOM_API_KEY"))
 	if os.Getenv("TOMTOM_API_KEY") == "" {
 		log.Print("traffic: TOMTOM_API_KEY unset, the driver screen will say traffic is unknown")
 	} else {

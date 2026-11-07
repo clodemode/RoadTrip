@@ -1,21 +1,49 @@
 {{template "head" .}}
 <section class="hud" id="hud" data-url="/driver/hud.json">
 
-  <header class="hud-top" aria-label="Gauges">
+  {{if not .Destined}}<header class="hud-top" aria-label="Gauges">
     <div class="hud-gauge"><span class="hud-k">Day</span><b class="hud-v" id="hud-day">{{if .H.DayN}}{{.H.DayN}} of {{.H.DayTotal}}{{else}}—{{end}}</b><span class="hud-s" id="hud-leg">{{.H.LegName}}</span></div>
     <div class="hud-gauge"><span class="hud-k">Done</span><b class="hud-v" id="hud-done">{{.H.MilesDone}}</b></div>
     <div class="hud-gauge"><span class="hud-k">Left</span><b class="hud-v" id="hud-left">{{.H.MilesLeft}}</b></div>
     <div class="hud-gauge"><span class="hud-k">ETA <span id="hud-tonight">{{.H.TonightName}}</span></span><b class="hud-v" id="hud-eta">{{.H.ETA}}</b><span class="hud-s">plan pace</span></div>
     <div class="hud-gauge"><span class="hud-k">Clock</span><b class="hud-v" id="hud-tz">{{.H.TZ}}</b></div>
     <p class="hud-cross" id="hud-cross" role="status"{{if not .H.Crossing}} hidden{{end}}>{{.H.Crossing}}</p>
-  </header>
+  </header>{{end}}
 
   <nav class="hud-tools hud-left" aria-label="Driver tools, left">
     <a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>Post photo</a>
     {{if .ChesterOn}}<a class="hud-tool" href="/chester"><span class="hud-ico" aria-hidden="true">&#128172;</span>Ask Chester</a>{{end}}
   </nav>
 
-  <section class="hud-road" aria-label="Road ahead">
+  {{if .Destined}}<section class="hud-road hud-free" id="hud-free" aria-label="FreeLance drive">
+    <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
+      <button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>
+      <button class="btn btn-sm {{if .Destined}}btn-dark{{else}}btn-outline-dark{{end}}" name="mode" value="destined"{{if .Destined}} aria-current="true"{{end}}>FreeLance: Destined</button>
+    </form>
+    <form class="hud-dest" method="post" action="/driver/freelance/dest">
+      <input class="form-control" type="text" name="dest" maxlength="120" placeholder="Where to? Town, place or address" value="{{.FreeLabel}}" aria-label="Destination" autocomplete="off">
+      <button class="btn btn-primary">Go</button>
+    </form>
+    {{if .FreeErr}}<p class="hud-free-err" role="status">{{.FreeErr}}</p>{{end}}
+    <p class="hud-k">Destination</p>
+    <h1 class="hud-next" id="free-dest">{{if .FreeHave}}{{.FreeLabel}}{{else}}Not set{{end}}</h1>
+    <p class="hud-dist"><b id="free-miles">—</b> to go &middot; arrive <b id="free-eta">—</b> <span class="hud-s">(traffic-aware, destination clock)</span></p>
+    <p class="hud-s" id="free-delay" hidden></p>
+    <p class="hud-free-msg" id="free-msg" role="status" aria-live="polite"></p>
+    <a class="btn btn-primary hud-waze" id="free-waze" href="#" rel="noopener" hidden>Navigate in Waze</a>
+    <ul class="hud-chips" id="hud-chips" aria-label="Hazards on this route" aria-live="polite">
+      <li class="hud-chip unknown">Weather: checking&hellip;</li>
+      <li class="hud-chip unknown">Traffic: checking&hellip;</li>
+    </ul>
+    <h2 class="hud-k">Along the way</h2>
+    <button type="button" class="btn btn-outline-dark" id="free-find" disabled>Find picks</button>
+    <p class="hud-s" id="free-picks-msg" role="status" aria-live="polite"></p>
+    <div id="free-picks"></div>
+  </section>{{else}}<section class="hud-road" aria-label="Road ahead">
+    <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
+      <button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>
+      <button class="btn btn-sm {{if .Destined}}btn-dark{{else}}btn-outline-dark{{end}}" name="mode" value="destined"{{if .Destined}} aria-current="true"{{end}}>FreeLance: Destined</button>
+    </form>
     <p class="hud-k">Next</p>
     <h1 class="hud-next" id="hud-next">{{if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</h1>
     <p class="hud-dist"><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
@@ -24,7 +52,7 @@
       <li class="hud-chip unknown">Weather: checking&hellip;</li>
       <li class="hud-chip unknown">Traffic: checking&hellip;</li>
     </ul>
-  </section>
+  </section>{{end}}
 
   <nav class="hud-tools hud-right" aria-label="Driver tools, right">
     <a class="hud-tool" href="/checklist"><span class="hud-ico" aria-hidden="true">&#9745;</span>Checklist</a>

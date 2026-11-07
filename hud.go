@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -47,6 +48,10 @@ type hudView struct {
 	Waze      string `json:"waze"`
 
 	Hazards []hazardChip `json:"hazards,omitempty"`
+
+	// Free is set instead of the trip fields being believed when the signed-in
+	// user is on a FreeLance drive.
+	Free *freeView `json:"free,omitempty"`
 }
 
 func hudMiles(mi float64) string { return strconv.Itoa(int(math.Round(mi))) + " mi" }
@@ -205,7 +210,9 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the ride could not be read", http.StatusInternalServerError)
 		return
 	}
-	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h})
+	st := a.freeSvc().get(a.userOf(r))
+	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h,
+		"Destined": st.Mode == modeDestined, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 
 // hudJSON is the live HUD: position-aware, with the hazard chips of the leg.
@@ -220,6 +227,20 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	hz := a.hazards
 	if hz == nil {
 		hz = newHazardSvc("")
+	}
+	if user := a.userOf(r); a.freeSvc().get(user).Mode == modeDestined {
+		st := a.freeSvc().get(user)
+		fctx, fcancel := context.WithTimeout(r.Context(), 3*freeTimeout)
+		defer fcancel()
+		fv, fpts := a.freeHUD(fctx, user, st, lat, lng)
+		h.Free = fv
+		ctx, cancel := context.WithTimeout(r.Context(), 2*hazardTimeout)
+		defer cancel()
+		h.Hazards = hz.ForLeg(ctx, "free:"+user+"|"+strings.ToLower(st.Query), fpts)
+		w.Header().Set("Cache-Control", "private, no-store")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(h)
+		return
 	}
 	var pts []ll
 	for _, l := range legs {
