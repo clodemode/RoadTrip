@@ -456,3 +456,29 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 /* Signed-in tool bar: one compact row under the masthead, never shown to visitors. */
 .driver-bar { display: flex; flex-wrap: wrap; gap: .25rem .5rem; padding: .35rem 16px; background: #f3f4f6; border-bottom: 1px solid #d1d5db; font-size: .9rem; }
 .driver-bar a { padding: .25rem .6rem; border-radius: .4rem; background: #fff; border: 1px solid #d1d5db; text-decoration: none; }
+
+/* --- the driver screen (HUD) ---------------------------------------------
+   Portrait, one light theme. Gauges across the top, thumb tools down both
+   sides, the next decision in the middle, the phone's telemetry underneath.
+   Red is never used here: a number in red reads as a loss. */
+.hud { display: grid; grid-template-columns: 76px 1fr 76px; grid-template-areas: "top top top" "left road right" "bottom bottom bottom"; gap: .6rem; padding: .6rem 0 1rem; color: #111827; }
+.hud-top { grid-area: top; display: flex; flex-wrap: wrap; gap: .4rem; }
+.hud-gauge { flex: 1 1 28%; min-width: 92px; background: #fff; border: 2px solid #111827; border-radius: .6rem; padding: .3rem .5rem; display: flex; flex-direction: column; }
+.hud-k { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #374151; margin: 0; }
+.hud-v { font-size: 1.6rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.hud-s { font-size: .8rem; color: #374151; }
+.hud-cross { flex: 1 1 100%; margin: 0; padding: .45rem .7rem; background: #fef3c7; border: 2px solid #92400e; border-radius: .6rem; font-weight: 700; color: #78350f; }
+.hud-left { grid-area: left; } .hud-right { grid-area: right; }
+.hud-tools { display: flex; flex-direction: column; gap: .5rem; }
+.hud-tool { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 76px; padding: .3rem; background: #fff; border: 2px solid #111827; border-radius: .8rem; font-size: .75rem; font-weight: 700; text-align: center; text-decoration: none; color: #111827; line-height: 1.1; }
+.hud-ico { font-size: 1.7rem; line-height: 1.2; }
+.hud-road { grid-area: road; background: #fff; border: 3px solid #111827; border-radius: 1rem; padding: .8rem .7rem; min-height: 60vh; display: flex; flex-direction: column; gap: .5rem; }
+.hud-next { font-size: 1.9rem; line-height: 1.15; margin: 0; overflow-wrap: anywhere; }
+.hud-dist { font-size: 1.1rem; margin: 0; } .hud-dist b { font-size: 2.2rem; font-variant-numeric: tabular-nums; }
+.hud-waze { font-size: 1.3rem; font-weight: 700; padding: .9rem .5rem; border-radius: .8rem; }
+.hud-chips { list-style: none; margin: .4rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
+.hud-chip { padding: .4rem .6rem; border-radius: .6rem; border: 2px solid #111827; background: #fff; font-weight: 600; font-size: .95rem; overflow-wrap: anywhere; }
+.hud-chip.items { background: #fef3c7; border-color: #92400e; color: #78350f; }
+.hud-chip.clear { background: #ecfdf5; border-color: #065f46; color: #064e3b; }
+.hud-chip.unknown { background: #f3f4f6; border-style: dashed; color: #374151; }
+.hud-bottom { grid-area: bottom; display: flex; flex-wrap: wrap; gap: .4rem 1rem; justify-content: space-between; padding: .4rem .6rem; background: #f3f4f6; border: 2px solid #d1d5db; border-radius: .6rem; font-size: .9rem; }

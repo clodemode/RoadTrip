@@ -1,0 +1,41 @@
+{{template "head" .}}
+<section class="hud" id="hud" data-url="/driver/hud.json">
+
+  <header class="hud-top" aria-label="Gauges">
+    <div class="hud-gauge"><span class="hud-k">Day</span><b class="hud-v" id="hud-day">{{if .H.DayN}}{{.H.DayN}} of {{.H.DayTotal}}{{else}}—{{end}}</b><span class="hud-s" id="hud-leg">{{.H.LegName}}</span></div>
+    <div class="hud-gauge"><span class="hud-k">Done</span><b class="hud-v" id="hud-done">{{.H.MilesDone}}</b></div>
+    <div class="hud-gauge"><span class="hud-k">Left</span><b class="hud-v" id="hud-left">{{.H.MilesLeft}}</b></div>
+    <div class="hud-gauge"><span class="hud-k">ETA <span id="hud-tonight">{{.H.TonightName}}</span></span><b class="hud-v" id="hud-eta">{{.H.ETA}}</b><span class="hud-s">plan pace</span></div>
+    <div class="hud-gauge"><span class="hud-k">Clock</span><b class="hud-v" id="hud-tz">{{.H.TZ}}</b></div>
+    <p class="hud-cross" id="hud-cross" role="status"{{if not .H.Crossing}} hidden{{end}}>{{.H.Crossing}}</p>
+  </header>
+
+  <nav class="hud-tools hud-left" aria-label="Driver tools, left">
+    <a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>Post photo</a>
+    {{if .ChesterOn}}<a class="hud-tool" href="/chester"><span class="hud-ico" aria-hidden="true">&#128172;</span>Ask Chester</a>{{end}}
+  </nav>
+
+  <section class="hud-road" aria-label="Road ahead">
+    <p class="hud-k">Next</p>
+    <h1 class="hud-next" id="hud-next">{{if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</h1>
+    <p class="hud-dist"><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
+    <a class="btn btn-primary hud-waze" id="hud-waze" href="{{if .H.HasNext}}{{.H.Waze}}{{else}}#{{end}}" rel="noopener"{{if not .H.HasNext}} hidden{{end}}>Navigate in Waze</a>
+    <ul class="hud-chips" id="hud-chips" aria-label="Hazards on this leg" aria-live="polite">
+      <li class="hud-chip unknown">Weather: checking&hellip;</li>
+      <li class="hud-chip unknown">Traffic: checking&hellip;</li>
+    </ul>
+  </section>
+
+  <nav class="hud-tools hud-right" aria-label="Driver tools, right">
+    <a class="hud-tool" href="/checklist"><span class="hud-ico" aria-hidden="true">&#9745;</span>Checklist</a>
+    <a class="hud-tool" href="/plan"><span class="hud-ico" aria-hidden="true">&#128506;</span>Plan</a>
+  </nav>
+
+  <footer class="hud-bottom" aria-label="Telemetry">
+    <span class="hud-tel">GPS <b id="hud-gps">asking&hellip;</b></span>
+    <span class="hud-tel">Net <b id="hud-net">online</b></span>
+    <span class="hud-tel">Synced <b id="hud-sync">not yet</b></span>
+  </footer>
+</section>
+<script defer src="/static/js/hud.js?v={{.V}}"></script>
+{{template "foot" .}}

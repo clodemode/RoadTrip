@@ -59,7 +59,7 @@
     </a>
   </div>
 </header>
-{{if .Authed}}
+{{if and .Authed (not .HUD)}}
 <nav class="driver-bar" aria-label="Driver tools">
   <a href="/driver/post">Post photo</a>
   {{if .ChesterOn}}<a href="/chester">Ask Chester</a>{{end}}

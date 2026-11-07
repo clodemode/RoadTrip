@@ -8,11 +8,6 @@ import (
 	"strings"
 )
 
-// driverHome is where sign-in lands: straight to the one-thumb post screen.
-func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/driver/post", http.StatusFound)
-}
-
 func (a *App) usersView(w http.ResponseWriter, r *http.Request, status int, extra map[string]any) {
 	data := map[string]any{"Title": "Users", "Users": a.auth.users.list()}
 	for k, v := range extra {
