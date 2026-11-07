@@ -33,7 +33,9 @@
   if (!root) return;
   var $ = function (id) { return document.getElementById(id); };
   var fix = null, lastAsk = 0, busy = false, again = false;
-  var simOn = !!(window.location && /[?&]sim=/.test(window.location.search || ''));
+  // A simulated drive is held by the server (sim.go): the page never asks the
+  // phone for a position and never sends one. Every ask goes without lat/lng.
+  var simOn = root.getAttribute('data-sim') === '1';
 
   function setText(id, v) { var el = $(id); if (el && v !== undefined && v !== null) el.textContent = v; }
 
@@ -124,8 +126,6 @@
     var url = root.getAttribute('data-url');
     var q = [];
     if (fix) q.push('lat=' + encodeURIComponent(fix.latitude.toFixed(4)), 'lng=' + encodeURIComponent(fix.longitude.toFixed(4)));
-    // A simulated drive says so, so its hud_served records are not mistaken for the road.
-    if (simOn) q.push('sim=1');
     if (q.length) url += '?' + q.join('&');
     lastAsk = Date.now();
     fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
@@ -215,7 +215,9 @@
 
   // --- GPS: the browser's own, only if granted ---------------------------------
   var gps = $('hud-gps');
-  if (!('geolocation' in navigator)) {
+  if (simOn) {
+    gps.textContent = 'simulated (server)';
+  } else if (!('geolocation' in navigator)) {
     gps.textContent = 'not available';
   } else {
     navigator.geolocation.watchPosition(function (p) {
@@ -298,5 +300,5 @@
   paintClock();
   setInterval(paintClock, 20000);
   refresh();
-  setInterval(function () { if (!document.hidden && navigator.onLine !== false) refresh(); }, 120000);
+  setInterval(function () { if (!document.hidden && navigator.onLine !== false) refresh(); }, simOn ? 15000 : 120000);
 })();

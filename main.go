@@ -101,7 +101,9 @@ type App struct {
 	hazards *hazardSvc
 	// free is the FreeLance drive: per-user mode and destination, in memory,
 	// and the TomTom search and routing it needs. nil is built on first use.
-	free *freeSvc
+	free       *freeSvc
+	sim        *simSvc
+	simAllowed bool
 	// tracks is the RoadTracks search; nil is the feature off.
 	tracks *roadtracksSvc
 }
@@ -302,6 +304,11 @@ func main() {
 	app.melt = newMelt(os.Getenv("MELT_REDIS_ADDR"), os.Getenv("MELT_VENUE"))
 	app.hazards = newHazardSvc(os.Getenv("TOMTOM_API_KEY"))
 	app.free = newFreeSvc(os.Getenv("TOMTOM_API_KEY"))
+	if app.simAllowed = os.Getenv("SIM_ALLOWED") == "1"; app.simAllowed {
+		log.Print("sim: allowed (test venue)")
+	} else {
+		log.Print("sim: off")
+	}
 	if os.Getenv("TOMTOM_API_KEY") == "" {
 		log.Print("traffic: TOMTOM_API_KEY unset, the driver screen will say traffic is unknown")
 	} else {

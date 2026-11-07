@@ -1,5 +1,5 @@
 {{template "head" .}}
-<section class="hud" id="hud" data-url="/driver/hud.json">
+<section class="hud" id="hud" data-url="/driver/hud.json"{{if .SimOn}} data-sim="1"{{end}}>
 
   {{if not (or .Destined .Aimless)}}<header class="hud-top" aria-label="Gauges">
     <div class="hud-gauge"><span class="hud-k">Day</span><b class="hud-v" id="hud-day">{{if .H.DayN}}{{.H.DayN}} of {{.H.DayTotal}}{{else}}—{{end}}</b><span class="hud-s" id="hud-leg">{{.H.LegName}}</span></div>
@@ -107,6 +107,17 @@
     <p class="hud-s" id="rt-msg" role="status" aria-live="polite"></p>
     <ul class="rt-list" id="rt-list"></ul>{{end}}
   </section>{{end}}
+
+  {{if and .SimAllowed (not .SimOn)}}<details class="hud-sim">
+    <summary class="hud-k">Simulated drive</summary>
+    <form class="hud-dest" method="post" action="/driver/sim/start" aria-label="Start a simulated drive">
+      <select class="form-select" name="corridor" aria-label="Corridor"><option value="kgn-yyz">Kingston &rarr; Toronto</option></select>
+      <input class="form-control" type="text" name="seed" inputmode="numeric" pattern="[0-9]*" placeholder="Seed (blank = random)" aria-label="Seed" autocomplete="off">
+      <input class="form-control" type="text" name="x" inputmode="decimal" value="60" aria-label="Time compression">
+      <button class="btn btn-outline-dark">Start</button>
+    </form>
+    <p class="hud-s">The server holds the position for you on every page and device, until you stop it. The phone&rsquo;s GPS is not asked.</p>
+  </details>{{end}}
 
   <nav class="hud-tools hud-right" aria-label="Driver tools, right">
     {{if .Driver}}<a class="hud-tool" href="/checklist"><span class="hud-ico" aria-hidden="true">&#9745;</span>Checklist</a>{{end}}

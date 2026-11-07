@@ -158,6 +158,11 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	if lat == nil || lng == nil {
 		lat, lng = nil, nil
 	}
+	// No phone position and a simulated drive running: the simulated phone
+	// answers, through the same publishPosition coarsening below.
+	if lat == nil {
+		lat, lng = a.simFix(r)
+	}
 
 	// One question at a time: a second one is told so at once rather than
 	// queued, because a queue on a hotspot is a page that looks hung.

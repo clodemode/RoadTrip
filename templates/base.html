@@ -25,6 +25,10 @@
 <script defer src="/static/vendor/leaflet.js?v={{.V}}"></script>
 </head>
 <body data-leg="{{.PageLeg}}">
+{{if .SimBanner}}<div class="sim-banner" role="status" style="position:sticky;top:0;z-index:1000;box-sizing:border-box;min-height:2.25rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.4rem .75rem;background:#b91c1c;color:#fff;font:600 .85rem/1.2 system-ui,sans-serif;">
+  <span>{{.SimBanner}}</span>
+  <form method="post" action="/driver/sim/stop" style="margin:0"><button type="submit" style="background:none;border:0;color:#fff;text-decoration:underline;font:inherit;padding:0">Stop</button></form>
+</div>{{end}}
 <header class="masthead">
   <div class="mast-inner">
     <a class="mast-brand" href="/">

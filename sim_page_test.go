@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// The simulated drive must replace navigator.geolocation before hud.js asks for
-// it, so sim.js has to come first in the /driver page.
+// The sim.js link-in (?sim= starts a server-side drive) must load before hud.js, so
+// a drive started from the URL is in place before the first HUD ask.
 func TestDriverPageLoadsSimBeforeHUD(t *testing.T) {
 	app, _ := hudRide(t)
 	c := asUser(t, app, "kris", roleAdmin)

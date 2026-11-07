@@ -65,16 +65,18 @@ test('telemetryBody builds the body and refuses any coordinate key at any depth'
   }
 });
 
-test('a simulated drive adds sim=1 to the hud.json request', () => {
-  const calls = [];
+test('a server-held simulated drive never asks the phone and asks without a position', () => {
+  const calls = []; let watched = 0;
+  const hud = fakeEl(); hud.getAttribute = (k) => (k === 'data-sim' ? '1' : (k === 'data-url' ? '/driver/hud.json' : null));
   const ctx = {
-    document: { getElementById: () => fakeEl(), createElement: () => fakeEl(), hidden: false, addEventListener() {} },
-    navigator: { onLine: true, geolocation: { watchPosition() { return 1; } } },
-    window: { addEventListener() {}, location: { search: '?sim=kingston', pathname: '/driver' } },
+    document: { getElementById: (id) => (id === 'hud' ? hud : fakeEl()), createElement: () => fakeEl(), hidden: false, addEventListener() {} },
+    navigator: { onLine: true, geolocation: { watchPosition() { watched++; return 1; } } },
+    window: { addEventListener() {}, location: { search: '', pathname: '/driver' } },
     setInterval() { return 1; }, setTimeout() { return 1; },
     fetch(url) { calls.push(url); return new Promise(() => {}); },
     encodeURIComponent, Date, Math, JSON, Promise, console,
   };
   vm.runInNewContext(readFileSync(new URL('./hud.js', import.meta.url), 'utf8'), ctx);
-  assert.equal(calls[0], '/driver/hud.json?sim=1');
+  assert.equal(watched, 0, 'navigator.geolocation is not called');
+  assert.equal(calls[0], '/driver/hud.json');
 });

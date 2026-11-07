@@ -798,7 +798,17 @@ delete and a re-post.
 
 ### Testing the driver screen without driving
 
-`/driver?sim=1|10|100` (the rung, in miles) swaps the browser's GPS for a fake one from `static/js/sim.js`, with `x=` time compression and `mph=`; nothing is stored. Add `corridor=kgn-yyz` and the car drives a randomized Highway 401 route from Kingston to Toronto instead of a straight line (`from=` and `to=` are ignored, and the real position is never read), and `sim=all` drives the whole corridor. `seed=N` repeats a run exactly; without it a random seed is chosen at page load and shown in the banner.
+A simulated drive is **one position per signed-in driver, held on the server**, so every page and every device signed in as that driver sees the same car at the same instant. Nothing ticks in a tab and nothing is kept in browser storage: the position is computed at request time from the corridor, the seed, the start instant and the compression (`sim.go`, a port of the pure helpers in `static/js/sim.js`), and is only ever consumed server-side or handed to the HUD and Chester the way a phone fix is.
+
+It exists only where `SIM_ALLOWED=1` (set it on a KATE, never on Fly); otherwise the start route is a 404. Three routes, all signed-in:
+
+- `POST /driver/sim/start` (form: `corridor` = `kgn-yyz`, `seed` blank for random, `x` compression default 60, `mph` cap, `rung` mile cap) then 303 to `/driver`. The "Simulated drive" block on `/driver` posts it; `/driver?sim=1|10|100|all&corridor=kgn-yyz&seed=N&x=` does too, once, and strips itself from the URL.
+- `POST /driver/sim/stop` forgets it, everywhere.
+- `GET /driver/sim.json` is `{running, corridor, seed, miles_done, mph, started_at}` or `{running:false}`, never the position.
+
+While it runs, every page carries a red sticky banner, drawn by the server, `SIMULATED GPS — Kingston→Toronto corridor, seed N, 12.3 mi at 63 mph x60`, with Stop. The HUD asks the server without a position and `hud.js` does not call `navigator.geolocation` at all (an iPhone never prompts); Chester's question falls back to the simulated position, coarsened by `publishPosition` like a phone's. A browser position, when one is sent, still wins. The drive starts 0-5 mi along the corridor, re-draws its speed each simulated minute in 55-75 mph (`mph` caps it), and jitters each fix up to 30 m sideways. The same seed is the same drive. `hud_served` MELT records say `sim: true` and carry no coordinates. The old `from=`/`to=` straight-line mode is retired.
+
+The behaviour is stated in `features/sim_position.feature` and run by godog from `go test` (`features_test.go`, `sim_steps_test.go`).
 
 ## Shipping it
 

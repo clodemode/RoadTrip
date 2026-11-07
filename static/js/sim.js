@@ -1,19 +1,18 @@
-/* roadtrip — simulated GPS drive for the driver screen (the Trailer Test).
+/* roadtrip — the simulated drive's pure helpers, and its one link in.
  *
- * Inert unless the URL has ?sim=1, 10 or 100 (the rung, in miles). Then it
- * replaces the browser geolocation with a fake that walks the great circle
- * from "from" toward "to" at mph times the time compression, one fix per real
- * second, and stops at the rung distance. Nothing is stored anywhere; the
- * fixes live only in this page. Loaded before hud.js so hud.js sees the fake.
- * Params: sim=1|10|100, from=lat,lng, to=lat,lng, x=compression, mph=60.
+ * The drive itself is held by the SERVER (sim.go): one position per signed-in
+ * user, computed from the corridor, the seed, the start instant and the
+ * compression when a request needs it. Nothing ticks in a tab, nothing is kept
+ * in the browser, and this file no longer replaces navigator.geolocation or
+ * intercepts any request. Every page and device signed in as the driver sees
+ * the same car; a server-rendered banner says so and carries Stop.
  *
- * corridor=kgn-yyz walks a polyline along Highway 401 from Kingston to Toronto
- * instead of the from->to great circle; from= and to= are IGNORED then (the
- * corridor decides), and the real position is never read. The drive is seeded:
- * seed=N (default a random 32-bit value, shown in the banner) repeats a run.
- * It starts 0-5 mi along the corridor, re-draws its speed every 60 simulated
- * seconds in 55-75 mph (mph= caps it when given), jitters each fix up to 30 m
- * sideways and reports 5-25 m accuracy. sim=all drives the whole corridor.
+ * What is left: the pure helpers (the corridor, the seeded PRNG, speed and
+ * jitter laws; node tests cover them and sim.go is a port of them), and one
+ * browser behaviour. If the URL has sim= and/or corridor=, POST /driver/sim/start
+ * once with x, seed, mph and the rung (sim=1|10|100 miles, sim=all = the whole
+ * corridor) and replace the URL with the clean path. from= and to= are ignored:
+ * the straight-line mode is retired; only the corridor drive remains.
  */
 (function (root) {
   'use strict';
@@ -155,114 +154,17 @@
     corridorWalk: corridorWalk };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
-  // ---- browser side: only when the URL asks for it ------------------------------
-  var o = parse(root.location.search);
-  if (!o) return;
-  if (o.corridor && o.seed === null) o.seed = Math.floor(Math.random() * 4294967296) >>> 0;
-  var nav = root.navigator, realGeo = nav.geolocation;
-  var watchers = {}, nextId = 1, timer = null, t0 = 0, started = false;
-  var banner = document.createElement('div');
-  banner.className = 'sim-banner';
-  banner.setAttribute('role', 'status');
-  var msg = document.createElement('span');
-  var stop = document.createElement('a');
-  stop.textContent = 'Stop';
-  stop.setAttribute('href', stopUrl(root.location.pathname, root.location.search));
-  banner.appendChild(msg);
-  banner.appendChild(stop);
-  // Fixed height, in flow at the top: it takes its space once, then never moves.
-  banner.style.cssText = 'position:sticky;top:0;z-index:1000;box-sizing:border-box;height:2.25rem;' +
-    'display:flex;align-items:center;justify-content:space-between;padding:0 .75rem;' +
-    'background:#b91c1c;color:#fff;font:600 .85rem/1 system-ui,sans-serif;';
-  stop.style.cssText = 'color:#fff;text-decoration:underline;';
-  function mount() { document.body.insertBefore(banner, document.body.firstChild); }
-  if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
-
-  function say(t) { msg.textContent = 'SIMULATED GPS — ' + t; }
-  say('waiting for a start point');
-
-  // At most one HUD fetch per ~5 s, however often hud.js asks.
-  var realFetch = root.fetch ? root.fetch.bind(root) : null, lastHud = 0, lastBody = null, lastHadPos = false;
-  if (realFetch) {
-    root.fetch = function (url, init) {
-      if (String(url).indexOf('/driver/hud.json') !== 0) return realFetch(url, init);
-      var now = Date.now(), hasPos = /[?&]lat=/.test(String(url));
-      if (lastBody !== null && !mayFetch(lastHud, now, lastHadPos, hasPos)) {
-        return Promise.resolve(new Response(lastBody, { status: 200, headers: { 'Content-Type': 'application/json' } }));
-      }
-      lastHud = now;
-      lastHadPos = hasPos;
-      return realFetch(url, init).then(function (r) {
-        return r.clone().text().then(function (t) { if (r.ok) lastBody = t; return r; });
-      });
-    };
-  }
-
-  function mkFix(pos, heading, moving, acc, mph) {
-    return { coords: { latitude: pos[0], longitude: pos[1], accuracy: acc || 10, altitude: null,
-      altitudeAccuracy: null, heading: heading, speed: moving ? mph * 0.44704 * o.x : 0 }, timestamp: Date.now() };
-  }
-  // step: the car now, for either mode, as one shape.
-  function step(elapsed) {
-    if (o.corridor) { var c = corridorWalk(o, elapsed); c.head = c.heading; return c; }
-    var w = walk(o, elapsed);
-    w.head = bearing(o.from[0], o.from[1], o.to[0], o.to[1]); w.accuracy = 10; w.mph = o.mph;
-    return w;
-  }
-  function label() { return o.corridor ? CORRIDOR_LABELS[o.corridor] + ', seed ' + o.seed + ', ' : ''; }
-  function emit(w) {
-    var fix = mkFix(w.pos, w.head, !w.done, w.accuracy, w.mph);
-    Object.keys(watchers).forEach(function (k) { watchers[k].ok(fix); });
-  }
-  function tick() {
-    var w = step((Date.now() - t0) / 1000);
-    emit(w);
-    if (w.done) {
-      clearInterval(timer); timer = null;
-      say(label() + 'arrived, ' + w.d.toFixed(1) + ' mi driven at ' + o.x + 'x');
-    } else {
-      say(label() + w.d.toFixed(1) + ' of ' + Math.round(o.miles) + ' mi at ' + Math.round(w.mph) + ' mph x' + o.x);
-    }
-  }
-  function begin() {
-    if (started) return;
-    started = true;
-    t0 = Date.now();
-    tick();
-    if (timer === null && !step(0).done) timer = setInterval(tick, 1000);
-  }
-  // Start: the given "from", else the first real fix. Destination: the given
-  // "to", else the HUD next stop, else straight north.
-  function haveTo() {
-    if (o.to) return Promise.resolve();
-    return (realFetch ? realFetch('/driver/hud.json', { credentials: 'same-origin' }).then(function (r) { return r.json(); }) : Promise.reject())
-      .then(function (h) { if (h && typeof h.next_lat === 'number') o.to = [h.next_lat, h.next_lng]; })
-      .catch(function () {})
-      .then(function () { if (!o.to) o.to = pointAt(o.from[0], o.from[1], o.from[0] + 5, o.from[1], o.miles + 1); });
-  }
-  function haveFrom() {
-    if (o.from) return Promise.resolve();
-    return new Promise(function (res, rej) {
-      if (!realGeo) { rej(); return; }
-      realGeo.getCurrentPosition(function (p) { o.from = [p.coords.latitude, p.coords.longitude]; res(); }, rej, { timeout: 15000 });
-    });
-  }
-  function go() {
-    if (o.corridor) { begin(); return; }
-    haveFrom().then(haveTo).then(begin).catch(function () {
-      say('no start point: add from=lat,lng');
-      Object.keys(watchers).forEach(function (k) { if (watchers[k].err) watchers[k].err({ code: 2, message: 'no start point' }); });
-    });
-  }
-  var fake = {
-    watchPosition: function (ok, err) { var id = nextId++; watchers[id] = { ok: ok, err: err }; go(); return id; },
-    getCurrentPosition: function (ok, err) {
-      var id = nextId++;
-      if (started) { var w = step((Date.now() - t0) / 1000); ok(mkFix(w.pos, w.head, !w.done, w.accuracy, w.mph)); return; }
-      watchers[id] = { ok: function (f) { delete watchers[id]; ok(f); }, err: err };
-      go();
-    },
-    clearWatch: function (id) { delete watchers[id]; }
-  };
-  try { Object.defineProperty(nav, 'geolocation', { value: fake, configurable: true }); } catch (e) { say('could not take over GPS'); }
+  // ---- browser side: one POST when the URL asks for a drive ----------------------
+  var loc = root.location;
+  if (!loc || !root.fetch) return;
+  var q = new URLSearchParams(loc.search || '');
+  if (!q.has('sim') && !q.has('corridor')) return;
+  var body = new URLSearchParams();
+  body.set('corridor', CORRIDORS[q.get('corridor')] ? q.get('corridor') : 'kgn-yyz');
+  ['seed', 'x', 'mph'].forEach(function (k) { if (q.get(k)) body.set(k, q.get(k)); });
+  var rung = parseInt(q.get('sim'), 10);
+  if (rung > 0) body.set('rung', String(rung));
+  var clean = stopUrl(loc.pathname, loc.search);
+  root.fetch('/driver/sim/start', { method: 'POST', credentials: 'same-origin', body: body })
+    .then(function () { loc.replace(clean); }, function () { loc.replace(clean); });
 })(typeof window !== 'undefined' ? window : globalThis);

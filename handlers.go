@@ -161,6 +161,10 @@ func (a *App) routes() http.Handler {
 	mux.Handle("GET /driver", a.requireAuth(a.driverHome))
 	mux.Handle("GET /driver/hud.json", a.requireAuth(a.hudJSON)) // gates itself: FreeLance has no ride
 	mux.Handle("POST /driver/telemetry", a.requireAuth(a.telemetry))
+	// The simulated drive: one server-held position per signed-in user (sim.go).
+	mux.Handle("POST /driver/sim/start", a.requireAuth(a.simStart))
+	mux.Handle("POST /driver/sim/stop", a.requireAuth(a.simStop))
+	mux.Handle("GET /driver/sim.json", a.requireAuth(a.simJSON))
 	mux.Handle("POST /driver/freelance/mode", a.requireAuth(a.freeMode))
 	mux.Handle("POST /driver/freelance/dest", a.requireAuth(a.freeDest))
 	mux.Handle("POST /driver/freelance/picks", a.requireAuth(a.freePicks))
@@ -414,6 +418,13 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		data["Canonical"] = a.siteURL + r.URL.Path
 	}
 	data["SitePrivate"] = a.sitePrivate
+	// A simulated drive says so on every page, from the server, at render.
+	data["SimAllowed"] = authed && a.simAllowed
+	data["SimBanner"] = ""
+	if authed {
+		data["SimBanner"] = a.simBanner(r)
+	}
+	data["SimOn"] = data["SimBanner"] != ""
 	// Whether the masthead links to /checklist: only for a ride that has one.
 	_, data["HasChecklist"] = a.store.ChecklistSummary(a.activeSlug())
 	// Whether the masthead links to Chester: signed in, and switched on.
