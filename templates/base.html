@@ -88,6 +88,32 @@
 </html>
 {{end}}
 
+{{define "stop_row"}}<li class="cp{{if .IsStart}} start{{end}}{{if .Next}} next{{end}}{{if .ArrivedAt}} arrived{{end}}{{if .SkippedAt}} skipped{{end}}" style="--leg:{{legColor .LegOrd}}">
+      <span class="cp-n">{{.Mark}}</span>
+      <span class="cp-main">
+        <span class="cp-name">{{.Name}}</span>
+        <span class="cp-label muted">{{.Label}}{{if .ShowTZ}} &middot; {{.TZ}}{{end}}{{if eq .Precision "fuzzed"}} &middot; approximate{{end}}</span>
+      </span>
+      <span class="cp-time">
+        {{if .ArrivedAt}}<span class="arrived-at">{{if .IsStart}}Left{{else}}Arrived{{end}} {{local .ArrivedAt .TZ}}</span>
+        {{else if .SkippedAt}}<span class="skipped-at muted">{{if eq .SkipReason "rerouted"}}Rerouted around{{else}}Missed{{end}}</span>
+        {{else if .IsStart}}<span class="muted">{{if .Driver}}Leaving from here{{else}}Where the drive leaves from{{end}}</span>
+        {{else if .PlannedArrive}}<span class="muted">Plan: arrive {{clock .PlannedArrive .TZ}}</span>
+        {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
+        {{if .Driver}}
+          {{if and .IsStart (not .ArrivedAt)}}<a class="btn btn-sm btn-primary" href="/driver/post">Start the drive</a>{{end}}
+          {{if .Next}}
+          <a class="btn btn-sm btn-outline-primary" href="{{waze .Name .Lat .Lng}}" rel="noopener">Navigate in Waze</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{{gmaps .Name .Lat .Lng}}" rel="noopener">Google Maps</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{{applemaps .Name .Lat .Lng}}" rel="noopener">Apple Maps</a>{{end}}
+          {{if .ChesterOn}}<a class="btn btn-sm btn-outline-secondary" href="{{askChester .Name}}">Ask Chester about here</a>{{end}}
+          {{if or .ArrivedAt .SkippedAt}}<form method="post" action="/driver/checkpoint/{{.ID}}/arrive" class="d-inline">
+            <input type="hidden" name="clear" value="1"><button class="undo">Undo</button>
+          </form>{{end}}
+        {{end}}
+      </span>
+    </li>{{end}}
+
 {{define "post_card"}}
 <article class="post card kind-{{.Kind}}" id="post-{{.ID}}">
   {{with .Photo}}

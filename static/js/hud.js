@@ -125,14 +125,20 @@
     var cross = $('hud-cross');
     cross.textContent = h.crossing || '';
     cross.hidden = !h.crossing;
-    setText('hud-next', h.has_next ? h.next_name : 'No stop ahead');
+    // Before the drive starts the headline is the start, never "Next", and
+    // nothing here navigates to it.
+    var nav = h.drive_started && h.has_next;
+    setText('hud-k', h.drive_started ? 'Next' : 'Drive');
+    setText('hud-next', !h.drive_started ? 'Start \u00b7 ' + (h.start_name || '') : (h.has_next ? h.next_name : 'No stop ahead'));
     setText('hud-nextmi', h.next_miles);
+    var mi = $('hud-nextmi');
+    if (mi && mi.parentNode) mi.parentNode.hidden = !h.drive_started;
     var w = $('hud-waze');
-    w.hidden = !h.has_next;
-    if (h.has_next && h.waze) w.setAttribute('href', h.waze);
+    w.hidden = !nav;
+    if (nav && h.waze) w.setAttribute('href', h.waze);
     var alt = $('hud-nav-alt');
-    alt.hidden = !h.has_next;
-    if (h.has_next && h.google) { $('hud-google').setAttribute('href', h.google); $('hud-apple').setAttribute('href', h.apple); }
+    alt.hidden = !nav;
+    if (nav && h.google) { $('hud-google').setAttribute('href', h.google); $('hud-apple').setAttribute('href', h.apple); }
     paintChips(h);
   }
 

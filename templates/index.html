@@ -37,29 +37,7 @@
   <h2>Checkpoints</h2>
   <ol class="cp-list">
   {{range $leg := .Legs}}{{range .Checkpoints}}
-    <li class="cp{{if .ArrivedAt}} arrived{{end}}" style="--leg:{{legColor $leg.Ord}}">
-      <span class="cp-n">{{.Mark}}</span>
-      <span class="cp-main">
-        <span class="cp-name">{{.Name}}</span>
-        <span class="cp-label muted">{{.Label}}{{if eq .Precision "fuzzed"}} &middot; approximate{{end}}</span>
-      </span>
-      <span class="cp-time">
-        {{if .ArrivedAt}}<span class="arrived-at">{{if eq .Ord 1}}Left{{else}}Arrived{{end}} {{local .ArrivedAt .TZ}}</span>
-        {{else if .SkippedAt}}<span class="skipped-at muted">{{if eq .SkipReason "rerouted"}}Rerouted around{{else}}Missed{{end}}</span>
-        {{else if .PlannedArrive}}<span class="muted">Plan: arrive {{clock .PlannedArrive .TZ}}</span>
-        {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
-        {{if $.Driver}}
-          <a class="btn btn-sm btn-outline-primary" href="{{waze .Name .Lat .Lng}}" rel="noopener">Navigate in Waze</a>
-          <a class="btn btn-sm btn-outline-secondary" href="{{gmaps .Name .Lat .Lng}}" rel="noopener">Google Maps</a>
-          <a class="btn btn-sm btn-outline-secondary" href="{{applemaps .Name .Lat .Lng}}" rel="noopener">Apple Maps</a>
-          {{if $.ChesterOn}}<a class="btn btn-sm btn-outline-secondary" href="{{askChester .Name}}">Ask Chester about here</a>{{end}}
-          <form method="post" action="/driver/checkpoint/{{.ID}}/arrive" class="d-inline">
-            {{if .ArrivedAt}}<input type="hidden" name="clear" value="1"><button class="btn btn-sm btn-outline-secondary">Undo</button>
-            {{else}}<button class="btn btn-sm btn-primary">Arrived</button>{{end}}
-          </form>
-        {{end}}
-      </span>
-    </li>
+    {{template "stop_row" (row . $leg.Ord $.Driver $.ChesterOn $.NextID false)}}
   {{end}}{{end}}
   </ol>
 </section>

@@ -576,9 +576,18 @@ func TestFreePicksNeedAFixAndADestination(t *testing.T) {
 	}
 }
 
+// Navigation is offered to the next open stop, never to the start, so the
+// drive has to have started for the driver screen to carry any.
 func TestEveryStopPageOffersWazeGoogleAndApple(t *testing.T) {
 	app := testApp(t)
 	c := asUser(t, app, "kris", roleAdmin)
+	rv, err := app.loadRide()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.store.SetArrived(tripStart(rv.Legs).ID, time.Now().Add(-time.Hour), nil); err != nil {
+		t.Fatal(err)
+	}
 	for _, path := range []string{"/", "/driver"} {
 		body := doAs(t, app, c, "GET", path, nil).Body.String()
 		for _, want := range []string{"waze.com/ul?", "google.com/maps/dir/?api=1&amp;destination=", "maps.apple.com/?daddr="} {

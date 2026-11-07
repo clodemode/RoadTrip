@@ -21,11 +21,14 @@ ride: **Austin → San Jose**, 2026-09-04 to 09-07, one way.
   control, with the roads not taken drawn dashed on the map. `/plan.json` is
   the same arithmetic as data. See "Trips on the volume".
 - `/driver/post` — **Post a Photo**, the driver's one screen: photo, kind,
-  title, body, leg, checkpoint, zone, hide-location. By default it posts just
-  a photo; an optional "Milestone" list of the stops not yet reached marks one
-  reached at the photo's own time (else now), through the same path that scores
-  the ETA ledger. The one-tap arrival lives on the plan page and at
-  `POST /driver/checkpoint/{id}/arrive`, not on this form.
+  title, body, leg, zone, hide-location. By default it posts just a photo;
+  before the drive starts the one choice is "Start the drive from <start>", and
+  afterwards a photo near the next open stop checks in there. The form has no
+  milestone list. `POST /driver/checkpoint/{id}/arrive` is a repair tool with
+  no page button except a small Undo on a settled row (arrived, left or
+  skipped), which posts `clear=1` and needs no position. The start is a
+  departure: no page offers navigation to it, and only the next open stop is a
+  destination.
 - `/driver/posts.json` — the census: **every** post with its photo's identity,
   signed-in only. See "Taking a census".
 
@@ -568,7 +571,9 @@ given the checkpoint stops being a plan:
   snapped before the write. The raw fix at a private place is never written
   down — an arrival must not become the one path that writes it.
 - `clear=1` takes the stamp back and **leaves the location**. A mis-tap is a
-  wrong time, not a wrong place.
+  wrong time, not a wrong place. It also clears a skip (`skipped_at` and
+  `skip_reason`), so Undo works on a missed stop. This is the one thing the
+  page's Undo link does.
 - `at=<RFC3339>` stamps a time other than now. The button never sends it — a
   tap means *now*, which is the whole point of a one-tap stamp.
 

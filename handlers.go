@@ -89,7 +89,10 @@ func (a *App) funcs() template.FuncMap {
 			}
 			return t.Format(fmtDay)
 		},
-		"card":       func(p Post, authed bool) postCard { return postCard{Post: p, Authed: authed} },
+		"card": func(p Post, authed bool) postCard { return postCard{Post: p, Authed: authed} },
+		"row": func(c Checkpoint, legOrd int, driver, chesterOn bool, nextID int64, showTZ bool) stopRow {
+			return stopRow{Checkpoint: c, LegOrd: legOrd, Driver: driver, ChesterOn: chesterOn, Next: c.ID == nextID, ShowTZ: showTZ}
+		},
 		"legColor":   legColor,
 		"trimPrefix": func(s, prefix string) string { return strings.TrimPrefix(s, prefix) },
 		"num":        func(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) },
@@ -752,18 +755,21 @@ type legJS struct {
 }
 
 type cpJS struct {
-	ID        int64   `json:"id"`
-	Ord       int     `json:"ord"`
-	Mark      string  `json:"mark"`
-	Name      string  `json:"name"`
-	Label     string  `json:"label"`
-	Lat       float64 `json:"lat"`
-	Lng       float64 `json:"lng"`
-	TZ        string  `json:"tz"`
-	Precision string  `json:"precision"`
-	LegSlug   string  `json:"leg_slug"`
-	Planned   string  `json:"planned"` // local text
-	Arrived   string  `json:"arrived"` // local text
+	ID         int64   `json:"id"`
+	Ord        int     `json:"ord"`
+	Mark       string  `json:"mark"`
+	Name       string  `json:"name"`
+	Label      string  `json:"label"`
+	Lat        float64 `json:"lat"`
+	Lng        float64 `json:"lng"`
+	TZ         string  `json:"tz"`
+	Precision  string  `json:"precision"`
+	LegSlug    string  `json:"leg_slug"`
+	Planned    string  `json:"planned"` // local text
+	Arrived    string  `json:"arrived"` // local text
+	IsStart    bool    `json:"is_start,omitempty"`
+	Skipped    bool    `json:"skipped,omitempty"`
+	SkipReason string  `json:"skip_reason,omitempty"`
 }
 
 type sightJS struct {
@@ -834,7 +840,8 @@ func buildMap(legs []Leg, posts []Post, tracks map[int64][][]float64, planned ma
 			}
 			m.Checkpoints = append(m.Checkpoints, cpJS{ID: c.ID, Ord: c.Ord, Mark: c.Mark, Name: c.Name, Label: c.Label,
 				Lat: c.Lat, Lng: c.Lng, TZ: c.TZ, Precision: c.Precision, LegSlug: l.Slug,
-				Planned: planned, Arrived: localFmt(c.ArrivedAt, c.TZ, fmtLocal)})
+				Planned: planned, Arrived: localFmt(c.ArrivedAt, c.TZ, fmtLocal),
+				IsStart: c.IsStart, Skipped: c.SkippedAt != "", SkipReason: c.SkipReason})
 		}
 		for _, s := range l.Sights {
 			m.Sights = append(m.Sights, sightJS{Name: s.Name, Why: s.Why, Kind: s.Kind, Lat: s.Lat, Lng: s.Lng})
@@ -885,8 +892,8 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
 		"Title": "", "Ride": rv.Ride, "Legs": rv.Legs, "Posts": posts,
 		"Day": di, "PageLeg": pageLeg, "Multi": len(rv.Legs) > 1,
-		"HoursBars": bars,
-		"Map":       withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
+		"NextID": nextOpenID(rv.Legs), "HoursBars": bars,
+		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
 	// The checklist in one line, n of m done. Counts only.
 	if sum, ok := a.store.ChecklistSummary(rv.Ride.Slug); ok {
 		data["Checklist"] = sum
@@ -927,11 +934,23 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "leg.html", map[string]any{
 		"Title": leg.Name, "Ride": rv.Ride, "Leg": leg, "Prev": prev, "Next": next,
 		"Posts": posts, "Day": di, "Total": len(rv.Legs), "Multi": len(rv.Legs) > 1,
-		"HoursBars": bars,
+		"NextID": nextOpenID(rv.Legs), "HoursBars": bars,
 		// The tracks are computed over the whole ride so this leg's own track
 		// still begins where the day before it ended.
 		"Map":     withHours(buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars),
 		"PageLeg": leg.Slug})
+}
+
+// stopRow is what the stop_row template is called with: the checkpoint plus
+// what the row needs from the page. Next is true for the one stop that is a
+// destination; only it offers navigation, and never the start.
+type stopRow struct {
+	Checkpoint
+	LegOrd    int
+	Driver    bool
+	ChesterOn bool
+	Next      bool
+	ShowTZ    bool
 }
 
 // postCard is what the post_card template is called with: the post, plus
@@ -1089,7 +1108,11 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 			// arrive route is keyed by id, and ord is not it.
 			p := map[string]any{"kind": "checkpoint", "id": c.ID, "order": c.Ord, "name": c.Name,
 				"label": c.Label, "leg": l.Ord, "tz": c.TZ, "precision": c.Precision,
-				"is_terminal": c.IsTerminal, "mark": c.Mark}
+				"is_terminal": c.IsTerminal, "mark": c.Mark, "is_start": c.IsStart}
+			if c.SkippedAt != "" {
+				p["skipped_at"] = c.SkippedAt
+				p["skip_reason"] = c.SkipReason
+			}
 			if c.PlannedArrive != "" {
 				p["planned_arrive"] = c.PlannedArrive
 			}
@@ -1236,6 +1259,16 @@ func openStops(legs []Leg) []Checkpoint {
 		out = append(out, c)
 	}
 	return out
+}
+
+// nextOpenID is the id of the next stop: the first checkpoint in trip order
+// that is not the start and is neither arrived at nor skipped. 0 when none is
+// left. It is the one stop a page offers navigation to.
+func nextOpenID(legs []Leg) int64 {
+	if o := openStops(legs); len(o) > 0 {
+		return o[0].ID
+	}
+	return 0
 }
 
 // vouch is the position a request proves, and who vouched for it.

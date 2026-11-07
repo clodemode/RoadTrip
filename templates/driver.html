@@ -91,11 +91,12 @@
       <button class="btn btn-sm {{if .Destined}}btn-dark{{else}}btn-outline-dark{{end}}" name="mode" value="destined"{{if .Destined}} aria-current="true"{{end}}>FreeLance: Destined</button>
       <button class="btn btn-sm btn-outline-dark" name="mode" value="aimless">FreeLance: Aimless</button>
     </form>
-    <p class="hud-k">Next</p>
-    <h1 class="hud-next" id="hud-next">{{if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</h1>
-    <p class="hud-dist"><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
-    <a class="btn btn-primary hud-waze" id="hud-waze" href="{{if .H.HasNext}}{{.H.Waze}}{{else}}#{{end}}" rel="noopener"{{if not .H.HasNext}} hidden{{end}}>Navigate in Waze</a>
-    <p class="nav-alt" id="hud-nav-alt"{{if not .H.HasNext}} hidden{{end}}><a class="btn btn-sm btn-outline-dark" id="hud-google" href="{{if .H.HasNext}}{{.H.Google}}{{else}}#{{end}}" rel="noopener">Google Maps</a> <a class="btn btn-sm btn-outline-dark" id="hud-apple" href="{{if .H.HasNext}}{{.H.Apple}}{{else}}#{{end}}" rel="noopener">Apple Maps</a></p>
+    {{$nav := and .H.HasNext .H.DriveStarted}}
+    <p class="hud-k" id="hud-k">{{if .H.DriveStarted}}Next{{else}}Drive{{end}}</p>
+    <h1 class="hud-next" id="hud-next">{{if not .H.DriveStarted}}Start &middot; {{.H.StartName}}{{else if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</h1>
+    <p class="hud-dist"{{if not .H.DriveStarted}} hidden{{end}}><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
+    <a class="btn btn-primary hud-waze" id="hud-waze" href="{{if $nav}}{{.H.Waze}}{{else}}#{{end}}" rel="noopener"{{if not $nav}} hidden{{end}}>Navigate in Waze</a>
+    <p class="nav-alt" id="hud-nav-alt"{{if not $nav}} hidden{{end}}><a class="btn btn-sm btn-outline-dark" id="hud-google" href="{{if $nav}}{{.H.Google}}{{else}}#{{end}}" rel="noopener">Google Maps</a> <a class="btn btn-sm btn-outline-dark" id="hud-apple" href="{{if $nav}}{{.H.Apple}}{{else}}#{{end}}" rel="noopener">Apple Maps</a></p>
     <ul class="hud-chips" id="hud-chips" aria-label="Hazards on this leg" aria-live="polite">
       <li class="hud-chip unknown">Weather: checking&hellip;</li>
       <li class="hud-chip unknown">Traffic: checking&hellip;</li>
