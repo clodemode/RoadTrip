@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,7 @@ type ttStub struct {
 	alongBody            map[string]string // by query word; "500" is a failure
 	mu                   sync.Mutex
 	alongReq             []string
+	alongPts             [][]map[string]float64 // route points each along-route call carried
 	sawKey               atomic.Bool
 }
 
@@ -53,6 +55,7 @@ func newTT(t *testing.T) *ttStub {
 			q, _ = url.PathUnescape(q)
 			s.mu.Lock()
 			s.alongReq = append(s.alongReq, q+"|"+r.URL.Query().Get("maxDetourTime"))
+			s.alongPts = append(s.alongPts, b.Route.Points)
 			s.mu.Unlock()
 			body, known := s.alongBody[q]
 			if !known {
@@ -565,6 +568,108 @@ func TestEveryStopPageOffersWazeGoogleAndApple(t *testing.T) {
 		for _, want := range []string{"waze.com/ul?", "google.com/maps/dir/?api=1&amp;destination=", "maps.apple.com/?daddr="} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s lacks %s", path, want)
+			}
+		}
+	}
+}
+
+// --- the private-place mask on the along-route search ---------------------------
+
+// The fixture trip's Alder (40.10, -100.45) and Elm (44.30, -106.30) are
+// fuzzed checkpoints, invented places. A route is written as lat,lng pairs.
+func routeJSON(pts [][2]float64) string {
+	var sb strings.Builder
+	sb.WriteString(`{"routes":[{"summary":{"lengthInMeters":900000,"travelTimeInSeconds":36000,"trafficDelayInSeconds":0,"arrivalTime":"2030-05-01T15:40:00-05:00"},"legs":[{"points":[`)
+	for i, p := range pts {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(`{"latitude":` + strconv.FormatFloat(p[0], 'f', 5, 64) + `,"longitude":` + strconv.FormatFloat(p[1], 'f', 5, 64) + `}`)
+	}
+	sb.WriteString(`]}]}]}`)
+	return sb.String()
+}
+
+// maskedPicksApp is a Destined app whose active ride is the fixture trip, so
+// there are private places to keep out of the search.
+func maskedPicksApp(t *testing.T, tt *ttStub, route [][2]float64) (*App, *http.Cookie) {
+	t.Helper()
+	t.Setenv("PUSH_TOKEN", testToken)
+	app, c := freeApp(t, tt)
+	if w := pushTrip(t, app, fixtureTrip(t), "?activate=1"); w.Code != http.StatusOK {
+		t.Fatalf("push fixture: %d %s", w.Code, w.Body.String())
+	}
+	tt.routeBody = routeJSON(route)
+	tt.alongBody["coffee shop"] = coffeeRes
+	goDestined(t, app, c, "hudson bend")
+	return app, c
+}
+
+func findPicksAt(t *testing.T, app *App, c *http.Cookie, lat, lng string) freePicksOut {
+	t.Helper()
+	w := doAs(t, app, c, "POST", "/driver/freelance/picks", url.Values{"lat": {lat}, "lng": {lng}})
+	var o freePicksOut
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &o) != nil {
+		t.Fatalf("picks %d %s", w.Code, w.Body.String())
+	}
+	return o
+}
+
+func TestAlongRouteSearchNeverSendsPointsNearAPrivatePlace(t *testing.T) {
+	// Starts at Alder's door, passes it again, runs far, then passes Elm.
+	route := [][2]float64{{40.10, -100.45}, {40.12, -100.43}, {40.50, -100.30}, {41.00, -101.00}, {42.00, -102.50},
+		{43.00, -104.00}, {44.28, -106.28}, {44.30, -106.31}, {45.00, -107.50}}
+	tt := newTT(t)
+	app, c := maskedPicksApp(t, tt, route)
+	o := findPicksAt(t, app, c, "40.1000", "-100.4500")
+	if o.State != "ok" || tt.along.Load() == 0 {
+		t.Fatalf("a mostly-open route must still be searched: %+v along=%d", o, tt.along.Load())
+	}
+	fuzzed := []Checkpoint{{Lat: 40.10, Lng: -100.45}, {Lat: 44.30, Lng: -106.30}}
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
+	for _, pts := range tt.alongPts {
+		if len(pts) < 2 {
+			t.Fatalf("searchAlongRoute needs 2+ points, got %d", len(pts))
+		}
+		for _, p := range pts {
+			if nearFuzzed(p["lat"], p["lon"], fuzzed) {
+				t.Errorf("TomTom was sent %v, within %.0f km of a private place", p, lineMaskKm)
+			}
+		}
+	}
+}
+
+func TestAlongRouteSearchFailsClosedWhenTheWholeRouteIsPrivate(t *testing.T) {
+	route := [][2]float64{{40.10, -100.45}, {40.12, -100.43}, {40.14, -100.41}, {40.16, -100.39}}
+	tt := newTT(t)
+	app, c := maskedPicksApp(t, tt, route)
+	o := findPicksAt(t, app, c, "40.1000", "-100.4500")
+	if tt.along.Load() != 0 {
+		t.Fatalf("%d along-route calls were made for a route inside a private radius", tt.along.Load())
+	}
+	if o.State != "route_unavailable" || len(o.Cats) != 0 || o.Text == "" {
+		t.Fatalf("want the fail-closed state, got %+v", o)
+	}
+}
+
+func TestAlongRouteSearchFarFromAnyPrivatePlaceSendsThePointsAsTheyAre(t *testing.T) {
+	route := [][2]float64{{35.00, -90.00}, {35.50, -90.50}, {36.00, -91.00}, {36.50, -91.50}}
+	tt := newTT(t)
+	app, c := maskedPicksApp(t, tt, route)
+	o := findPicksAt(t, app, c, "35.0000", "-90.0000")
+	if o.State != "ok" || tt.along.Load() == 0 {
+		t.Fatalf("an open route must be searched: %+v", o)
+	}
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
+	for _, pts := range tt.alongPts {
+		if len(pts) != len(route) {
+			t.Fatalf("sent %d points, want all %d unchanged", len(pts), len(route))
+		}
+		for i, p := range pts {
+			if p["lat"] != route[i][0] || p["lon"] != route[i][1] {
+				t.Errorf("point %d changed: %v vs %v", i, p, route[i])
 			}
 		}
 	}
