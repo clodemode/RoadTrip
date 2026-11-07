@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,7 +24,7 @@ const (
 	usersFile  = "users.json"
 	roleAdmin  = "admin"
 	roleEditor = "editor"
-	minPwLen   = 10
+	minPwLen   = 6 // length is the only password rule; no complexity requirements
 )
 
 var usernameRE = regexp.MustCompile(`^[a-z0-9_-]{2,32}$`)
@@ -44,6 +45,15 @@ type userStore struct {
 	mu    sync.RWMutex
 	path  string // "" = memory only (tests)
 	users map[string]User
+
+	// seen is the file's mtime and size as this store last read or wrote it. A
+	// different stat means another process (`roadtrip -set-password` over fly
+	// ssh) changed the file, and the next get/list re-reads it: a password
+	// change never needs a restart.
+	seenMod  time.Time
+	seenSize int64
+	seenOK   bool
+	warned   bool // a failed reload is logged once per bad file state
 }
 
 func newUserStore(path string) *userStore {
@@ -51,9 +61,22 @@ func newUserStore(path string) *userStore {
 }
 
 func (s *userStore) load() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loadLocked()
+}
+
+// loadLocked reads the file into memory; the caller holds s.mu. The stat is
+// taken before the read, so a write landing in between shows as a change on
+// the next call rather than being lost. On error the last good set is kept.
+func (s *userStore) loadLocked() error {
+	fi, statErr := os.Stat(s.path)
 	raw, err := os.ReadFile(s.path)
 	if err != nil {
 		return err
+	}
+	if statErr == nil {
+		s.seenMod, s.seenSize, s.seenOK = fi.ModTime(), fi.Size(), true
 	}
 	var doc struct {
 		Users []User `json:"users"`
@@ -61,13 +84,52 @@ func (s *userStore) load() error {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return fmt.Errorf("%s: %w", s.path, err)
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.users = map[string]User{}
 	for _, u := range doc.Users {
 		s.users[u.Name] = u
 	}
+	s.warned = false
 	return nil
+}
+
+// changedLocked reports whether the file on disk differs from what this store
+// last read or wrote. A missing or unreadable file is not a change: the last
+// good set stands.
+func (s *userStore) changedLocked() bool {
+	if s.path == "" {
+		return false
+	}
+	fi, err := os.Stat(s.path)
+	if err != nil {
+		return false
+	}
+	return !s.seenOK || !fi.ModTime().Equal(s.seenMod) || fi.Size() != s.seenSize
+}
+
+// refresh re-reads users.json when something else changed it. A bad file
+// keeps the last good set and is logged once.
+func (s *userStore) refresh() {
+	s.mu.RLock()
+	changed := s.changedLocked()
+	s.mu.RUnlock()
+	if !changed {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.changedLocked() {
+		return
+	}
+	if err := s.loadLocked(); err != nil {
+		if !s.warned {
+			log.Printf("users: keeping the last good set, cannot reload: %v", err)
+			s.warned = true
+		}
+		// Remember this file state so a bad file is not re-read on every request.
+		if fi, e := os.Stat(s.path); e == nil {
+			s.seenMod, s.seenSize, s.seenOK = fi.ModTime(), fi.Size(), true
+		}
+	}
 }
 
 // saveLocked writes the file; the caller holds s.mu.
@@ -88,10 +150,18 @@ func (s *userStore) saveLocked() error {
 	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	if err := os.Rename(tmp, s.path); err != nil {
+		return err
+	}
+	// Our own write is not an outside change.
+	if fi, err := os.Stat(s.path); err == nil {
+		s.seenMod, s.seenSize, s.seenOK = fi.ModTime(), fi.Size(), true
+	}
+	return nil
 }
 
 func (s *userStore) get(name string) (User, bool) {
+	s.refresh()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	u, ok := s.users[name]
@@ -99,6 +169,7 @@ func (s *userStore) get(name string) (User, bool) {
 }
 
 func (s *userStore) anyActive() bool {
+	s.refresh()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, u := range s.users {
@@ -110,6 +181,7 @@ func (s *userStore) anyActive() bool {
 }
 
 func (s *userStore) list() []User {
+	s.refresh()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]User, 0, len(s.users))
@@ -128,6 +200,7 @@ func (s *userStore) create(name, hash, role string) error {
 	if role != roleAdmin && role != roleEditor {
 		return errors.New("role must be admin or editor")
 	}
+	s.refresh() // never save over an outside change
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, dup := s.users[name]; dup {
@@ -138,6 +211,7 @@ func (s *userStore) create(name, hash, role string) error {
 }
 
 func (s *userStore) setHash(name, hash string) error {
+	s.refresh()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	u, ok := s.users[name]
@@ -151,6 +225,7 @@ func (s *userStore) setHash(name, hash string) error {
 
 // setDisabled refuses to disable the last active admin.
 func (s *userStore) setDisabled(name string, disabled bool) error {
+	s.refresh()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	u, ok := s.users[name]

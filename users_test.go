@@ -253,6 +253,89 @@ func TestSetPasswordCLI(t *testing.T) {
 	}
 }
 
+func TestMinimumPasswordIsSixCharacters(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ADMIN_PASSWORD_HASH", "")
+	a := NewAuth()
+	if err := a.LoadUsers(dir); err != nil {
+		t.Fatal(err)
+	}
+	h, _ := HashPassword("x")
+	a.users.create("kris", h, roleAdmin)
+	if err := setPasswordFile(dir, "kris", strings.NewReader("abcde\n")); err == nil {
+		t.Fatal("5 characters must be refused")
+	}
+	// Length is the only rule: no digits, symbols or mixed case required.
+	if err := setPasswordFile(dir, "kris", strings.NewReader("abcdef\n")); err != nil {
+		t.Fatalf("6 plain lowercase characters must be accepted: %v", err)
+	}
+	// The users page applies the same rule.
+	app := testApp(t)
+	c := asUser(t, app, "root", roleAdmin)
+	w := doAs(t, app, c, "POST", "/driver/users", url.Values{"username": {"sam"}, "password": {"abcde"}, "role": {roleEditor}})
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "at least 6 characters") {
+		t.Fatalf("5-char password on the users page: %d", w.Code)
+	}
+	w = doAs(t, app, c, "POST", "/driver/users", url.Values{"username": {"sam"}, "password": {"abcdef"}, "role": {roleEditor}})
+	if w.Code != http.StatusFound {
+		t.Fatalf("6-char password on the users page: %d", w.Code)
+	}
+}
+
+func TestPasswordSetOutsideTheServerNeedsNoRestart(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ADMIN_PASSWORD_HASH", "")
+	a := NewAuth()
+	if err := a.LoadUsers(dir); err != nil {
+		t.Fatal(err)
+	}
+	h, _ := HashPassword("old-password")
+	if err := a.users.create("kris", h, roleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	if !a.Check("kris", "old-password") {
+		t.Fatal("old password should work")
+	}
+	// What `roadtrip -set-password` does from another process.
+	if err := setPasswordFile(dir, "kris", strings.NewReader("newpass\n")); err != nil {
+		t.Fatal(err)
+	}
+	if !a.Check("kris", "newpass") {
+		t.Fatal("running store did not pick up the changed users.json")
+	}
+	if a.Check("kris", "old-password") {
+		t.Fatal("old password still works")
+	}
+	// A server write must not be mistaken for an outside change.
+	if err := a.users.create("ann", h, roleEditor); err != nil {
+		t.Fatal(err)
+	}
+	a.users.mu.RLock()
+	stale := a.users.changedLocked()
+	a.users.mu.RUnlock()
+	if stale {
+		t.Fatal("the store's own write looks like an outside change")
+	}
+	if _, ok := a.users.get("ann"); !ok {
+		t.Fatal("own write lost")
+	}
+}
+
+func TestBadUsersFileKeepsLastGoodSet(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ADMIN_PASSWORD_HASH", "")
+	a := NewAuth()
+	a.LoadUsers(dir)
+	h, _ := HashPassword("old-password")
+	a.users.create("kris", h, roleAdmin)
+	if err := os.WriteFile(filepath.Join(dir, usersFile), []byte("{not json, and longer"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !a.Check("kris", "old-password") {
+		t.Fatal("a corrupt file dropped the last good users")
+	}
+}
+
 func TestSignedInPostMustBeOwnOrigin(t *testing.T) {
 	app := testApp(t)
 	admin := asUser(t, app, "kris", roleAdmin)

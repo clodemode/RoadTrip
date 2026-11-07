@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -48,7 +49,7 @@ func (a *App) usersCreate(w http.ResponseWriter, r *http.Request) {
 		generated = true
 	}
 	if len(pw) < minPwLen {
-		a.usersView(w, r, http.StatusBadRequest, map[string]any{"Error": "Password must be at least 10 characters."})
+		a.usersView(w, r, http.StatusBadRequest, map[string]any{"Error": fmt.Sprintf("Password must be at least %d characters.", minPwLen)})
 		return
 	}
 	h, err := HashPassword(pw)
@@ -84,7 +85,7 @@ func (a *App) usersReset(w http.ResponseWriter, r *http.Request) {
 		generated = true
 	}
 	if len(pw) < minPwLen {
-		a.usersView(w, r, http.StatusBadRequest, map[string]any{"Error": "Password must be at least 10 characters."})
+		a.usersView(w, r, http.StatusBadRequest, map[string]any{"Error": fmt.Sprintf("Password must be at least %d characters.", minPwLen)})
 		return
 	}
 	h, err := HashPassword(pw)
