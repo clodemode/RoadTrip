@@ -571,7 +571,7 @@ func (p chesterPlace) card() chesterCard {
 	}
 	c := chesterCard{chesterPlace: p, KindLabel: chesterKinds[p.Kind]}
 	c.Links = append(c.Links,
-		chesterLink{"Navigate", "https://waze.com/ul?" + url.Values{"q": {where}, "navigate": {"yes"}}.Encode()},
+		chesterLink{"Navigate", wazeLink(where, 0, 0)},
 		chesterLink{"Map", "https://www.google.com/maps/search/?" + url.Values{"api": {"1"}, "query": {where}}.Encode()})
 	if p.Kind == "lodging" {
 		q := url.Values{"destination": {p.Town}}
@@ -1649,4 +1649,25 @@ func (c *Chester) stripKey(s string) string {
 		return s
 	}
 	return strings.ReplaceAll(s, c.cfg.apiKey, "[key]")
+}
+
+// wazeLink builds the one Waze deep link the site uses: a card's place name, a
+// stop's published coordinates, or both. Built only from url.Values, so a
+// model's or a visitor's text is never more than an escaped query. A zero
+// lat/lng means "no coordinates".
+func wazeLink(where string, lat, lng float64) string {
+	q := url.Values{"navigate": {"yes"}}
+	if where != "" {
+		q.Set("q", where)
+	}
+	if lat != 0 || lng != 0 {
+		q.Set("ll", strconv.FormatFloat(lat, 'f', -1, 64)+","+strconv.FormatFloat(lng, 'f', -1, 64))
+	}
+	return "https://waze.com/ul?" + q.Encode()
+}
+
+// askChesterLink is the link that opens Chester with a question already in the
+// box about one stop. The page sets it as text.
+func askChesterLink(stop string) string {
+	return "/chester?" + url.Values{"q": {"What should I know about " + stop + "? Anything worth a stop nearby?"}}.Encode()
 }

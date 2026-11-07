@@ -65,3 +65,51 @@ func TestPagesAndMapDataUseTheMarks(t *testing.T) {
 		t.Error("map.js does not label by mark")
 	}
 }
+
+func TestSignedInToolsAreSignedInOnly(t *testing.T) {
+	app := chesterApp(t, newAPIStub(t))
+	pat := asUser(t, app, "pat", roleEditor)
+	for _, p := range []string{"/", "/plan", "/checklist", "/photos"} {
+		anon := doAs(t, app, nil, "GET", p, nil).Body.String()
+		for _, bad := range []string{"driver-bar", "waze.com", "/chester?q="} {
+			if strings.Contains(anon, bad) {
+				t.Errorf("%s: a visitor sees %q", p, bad)
+			}
+		}
+		in := doAs(t, app, pat, "GET", p, nil).Body.String()
+		for _, want := range []string{`class="driver-bar"`, `href="/driver/post"`, `href="/chester"`, `href="/plan"`, `href="/checklist"`} {
+			if !strings.Contains(in, want) {
+				t.Errorf("%s: signed-in bar lacks %s", p, want)
+			}
+		}
+	}
+	in := doAs(t, app, pat, "GET", "/", nil).Body.String()
+	if !strings.Contains(in, "https://waze.com/ul?ll=") || !strings.Contains(in, "navigate=yes") {
+		t.Error("index: no Waze button on the stops")
+	}
+	if !strings.Contains(in, "/chester?q=") {
+		t.Error("index: no Ask Chester link on the stops")
+	}
+	// The chester page takes the prefill as text.
+	pg := doAs(t, app, pat, "GET", "/chester?q=What+about+%3Cb%3EKingston%3C%2Fb%3E", nil).Body.String()
+	if !strings.Contains(pg, "What about &lt;b&gt;Kingston&lt;/b&gt;") {
+		t.Error("chester page does not prefill the question as escaped text")
+	}
+	// An editor's bar has no Users link; an admin's does.
+	if strings.Contains(in, "/driver/users") {
+		t.Error("editor sees the users link")
+	}
+	kris := asUser(t, app, "kris", roleAdmin)
+	if !strings.Contains(doAs(t, app, kris, "GET", "/", nil).Body.String(), `href="/driver/users"`) {
+		t.Error("admin lacks the users link")
+	}
+}
+
+func TestWazeLinkShape(t *testing.T) {
+	if got, want := wazeLink("Cedar Camp, ZZ", 0, 0), "https://waze.com/ul?navigate=yes&q=Cedar+Camp%2C+ZZ"; got != want {
+		t.Errorf("q only: %q want %q", got, want)
+	}
+	if got, want := wazeLink("", 44.5, -76.25), "https://waze.com/ul?ll=44.5%2C-76.25&navigate=yes"; got != want {
+		t.Errorf("ll only: %q want %q", got, want)
+	}
+}

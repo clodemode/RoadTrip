@@ -86,7 +86,7 @@ session cookie will never come back.
 
 | variable | purpose |
 |---|---|
-| `ADMIN_PASSWORD_HASH` | bcrypt hash; unset ⇒ read-only site |
+| `ADMIN_PASSWORD_HASH` | bcrypt hash; used once, to seed user `kris` (admin) when `$DATA_DIR/users.json` does not exist. After that the users file is the source of truth. No users ⇒ read-only site |
 | `SESSION_KEY` | HMAC key for session cookies; unset ⇒ random per boot (sessions drop on restart) |
 | `PUSH_TOKEN` | fixed bearer token accepted wherever the session is; unset ⇒ the header path does not exist. See "Pushing with the token" |
 | `RIDE_SLUG` | the ride `/` shows **when no active ride has been set**; default `atx-sjc-2026-09`. The active ride is data, set by `POST /driver/ride/active` — see "Trips on the volume" |
@@ -942,3 +942,14 @@ The Leaflet frontend is plain, dependency-free JavaScript.
 ## Licence
 
 MIT.
+
+## People and sign-in
+
+Each person signs in with a username and password. Users live in `$DATA_DIR/users.json` (bcrypt hashes, role `admin` or `editor`, created, disabled); the session cookie is signed and carries the username, and a disabled user's cookie stops working at once. There is **no self sign-up**: only an admin creates a user, at `/driver/users` (add with a password or generate one, shown once; reset; disable). Editors can post, edit, check off and plan; only admins manage users. `PUSH_TOKEN` still opens every `/driver` route except `/driver/users`.
+
+Reset a password from the machine (the old one cannot be recovered):
+
+```bash
+fly ssh console -a roadtrip-clodemode
+/app/roadtrip -set-password kris        # type the new password (10+ characters), one line, press Enter
+```

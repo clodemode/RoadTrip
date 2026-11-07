@@ -67,6 +67,8 @@ func localFmt(utc, tz, layout string) string {
 
 func (a *App) funcs() template.FuncMap {
 	return template.FuncMap{
+		"waze":       func(name string, lat, lng float64) string { return wazeLink(name, lat, lng) },
+		"askChester": askChesterLink,
 		"json": func(v any) template.JS {
 			b, err := json.Marshal(v)
 			if err != nil {
@@ -353,6 +355,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	data["V"] = a.assetV
 	authed := a.auth.IsAuthed(r)
 	data["Authed"] = authed
+	data["IsAdmin"] = a.auth.IsAdmin(r)
 	if authed {
 		// Every page goes through here, and this is where the session is known.
 		// A signed-in page is served on the SAME address a visitor uses and can

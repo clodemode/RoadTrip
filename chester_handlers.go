@@ -86,6 +86,9 @@ func usd4(v float64) string { return "$" + strconv.FormatFloat(v, 'f', 4, 64) }
 // answer and its cards. With no key it says so and offers nothing to press.
 func (a *App) chesterPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{"Title": "Chester", "On": a.chester != nil, "Presets": chesterPresets}
+	if q := r.URL.Query().Get("q"); len(q) <= 1000 {
+		data["Prefill"] = q // the template sets it as text
+	}
 	if a.chester != nil {
 		cfg := a.chester.cfg
 		spent, _ := a.store.ChesterSpent(time.Now())

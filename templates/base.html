@@ -59,6 +59,15 @@
     </a>
   </div>
 </header>
+{{if .Authed}}
+<nav class="driver-bar" aria-label="Driver tools">
+  <a href="/driver/post">Post photo</a>
+  {{if .ChesterOn}}<a href="/chester">Ask Chester</a>{{end}}
+  <a href="/plan">Plan</a>
+  <a href="/checklist">Checklist</a>
+  {{if .IsAdmin}}<a href="/driver/users">Users</a>{{end}}
+</nav>
+{{end}}
 
 <main>
 {{end}}

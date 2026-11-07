@@ -65,7 +65,7 @@ docker build -t roadtrip .
 docker run -p 8080:8080 --env-file .env -v "$PWD/data:/data" roadtrip   # .env from .env.example; gitignored
 ```
 
-First boot seeds from `seed/*.geojson`; after that the volume is the source of truth and a redeploy never clobbers rows edited through the UI. With no `ADMIN_PASSWORD_HASH` the site is read-only. Generate one with `docker run --rm roadtrip -hash 'your-password'`.
+First boot seeds from `seed/*.geojson`; after that the volume is the source of truth and a redeploy never clobbers rows edited through the UI. With no users file and no `ADMIN_PASSWORD_HASH` (which only seeds user `kris` once) the site is read-only; users live in `$DATA_DIR/users.json` (`users.go`) and are managed at `/driver/users`. Generate one with `docker run --rm roadtrip -hash 'your-password'`.
 
 The full environment table (`SITE_URL`, `SITE_VISIBILITY`, `PIN_PRECISION`, `RIDE_SLUG`, `PUSH_TOKEN`, `DATA_DIR`, `GOMEMLIMIT`, …) is in [README.md](README.md#configuration) — read it there rather than restating it.
 
