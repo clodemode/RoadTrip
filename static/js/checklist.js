@@ -1,12 +1,26 @@
-/* roadtrip — tap a step's box to mark it done (or reopen it), no page reload.
- * Posts to the same mark route the forms use, asking for JSON. On any failure
- * the box goes back where it was and a plain sentence says so. */
+/* roadtrip — the checklist's boxes.
+ * Ticking an open step opens its Mark done form, on What happened, so the
+ * notes go in before it is marked; the form's Done button saves it and the
+ * page comes back to the step. Unticking a done step undoes it at once, no
+ * page reload: it posts to the same mark route the forms use, asking for
+ * JSON. On any failure the box goes back where it was and a plain sentence
+ * says so. */
 (function () {
   'use strict';
   var boxes = document.querySelectorAll('input.cl-check');
   Array.prototype.forEach.call(boxes, function (box) {
     box.addEventListener('change', function () {
       var want = box.checked;
+      var item = box.closest('.cl-item');
+      var form = want && item ? item.querySelector('details.cl-edit') : null;
+      if (form) {
+        box.checked = false;
+        form.open = true;
+        form.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        var notes = form.querySelector('textarea[name="outcome"]');
+        if (notes) notes.focus();
+        return;
+      }
       var old = box.parentNode.querySelector('.cl-fail');
       if (old) old.remove();
       var body = new URLSearchParams();
