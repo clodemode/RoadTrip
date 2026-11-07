@@ -1,0 +1,30 @@
+entries:
+- slug: todo-roadtrip-drivers-are-assigned-to-rides-a-signed-in-driver-sees-and-acts-only-on-the-rides-they-are-assigned-to
+  title: 'roadtrip: drivers are assigned to rides (e.g. the current Kingston-to-Hudson-Bend trip); an
+    admin assigns them on /driver/users, and a signed-in driver sees and acts on (checklist, plan, posts,
+    picks shared per ride) only the rides they are assigned to'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: clode
+  tags:
+  - driver
+  - auth
+  - rides
+  - kris-idea-2026-11-07
+  status: design
+  description: 'Kris 2026-11-07: "Drivers are assigned to Rides, like our current Austin2HudsonBend trip."
+    Users store gains a ride assignment list; admins assign on /driver/users; driver-only pages and writes
+    scope to assigned rides; admins see all. Chester pick notes and TomTom knowledge stay shared; Chester
+    conversation, leanings and log stay private per driver (PR 9). Estimate: one CODI, about 120k-180k
+    subagent tokens. IMPLEMENTED in draft PR 10 (clodemode/RoadTrip, branch krispy/driver-only-checklist-geojson,
+    commit e3731a7); not merged or deployed. Not done: Chester page/log gating by ride (PR 9 files).'
+  dont: DONT let a driver write to a ride they are not assigned to. DONT make Chester memory per ride;
+    it is per driver.
+  do_this: Add assignment to the users store, gate driver writes by it, test a driver on ride A refused
+    on ride B.
+  effort: M
+  impact: high
+  triaged_at: '2026-11-07T14:01:56.618404+00:00'
+  triaged_by: clode
