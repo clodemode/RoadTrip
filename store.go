@@ -70,6 +70,11 @@ type Checkpoint struct {
 	PlannedArrive string  `json:"planned_arrive,omitempty"` // RFC3339 UTC or ""
 	PlannedDepart string  `json:"planned_depart,omitempty"`
 	ArrivedAt     string  `json:"arrived_at,omitempty"`
+	// SkippedAt is set when the driver passed this stop without checking in:
+	// "missed" (the Missed it button) or "rerouted" (the car went another way).
+	// A skipped stop is passed, never arrived: nothing reads it as an arrival.
+	SkippedAt  string `json:"skipped_at,omitempty"`
+	SkipReason string `json:"skip_reason,omitempty"`
 	// Mark is the label a map pin and a list row carry: the leg number for a
 	// day-leg end, a letter (A, B, C…) for a landmark or milestone. Numbers are
 	// reserved for driving days. Set by markCheckpoints, never stored.
@@ -191,7 +196,9 @@ CREATE TABLE IF NOT EXISTS checkpoints (
   is_terminal    INTEGER NOT NULL DEFAULT 0,
   planned_arrive TEXT NOT NULL DEFAULT '',
   planned_depart TEXT NOT NULL DEFAULT '',
-  arrived_at     TEXT NOT NULL DEFAULT ''
+  arrived_at     TEXT NOT NULL DEFAULT '',
+  skipped_at     TEXT NOT NULL DEFAULT '',
+  skip_reason    TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS sights (
   id     INTEGER PRIMARY KEY,
@@ -374,6 +381,11 @@ func (s *Store) migrate() error {
 	if err := s.addColumns("posts", []string{
 		"lat REAL", "lng REAL", "pin_source TEXT NOT NULL DEFAULT 'none'", "accuracy_m REAL",
 		"pin_fuzzed INTEGER NOT NULL DEFAULT 0",
+	}); err != nil {
+		return err
+	}
+	if err := s.addColumns("checkpoints", []string{
+		"skipped_at TEXT NOT NULL DEFAULT ''", "skip_reason TEXT NOT NULL DEFAULT ''",
 	}); err != nil {
 		return err
 	}
@@ -908,12 +920,12 @@ func (s *Store) LegBySlug(rideSlug, slug string) (*Leg, error) {
 	return nil, sql.ErrNoRows
 }
 
-const cpCols = `id,leg_id,ord,name,label,lat,lng,tz,precision,is_terminal,planned_arrive,planned_depart,arrived_at`
+const cpCols = `id,leg_id,ord,name,label,lat,lng,tz,precision,is_terminal,planned_arrive,planned_depart,arrived_at,skipped_at,skip_reason`
 
 func scanCheckpoint(sc interface{ Scan(...any) error }) (Checkpoint, error) {
 	var c Checkpoint
 	err := sc.Scan(&c.ID, &c.LegID, &c.Ord, &c.Name, &c.Label, &c.Lat, &c.Lng, &c.TZ,
-		&c.Precision, &c.IsTerminal, &c.PlannedArrive, &c.PlannedDepart, &c.ArrivedAt)
+		&c.Precision, &c.IsTerminal, &c.PlannedArrive, &c.PlannedDepart, &c.ArrivedAt, &c.SkippedAt, &c.SkipReason)
 	c.fuzz()
 	return c, err
 }
@@ -977,6 +989,13 @@ func (s *Store) SetArrived(id int64, at time.Time, loc *LatLng) error {
 	}
 	_, err := s.db.Exec(`UPDATE checkpoints SET arrived_at=?,lat=?,lng=?,precision=? WHERE id=?`,
 		v, lat, lng, precision, id)
+	return err
+}
+
+// SetSkipped marks a stop passed without a check-in. reason is "missed" or
+// "rerouted". It never touches arrived_at.
+func (s *Store) SetSkipped(id int64, at time.Time, reason string) error {
+	_, err := s.db.Exec(`UPDATE checkpoints SET skipped_at=?,skip_reason=? WHERE id=?`, utcString(at), reason, id)
 	return err
 }
 
@@ -1777,7 +1796,7 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	rows, err = tx.Query(`SELECT c.ord, c.name, l.ord, c.arrived_at,
+	rows, err = tx.Query(`SELECT c.ord, c.name, l.ord, c.arrived_at, c.skipped_at,
 	    (SELECT COUNT(*) FROM posts p WHERE p.checkpoint_id=c.id)
 	  FROM checkpoints c JOIN legs l ON l.id=c.leg_id WHERE l.ride_slug=? ORDER BY c.ord`, sd.Ride.Slug)
 	if err != nil {
@@ -1786,15 +1805,17 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var ord, legOrd, posts int
-		var name, arrived string
-		if err := rows.Scan(&ord, &name, &legOrd, &arrived, &posts); err != nil {
+		var name, arrived, skipped string
+		if err := rows.Scan(&ord, &name, &legOrd, &arrived, &skipped, &posts); err != nil {
 			return nil, err
 		}
-		if arrived == "" && posts == 0 {
+		if arrived == "" && skipped == "" && posts == 0 {
 			continue
 		}
 		why := "is arrived"
-		if arrived == "" {
+		if arrived == "" && skipped != "" {
+			why = "is skipped"
+		} else if arrived == "" {
 			why = fmt.Sprintf("holds %d post(s)", posts)
 		}
 		pc, ok := planCPs[ord]
@@ -1911,7 +1932,7 @@ func (s *Store) refreshPlan(sd *seedData, prune bool, after func(*sql.Tx) error)
 	for _, c := range sd.Checkpoints {
 		res, err := tx.Exec(`UPDATE checkpoints SET leg_id=?,name=?,label=?,lat=?,lng=?,tz=?,precision=?,
 		  is_terminal=?,planned_arrive=?,planned_depart=?
-		  WHERE arrived_at='' AND id IN (
+		  WHERE arrived_at='' AND skipped_at='' AND id IN (
 		    SELECT c.id FROM checkpoints c JOIN legs l ON l.id=c.leg_id WHERE l.ride_slug=? AND c.ord=?)`,
 			legIDs[c.LegOrd], c.Name, c.Label, c.Lat, c.Lng, c.TZ, c.Precision, c.IsTerminal,
 			c.PlannedArrive, c.PlannedDepart, r.Slug, c.Ord)

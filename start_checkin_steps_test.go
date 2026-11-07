@@ -22,7 +22,9 @@ import (
 // app, same fake Redis) and swap its trip for one of four stops, A to D, laid
 // along a line of latitude 55 km apart. They add what the feature needs: a
 // photo with a GPS of its own, the phone's position, the simulated car, and a
-// reader for the records the bus carries.
+// reader for the records the bus carries. The feature says a record's
+// "source"; the bus keeps that word for the app (roadtrip), so the field is
+// vouched_by.
 type scWorld struct {
 	p     *postWorld
 	phone bool // the phone reports a position at stop phoneI
@@ -115,9 +117,9 @@ func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		return nil
 	})
 	sc.Step(`^the bus carries a drive_started record whose source is "([a-z]+)"(?: with no latitude and no longitude)?$`,
-		func(src string) error { return s.bus("drive_started", -1, "source", src) })
+		func(src string) error { return s.bus("drive_started", -1, "vouched_by", src) })
 	sc.Step(`^the bus carries a checkin_verified record for B whose source is "([a-z]+)"(?: with no latitude and no longitude)?$`,
-		func(src string) error { return s.bus("checkin_verified", 1, "source", src) })
+		func(src string) error { return s.bus("checkin_verified", 1, "vouched_by", src) })
 	sc.Step(`^the bus carries a checkin_skipped record for B whose reason is "([a-z]+)"(?: with no latitude and no longitude)?$`,
 		func(why string) error { return s.bus("checkin_skipped", 1, "reason", why) })
 	sc.Step(`^the bus carries a checkin_skipped record for B with no latitude and no longitude$`,

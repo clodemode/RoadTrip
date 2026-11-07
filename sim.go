@@ -230,6 +230,17 @@ func (a *App) simFix(r *http.Request) (lat, lng *float64) {
 	return &la, &ln
 }
 
+// restartSim begins the pretend car afresh for user: the same settings when
+// one is running, else the Kingston corridor at x60 on a seed from the clock.
+func (a *App) restartSim(user string) {
+	st := simState{Corridor: simCorKGN, Seed: uint32(time.Now().UnixNano()), X: 60}
+	if old, ok := a.simSvc().State(user); ok {
+		st = old
+	}
+	st.T0 = a.simSvc().now()
+	a.simSvc().Start(user, st)
+}
+
 // simBanner is the sticky banner's text, or "" when no drive runs for the user.
 // Computed at render; nothing in the page ticks.
 func (a *App) simBanner(r *http.Request) string {
