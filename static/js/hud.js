@@ -122,7 +122,7 @@
     var msg = [];
     if (o.text) msg.push(o.text);
     if (o.note) msg.push(o.note);
-    if (o.cached) msg.push('Shown from a recent search of this stretch (places are kept up to a day, Chester's notes about half an hour). Re-ask Chester for a fresh look.');
+    if (o.cached) msg.push('Shown from a recent search of this stretch (places are kept up to a day, Chester\u2019s notes about half an hour). Re-ask Chester for a fresh look.');
     setText('free-picks-msg', msg.join(' '));
     (o.cats || []).forEach(function (c) {
       var sec = document.createElement('section');

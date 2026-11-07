@@ -500,5 +500,10 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 .free-none { background: #f3f4f6; border: 2px dashed #374151; border-radius: .6rem; padding: .4rem .6rem; margin: 0; color: #374151; font-weight: 600; }
 
 /* RoadTracks: album search on the driver screen */
-.rt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
+/* RoadTracks holds its size: the status line and the result box are reserved
+   up front and the results scroll inside the box, so a search never pushes the
+   rest of the driver screen around (Kris 2026-11-07: no jumpy pages). */
+#rt-msg { min-height: 1.5em; margin: .3rem 0; }
+.rt-list { list-style: none; margin: 0; padding: .4rem; display: flex; flex-direction: column; gap: .4rem;
+  height: 14rem; overflow-y: auto; overscroll-behavior: contain; border: 2px dashed #d1d5db; border-radius: .6rem; }
 .rt-list a { display: block; padding: .6rem .7rem; border: 2px solid #111827; border-radius: .6rem; background: #fff; color: #111827; font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
