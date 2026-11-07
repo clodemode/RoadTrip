@@ -52,3 +52,29 @@ test('a fix with nothing in flight asks at once, and no extra request follows', 
   await settle(); await settle();
   assert.equal(h.calls.length, 2);
 });
+
+test('telemetryBody builds the body and refuses any coordinate key at any depth', () => {
+  const mod = { exports: {} };
+  const ctx = { module: mod, document: { getElementById: () => null, addEventListener() {} }, window: { addEventListener() {} }, navigator: {} };
+  vm.runInNewContext(readFileSync(new URL('./hud.js', import.meta.url), 'utf8'), ctx);
+  const { telemetryBody } = mod.exports;
+  assert.deepEqual(JSON.parse(telemetryBody('geo_error', { code: 1 })), { event: 'geo_error', fields: { code: 1 } });
+  assert.equal(telemetryBody('nav_tap', { app: 'waze', hidden: false }) !== null, true);
+  for (const bad of [{ lat: 1 }, { lng: 1 }, { Latitude: 1 }, { x: { coords: {} } }, { arr: [{ longitude: 2 }] }]) {
+    assert.equal(telemetryBody('page_view', bad), null, JSON.stringify(bad));
+  }
+});
+
+test('a simulated drive adds sim=1 to the hud.json request', () => {
+  const calls = [];
+  const ctx = {
+    document: { getElementById: () => fakeEl(), createElement: () => fakeEl(), hidden: false, addEventListener() {} },
+    navigator: { onLine: true, geolocation: { watchPosition() { return 1; } } },
+    window: { addEventListener() {}, location: { search: '?sim=kingston', pathname: '/driver' } },
+    setInterval() { return 1; }, setTimeout() { return 1; },
+    fetch(url) { calls.push(url); return new Promise(() => {}); },
+    encodeURIComponent, Date, Math, JSON, Promise, console,
+  };
+  vm.runInNewContext(readFileSync(new URL('./hud.js', import.meta.url), 'utf8'), ctx);
+  assert.equal(calls[0], '/driver/hud.json?sim=1');
+});
