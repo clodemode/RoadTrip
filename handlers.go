@@ -424,6 +424,7 @@ func (a *App) loadRide() (*rideView, error) {
 		return nil, err
 	}
 	followArrivals(legs)
+	markCheckpoints(legs)
 	return &rideView{Ride: ride, Legs: legs}, nil
 }
 
@@ -691,6 +692,7 @@ type legJS struct {
 type cpJS struct {
 	ID        int64   `json:"id"`
 	Ord       int     `json:"ord"`
+	Mark      string  `json:"mark"`
 	Name      string  `json:"name"`
 	Label     string  `json:"label"`
 	Lat       float64 `json:"lat"`
@@ -768,7 +770,7 @@ func buildMap(legs []Leg, posts []Post, tracks map[int64][][]float64, planned ma
 			} else if c.PlannedDepart != "" {
 				planned = "depart " + localFmt(c.PlannedDepart, c.TZ, fmtClock)
 			}
-			m.Checkpoints = append(m.Checkpoints, cpJS{ID: c.ID, Ord: c.Ord, Name: c.Name, Label: c.Label,
+			m.Checkpoints = append(m.Checkpoints, cpJS{ID: c.ID, Ord: c.Ord, Mark: c.Mark, Name: c.Name, Label: c.Label,
 				Lat: c.Lat, Lng: c.Lng, TZ: c.TZ, Precision: c.Precision, LegSlug: l.Slug,
 				Planned: planned, Arrived: localFmt(c.ArrivedAt, c.TZ, fmtLocal)})
 		}
@@ -1021,7 +1023,7 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 			// arrive route is keyed by id, and ord is not it.
 			p := map[string]any{"kind": "checkpoint", "id": c.ID, "order": c.Ord, "name": c.Name,
 				"label": c.Label, "leg": l.Ord, "tz": c.TZ, "precision": c.Precision,
-				"is_terminal": c.IsTerminal}
+				"is_terminal": c.IsTerminal, "mark": c.Mark}
 			if c.PlannedArrive != "" {
 				p["planned_arrive"] = c.PlannedArrive
 			}

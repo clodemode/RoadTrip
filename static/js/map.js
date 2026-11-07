@@ -90,10 +90,10 @@
   (data.checkpoints || []).forEach(function (c) {
     var m = L.marker([c.lat, c.lng], {
       icon: L.divIcon({ className: 'cp-pin' + (c.arrived ? ' arrived' : ''),
-        iconSize: [26, 26], iconAnchor: [13, 13], html: '<span>' + c.ord + '</span>' }),
+        iconSize: [26, 26], iconAnchor: [13, 13], html: '<span>' + esc(c.mark || c.ord) + '</span>' }),
       keyboard: false, zIndexOffset: 500
     }).addTo(cpLayer);
-    var bits = ['<div class="popup"><h3>' + c.ord + '. ' + esc(c.name) + '</h3>'];
+    var bits = ['<div class="popup"><h3>' + esc(c.mark || c.ord) + '. ' + esc(c.name) + '</h3>'];
     if (c.label) bits.push('<p>' + esc(c.label) + '</p>');
     if (c.precision === 'fuzzed') bits.push('<p class="muted">approximate position</p>');
     if (c.arrived) bits.push('<p><b>Arrived</b> ' + esc(c.arrived) + '</p>');

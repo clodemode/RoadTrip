@@ -27,7 +27,7 @@
   <ol class="cp-list">
   {{range .Leg.Checkpoints}}
     <li class="cp{{if .ArrivedAt}} arrived{{end}}" style="--leg:{{legColor $.Leg.Ord}}">
-      <span class="cp-n">{{.Ord}}</span>
+      <span class="cp-n">{{.Mark}}</span>
       <span class="cp-main">
         <span class="cp-name">{{.Name}}</span>
         <span class="cp-label muted">{{.Label}} &middot; {{.TZ}}{{if eq .Precision "fuzzed"}} &middot; approximate{{end}}</span>
