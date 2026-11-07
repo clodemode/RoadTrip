@@ -160,6 +160,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("POST /driver/logout", a.logout)
 	mux.Handle("GET /driver", a.requireAuth(a.driverHome))
 	mux.Handle("GET /driver/hud.json", a.requireAuth(a.hudJSON)) // gates itself: FreeLance has no ride
+	mux.Handle("POST /driver/telemetry", a.requireAuth(a.telemetry))
 	mux.Handle("POST /driver/freelance/mode", a.requireAuth(a.freeMode))
 	mux.Handle("POST /driver/freelance/dest", a.requireAuth(a.freeDest))
 	mux.Handle("POST /driver/freelance/picks", a.requireAuth(a.freePicks))
@@ -1144,7 +1145,9 @@ func (a *App) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := strings.ToLower(strings.TrimSpace(r.PostFormValue("username")))
-	if !a.auth.Check(username, r.PostFormValue("password")) {
+	okLogin := a.auth.Check(username, r.PostFormValue("password"))
+	a.melt.Event("login", map[string]any{"user": username, "ok": okLogin})
+	if !okLogin {
 		w.WriteHeader(http.StatusUnauthorized)
 		a.render(w, r, "login.html", map[string]any{"Title": "Sign in", "Error": "Incorrect username or password.",
 			"Next": r.PostFormValue("next")})
@@ -1531,6 +1534,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	// surface hides a home fix by default. Names, never coordinates.
 	post.PinSource = pinNone
 	pinNote := "none (hidden)"
+	pinFuzzed := false
 	if !post.HideLocation {
 		// The EXIF point is the one the SERVER read out of the uploaded file.
 		// photo_lat/photo_lng came from the browser's own parse and are never
@@ -1543,6 +1547,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		res := resolvePin(pinInputFrom(r, cp, exLat, exLng), rideCheckpoints(rv.Legs), a.pinPrecision)
 		res.apply(post)
 		pinNote = res.Note
+		pinFuzzed = res.Fuzzed
 	}
 
 	// When: the form's explicit time (local to the chosen zone), else the
@@ -1566,6 +1571,8 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("post %d: pin %s", post.ID, pinNote)
+	a.melt.Event("post_created", map[string]any{"pin_source": post.PinSource, "has_photo": photo != nil,
+		"exif_gps": photo != nil && photo.Lat != nil, "fuzzed": pinFuzzed})
 	http.Redirect(w, r, "/#post-"+strconv.FormatInt(post.ID, 10), http.StatusSeeOther)
 }
 
@@ -1695,6 +1702,13 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 	when := ""
 	if !clearing && !at.Equal(time.Time{}) && r.PostFormValue("at") != "" {
 		when = " (at " + utcString(at) + ", supplied)"
+	}
+	if !clearing {
+		delta := 0
+		if pa, err := time.Parse(time.RFC3339, cp.PlannedArrive); err == nil {
+			delta = int(at.Sub(pa).Round(time.Minute) / time.Minute)
+		}
+		a.melt.Event("checkpoint_arrived", map[string]any{"name": cp.Name, "delta_min": delta})
 	}
 	switch {
 	case clearing:

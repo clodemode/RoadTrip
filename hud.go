@@ -278,6 +278,7 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*hazardTimeout)
 		defer cancel()
 		h.Hazards = hz.ForLeg(ctx, key, a.aimlessPoints(lat, lng))
+		a.hudServed(r, mode, h, lat != nil)
 		w.Header().Set("Cache-Control", "private, no-store")
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(h)
@@ -295,6 +296,7 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 		// asked about points near one, as on a planned leg.
 		fpts = dropNearFuzzed(fpts, fuzzedOf(rideCheckpoints(legs)))
 		h.Hazards = hz.ForLeg(ctx, "free:"+user+"|"+strings.ToLower(st.Query), fpts)
+		a.hudServed(r, mode, h, lat != nil)
 		w.Header().Set("Cache-Control", "private, no-store")
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(h)
@@ -309,7 +311,24 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*hazardTimeout)
 	defer cancel()
 	h.Hazards = hz.ForLeg(ctx, h.LegSlug, pts)
+	a.hudServed(r, mode, h, lat != nil)
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(h)
+}
+
+// hudServed is the one MELT line per HUD request: what the screen was given,
+// never where the car is.
+func (a *App) hudServed(r *http.Request, mode string, h hudView, hasFix bool) {
+	source := "plan"
+	if h.Source == "position" || (mode != modeTrip && hasFix) {
+		source = "fix"
+	}
+	miles := 0
+	if h.HaveMiles {
+		miles = int(math.Round(h.MilesLeftN))
+	}
+	a.melt.Event("hud_served", map[string]any{"mode": mode, "source": source, "has_fix": hasFix,
+		"has_next": h.HasNext, "next_name": h.NextName, "miles_left": miles,
+		"eta_shown": h.ETA != "" && h.ETA != "—", "sim": r.URL.Query().Get("sim") == "1"})
 }

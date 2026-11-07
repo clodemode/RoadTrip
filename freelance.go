@@ -558,6 +558,7 @@ func (a *App) freeMode(w http.ResponseWriter, r *http.Request) {
 		mode = modeAimless
 	}
 	a.freeSvc().set(user, func(s *freeState) { s.enter(mode) })
+	a.melt.Event("free_mode_set", map[string]any{"mode": mode})
 	http.Redirect(w, r, "/driver", http.StatusSeeOther)
 }
 
@@ -587,6 +588,13 @@ func (a *App) freeDest(w http.ResponseWriter, r *http.Request) {
 			}
 		})
 	}
+	// Never the label: only whether it resolved.
+	got := s.get(user)
+	state := "need_dest"
+	if got.Have {
+		state = "ok"
+	}
+	a.melt.Event("free_dest_set", map[string]any{"ok": got.Have, "state": state})
 	http.Redirect(w, r, "/driver", http.StatusSeeOther)
 }
 
@@ -1115,6 +1123,11 @@ func (a *App) enrichPicks(ctx context.Context, out *freePicksOut, user string, l
 		log.Printf("ERROR chester: the picks call could not be logged: %v", err)
 	}
 	log.Printf("chester: a picks call ended (%s) in %d ms, %d search(es), %s", out.Chester, ms, row.Searches, usd4(row.USD))
+	n := 0
+	for _, c := range out.Cats {
+		n += len(c.Picks)
+	}
+	a.melt.Event("picks_asked", map[string]any{"mode": a.freeSvc().get(user).Mode, "count": n, "usd": row.USD})
 }
 
 func reasonOf(ctx context.Context, err error) string {
