@@ -12,8 +12,12 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /roadtrip .
 # then resolves the login user through /etc/passwd. scratch has none, so every
 # session dies with "unable to authenticate" even though the log says
 # verified=true. A one-line root entry is enough for sftp — which is how the
-# private overlay (/data/private.json) reaches the volume. No shell is added.
-RUN printf 'root:x:0:0:root:/:/sbin/nologin\n' > /tmp/passwd && printf 'root:x:0:\n' > /tmp/group
+# private overlay (/data/private.json) reaches the volume. Its shell is a static
+# busybox (Kris 2026-11-07: an interactive `fly ssh console` is wanted), so the
+# operator gets sh, ls, cat and friends on the VM; the app itself never uses it.
+RUN apk add --no-cache busybox-static && mkdir /tmp/bin && cp /bin/busybox.static /tmp/bin/busybox \
+ && for a in $(/tmp/bin/busybox --list); do [ "$a" = busybox ] || ln -s busybox "/tmp/bin/$a"; done
+RUN printf 'root:x:0:0:root:/:/bin/sh\n' > /tmp/passwd && printf 'root:x:0:\n' > /tmp/group
 
 FROM scratch
 # Platform path standard: code under /app, persistent data under /data. The
@@ -26,6 +30,10 @@ COPY --from=build /roadtrip /app/roadtrip
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /tmp/passwd /etc/passwd
 COPY --from=build /tmp/group /etc/group
+# busybox picks its applet from argv[0]: /bin holds it plus one relative symlink
+# per applet (sh, ls, cat, ...), all made in the build stage since scratch has no ln.
+COPY --from=build /tmp/bin/ /bin/
+ENV PATH=/bin:/app
 ENV DATA_DIR=/data PORT=8080
 EXPOSE 8080
 ENTRYPOINT ["/app/roadtrip"]

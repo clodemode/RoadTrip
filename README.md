@@ -198,8 +198,8 @@ point, and the photo's `id`, `path`, `thumb`, `sha256`, `taken_at` and
 dimensions.
 
 `/route.geojson` cannot answer this: it is open data and drops any post without
-a pin. And on a `scratch` image there is no shell, so nobody can read the
-SQLite off the volume — the app itself is the only census there is.
+a pin. The image carries only a static busybox shell (no sqlite3), so the
+app itself is the only census there is.
 
 What it is for is duplicates, which a phone on a bad hotspot makes: the same
 `photo.id` or `photo.sha256` twice, or two rows whose `taken_at` are seconds
@@ -953,4 +953,4 @@ Reset a password from the machine (the old one cannot be recovered):
 fly ssh console -a roadtrip-clodemode -C "/app/roadtrip -set-password kris"   # type the new password, one line, press Enter
 ```
 
-The image has no shell, so the command is passed with `-C`; a plain `fly ssh console` fails. A password is six or more characters and length is the only rule. The running server re-reads `users.json` whenever the file changes, so the new password works at once and nothing is restarted.
+The image carries a static busybox `sh`, so a plain `fly ssh console -a roadtrip-clodemode` opens a shell too; `-C` runs the one command without one. A password is six or more characters and length is the only rule. The running server re-reads `users.json` whenever the file changes, so the new password works at once and nothing is restarted.
