@@ -33,7 +33,7 @@ func exportRow(t *testing.T, app *App) map[string]json.RawMessage {
 	var export struct {
 		Queries []map[string]json.RawMessage `json:"queries"`
 	}
-	if err := json.Unmarshal(send(t, app, "GET", "/admin/chester/log.json", testToken, "", nil).Body.Bytes(), &export); err != nil {
+	if err := json.Unmarshal(send(t, app, "GET", "/driver/chester/log.json", testToken, "", nil).Body.Bytes(), &export); err != nil {
 		t.Fatal(err)
 	}
 	if len(export.Queries) == 0 {
@@ -128,7 +128,7 @@ func TestChesterNeverShowsCardsWithNoWords(t *testing.T) {
 		t.Errorf("the stored first_ms is %v (%v), want empty", stored, err)
 	}
 	// The log page says both, and renders the sentence as text.
-	page := send(t, app, "GET", "/admin/chester/log", testToken, "", nil).Body.String()
+	page := send(t, app, "GET", "/driver/chester/log", testToken, "", nil).Body.String()
 	for _, w := range []string{"Not Chester's words", "<dd>no words</dd>", "Pump &lt;b&gt;&amp; Go&lt;/b&gt; (Birch Gate, ZZ)"} {
 		if !strings.Contains(page, w) {
 			t.Errorf("the log page lacks %q", w)

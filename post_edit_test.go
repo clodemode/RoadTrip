@@ -100,7 +100,7 @@ func mustGet(t *testing.T, app *App, id int64) *Post {
 // tests are about, and PathValue is what the handler actually reads.
 func submitEdit(t *testing.T, app *App, id int64, form url.Values) string {
 	t.Helper()
-	target := "/admin/post/" + strconv.FormatInt(id, 10) + "/edit"
+	target := "/driver/post/" + strconv.FormatInt(id, 10) + "/edit"
 	req := httptest.NewRequest("POST", target, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetPathValue("id", strconv.FormatInt(id, 10))
@@ -377,7 +377,7 @@ func TestPostEditFormRenders(t *testing.T) {
 	p := mustCreate(t, app, &Post{LegID: cp.LegID, CheckpointID: cp.ID, Kind: "meal",
 		TZ: cp.TZ, Title: "brisket", Body: "worth the stop"})
 
-	req := httptest.NewRequest("GET", "/admin/post/"+strconv.FormatInt(p.ID, 10)+"/edit", nil)
+	req := httptest.NewRequest("GET", "/driver/post/"+strconv.FormatInt(p.ID, 10)+"/edit", nil)
 	req.SetPathValue("id", strconv.FormatInt(p.ID, 10))
 	w := httptest.NewRecorder()
 	app.postEditForm(w, req)
@@ -401,7 +401,7 @@ func TestPostEditFormRenders(t *testing.T) {
 // A missing post is a 404, not a panic.
 func TestPostEditFormUnknownPost(t *testing.T) {
 	app := testApp(t)
-	req := httptest.NewRequest("GET", "/admin/post/9999/edit", nil)
+	req := httptest.NewRequest("GET", "/driver/post/9999/edit", nil)
 	req.SetPathValue("id", "9999")
 	w := httptest.NewRecorder()
 	app.postEditForm(w, req)

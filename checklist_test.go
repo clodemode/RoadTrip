@@ -41,7 +41,7 @@ func fixtureChecklist(t *testing.T) []byte {
 
 func pushChecklist(t *testing.T, app *App, body []byte, query string) *httptest.ResponseRecorder {
 	t.Helper()
-	return send(t, app, "POST", "/admin/checklist"+query, testToken, "application/json", body)
+	return send(t, app, "POST", "/driver/checklist"+query, testToken, "application/json", body)
 }
 
 // checklistApp is an app showing the fixture trip, with the fixture checklist
@@ -58,7 +58,7 @@ func checklistApp(t *testing.T) *App {
 // mark posts to the check-off route with the token, as curl does.
 func mark(t *testing.T, app *App, kind, id string, form url.Values) *httptest.ResponseRecorder {
 	t.Helper()
-	return postForm(t, app, "/admin/checklist/"+kind+"/"+id, form)
+	return postForm(t, app, "/driver/checklist/"+kind+"/"+id, form)
 }
 
 func markOK(t *testing.T, app *App, kind, id string, form url.Values) {
@@ -129,7 +129,7 @@ func captureLog(t *testing.T) *bytes.Buffer {
 func TestChecklistPushRequiresACredential(t *testing.T) {
 	app := activeTripApp(t)
 	for name, token := range map[string]string{"no credential": "", "wrong token": "ffffffffffffffffffffffff"} {
-		w := send(t, app, "POST", "/admin/checklist", token, "application/json", fixtureChecklist(t))
+		w := send(t, app, "POST", "/driver/checklist", token, "application/json", fixtureChecklist(t))
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("%s: status %d, want 401", name, w.Code)
 		}
@@ -378,7 +378,7 @@ func TestChecklistPushRefusesAVINShapeWithoutEchoingIt(t *testing.T) {
 		t.Errorf("a refused check-off changed the step: %+v", it)
 	}
 	// The browser path is a redirect, and it carries the field and not the value.
-	req := httptest.NewRequest("POST", "/admin/checklist/question/q-roof",
+	req := httptest.NewRequest("POST", "/driver/checklist/question/q-roof",
 		strings.NewReader(url.Values{"outcome": {fixtureVIN}}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "text/html")
@@ -457,7 +457,7 @@ func TestChecklistPageShowsPrivateTextOnlyWhenSignedIn(t *testing.T) {
 		}
 	}
 	// No way to change anything either, and an undone step's note is not shown.
-	for _, control := range []string{"<form method=\"post\" action=\"/admin/checklist", "<details", "Paid and then refunded."} {
+	for _, control := range []string{"<form method=\"post\" action=\"/driver/checklist", "<details", "Paid and then refunded."} {
 		if strings.Contains(page, control) {
 			t.Errorf("the anonymous page carries %q", control)
 		}
@@ -470,7 +470,7 @@ func TestChecklistPageShowsPrivateTextOnlyWhenSignedIn(t *testing.T) {
 	if n := strings.Count(signedIn, privateNoteMark); n < 3 {
 		t.Errorf("the signed-in page shows %d private notes; want the three that were written", n)
 	}
-	for _, want := range []string{`action="/admin/checklist/step/call-ahead"`, `action="/admin/checklist/question/q-late"`,
+	for _, want := range []string{`action="/driver/checklist/step/call-ahead"`, `action="/driver/checklist/question/q-late"`,
 		"Mark done", "What happened", "Private note", ">Undo<"} {
 		if !strings.Contains(signedIn, want) {
 			t.Errorf("the signed-in page lacks %q", want)
@@ -483,7 +483,7 @@ func TestChecklistPageShowsPrivateTextOnlyWhenSignedIn(t *testing.T) {
 func TestChecklistOpenEndpointsCarryNoPrivateText(t *testing.T) {
 	app := privateTextApp(t)
 	open := []string{"/", "/checklist.json", "/plan", "/plan.json", "/route.geojson", "/photos",
-		"/legs/day-1-ridge", "/healthz", "/robots.txt", "/admin/login"}
+		"/legs/day-1-ridge", "/healthz", "/robots.txt", "/driver/login"}
 	for _, token := range []string{"", testToken} {
 		for _, p := range open {
 			w := send(t, app, "GET", p, token, "", nil)
@@ -508,11 +508,11 @@ func TestChecklistOpenEndpointsCarryNoPrivateText(t *testing.T) {
 		t.Error("/checklist.json carries the note of a step that was reopened")
 	}
 	// The census is signed-in only, and it is where the private text is.
-	if w := send(t, app, "GET", "/admin/checklist.json", "", "", nil); w.Code != http.StatusFound ||
+	if w := send(t, app, "GET", "/driver/checklist.json", "", "", nil); w.Code != http.StatusFound ||
 		strings.Contains(w.Body.String(), privateMark) {
 		t.Errorf("the census without a credential: status %d", w.Code)
 	}
-	full := send(t, app, "GET", "/admin/checklist.json", testToken, "", nil)
+	full := send(t, app, "GET", "/driver/checklist.json", testToken, "", nil)
 	if full.Code != http.StatusOK || strings.Count(full.Body.String(), privateMark) != 4 ||
 		strings.Count(full.Body.String(), privateNoteMark) != 3 {
 		t.Errorf("the census with the token: status %d, %d private strings, %d private notes", full.Code,
@@ -585,7 +585,7 @@ func reflectStrings(v reflect.Value) string {
 func TestChecklistMarkRequiresACredential(t *testing.T) {
 	app := checklistApp(t)
 	for _, token := range []string{"", "ffffffffffffffffffffffff"} {
-		w := send(t, app, "POST", "/admin/checklist/step/call-ahead", token, "application/x-www-form-urlencoded", nil)
+		w := send(t, app, "POST", "/driver/checklist/step/call-ahead", token, "application/x-www-form-urlencoded", nil)
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("token %q: status %d, want 401", token, w.Code)
 		}
@@ -593,8 +593,8 @@ func TestChecklistMarkRequiresACredential(t *testing.T) {
 	if it := item(t, app, clStep, "call-ahead"); it.Done {
 		t.Error("a refused check-off marked the step done")
 	}
-	for _, target := range []string{"/admin/checklist/stage/pickup", "/admin/checklist/step/no-such-step",
-		"/admin/checklist/step/Not%20An%20Id"} {
+	for _, target := range []string{"/driver/checklist/stage/pickup", "/driver/checklist/step/no-such-step",
+		"/driver/checklist/step/Not%20An%20Id"} {
 		if w := postForm(t, app, target, url.Values{}); w.Code != http.StatusNotFound {
 			t.Errorf("%s: status %d, want 404", target, w.Code)
 		}
@@ -624,7 +624,7 @@ func TestChecklistCheckOffNow(t *testing.T) {
 		t.Errorf("the response does not carry the new count: %s", w.Body.String())
 	}
 	// A browser gets sent back to the step it tapped.
-	req := httptest.NewRequest("POST", "/admin/checklist/step/roof-straps", strings.NewReader(""))
+	req := httptest.NewRequest("POST", "/driver/checklist/step/roof-straps", strings.NewReader(""))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 	req.Header.Set("Authorization", "Bearer "+testToken)
@@ -971,7 +971,7 @@ func TestFrontPageSummarisesTheChecklist(t *testing.T) {
 		}
 	}
 	// The earlier ride has no checklist: showing it, the line and the link go.
-	if w := postForm(t, app, "/admin/ride/active", url.Values{"clear": {"1"}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/ride/active", url.Values{"clear": {"1"}}); w.Code != http.StatusOK {
 		t.Fatalf("clear the active ride: %d", w.Code)
 	}
 	if home := send(t, app, "GET", "/", "", "", nil).Body.String(); strings.Contains(home, `href="/checklist"`) {

@@ -16,7 +16,7 @@ import (
 func readCensus(t *testing.T, app *App) (int, []censusPost) {
 	t.Helper()
 	w := httptest.NewRecorder()
-	app.postsJSON(w, httptest.NewRequest("GET", "/admin/posts.json", nil))
+	app.postsJSON(w, httptest.NewRequest("GET", "/driver/posts.json", nil))
 	if w.Code != 200 {
 		t.Fatalf("status %d, want 200: %s", w.Code, w.Body.String())
 	}
@@ -119,7 +119,7 @@ func TestCensusCarriesPhotoIdentity(t *testing.T) {
 func TestCensusIsNotCachedOrShared(t *testing.T) {
 	app := testApp(t)
 	w := httptest.NewRecorder()
-	app.postsJSON(w, httptest.NewRequest("GET", "/admin/posts.json", nil))
+	app.postsJSON(w, httptest.NewRequest("GET", "/driver/posts.json", nil))
 
 	if got := w.Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q, want no-store", got)

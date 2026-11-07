@@ -1,0 +1,44 @@
+{{template "head" .}}
+<section class="card narrow admin">
+  <div class="card-body">
+  <h1>Users</h1>
+  {{with .Error}}<p class="error">{{.}}</p>{{end}}
+  {{if .ShownPassword}}
+  <div class="notice">
+    <p>New password for <strong>{{.ShownFor}}</strong>. It is shown once; copy it now.</p>
+    <p><code id="shown-pw">{{.ShownPassword}}</code></p>
+  </div>
+  {{end}}
+  <table class="table">
+    <thead><tr><th>User</th><th>Role</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {{range .Users}}
+      <tr>
+        <td>{{.Name}}</td><td>{{.Role}}</td><td>{{if .Disabled}}disabled{{else}}active{{end}}</td>
+        <td class="d-flex gap-2 flex-wrap">
+          <form method="post" action="/driver/users/{{.Name}}/reset" class="d-flex gap-1">
+            <input class="form-control form-control-sm" name="password" type="password" placeholder="new password" autocomplete="new-password">
+            <button class="btn btn-sm btn-outline-secondary">Reset</button>
+            <button class="btn btn-sm btn-outline-secondary" name="generate" value="1">Generate</button>
+          </form>
+          {{if .Disabled}}
+          <form method="post" action="/driver/users/{{.Name}}/enable"><button class="btn btn-sm btn-outline-secondary">Enable</button></form>
+          {{else}}
+          <form method="post" action="/driver/users/{{.Name}}/disable"><button class="btn btn-sm btn-outline-secondary">Disable</button></form>
+          {{end}}
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <h2>Add a user</h2>
+  <form method="post" action="/driver/users" class="d-flex flex-column gap-3">
+    <label class="form-label d-block">Username<input class="form-control" name="username" required pattern="[a-z0-9_-]{2,32}" autocomplete="off"></label>
+    <label class="form-label d-block">Password (blank and tick Generate to have one made)<input class="form-control" name="password" type="password" autocomplete="new-password"></label>
+    <label class="form-check"><input class="form-check-input" type="checkbox" name="generate" value="1"> Generate a strong password and show it once</label>
+    <label class="form-label d-block">Role<select class="form-select" name="role"><option value="editor">editor</option><option value="admin">admin</option></select></label>
+    <button type="submit" class="btn btn-primary">Add user</button>
+  </form>
+  </div>
+</section>
+{{template "foot" .}}

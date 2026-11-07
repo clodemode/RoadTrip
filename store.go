@@ -1360,7 +1360,7 @@ func parseSeed(path, defaultSlug string) (*seedData, error) {
 // re-pushed document that dropped one of its choices.
 //
 // A selection's start date WINS over the document's, the same way its choices
-// do: the trip-keeper moved the departure with POST /admin/plan, and a
+// do: the trip-keeper moved the departure with POST /driver/plan, and a
 // document pushed again afterwards must not quietly move it back. The
 // document's own start is kept in DocStartDate so the push can report that it
 // was not applied.

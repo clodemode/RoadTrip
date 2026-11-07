@@ -8,7 +8,7 @@
   {{with .DefaultLeg}}
   <div class="arrive-strip">
     {{range .Checkpoints}}
-    <form method="post" action="/admin/checkpoint/{{.ID}}/arrive" class="d-inline">
+    <form method="post" action="/driver/checkpoint/{{.ID}}/arrive" class="d-inline">
       {{if .ArrivedAt}}
         <input type="hidden" name="clear" value="1">
         <button class="btn btn-sm btn-outline-secondary" title="arrived {{local .ArrivedAt .TZ}}, tap to undo">Arrived: {{.Name}} (undo)</button>
@@ -20,7 +20,7 @@
   </div>
   {{end}}
 
-  <form method="post" action="/admin/post" enctype="multipart/form-data" class="d-flex flex-column gap-3 mt-3">
+  <form method="post" action="/driver/post" enctype="multipart/form-data" class="d-flex flex-column gap-3 mt-3">
     <label class="form-label d-block">Photo (JPEG)
       <input class="form-control" type="file" name="photo" id="f-photo" accept="image/jpeg">
     </label>

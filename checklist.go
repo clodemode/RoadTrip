@@ -35,7 +35,7 @@ import (
 // The one seam that enforces it is Store.Checklist(slug, withPrivate): a read
 // without private never selects the private columns, so an anonymous request
 // does not hold the text it must not show. Every handler decides withPrivate
-// in exactly one place, from the same session the rest of /admin uses.
+// in exactly one place, from the same session the rest of /driver uses.
 //
 // The document itself lives on the volume beside the trip file, at
 // $DATA_DIR/trips/<slug>.checklist.json, and never in the repository:

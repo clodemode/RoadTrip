@@ -115,7 +115,15 @@ func main() {
 	cName := flag.String("name", "", "with -convert: the ride name; default is the route document's own")
 	cZones := flag.String("zones", "", "with -convert: IANA zones for stops that carry no tz, as stop=Zone,stop=Zone")
 	cOut := flag.String("out", "", "with -convert: where to write; default $DATA_DIR/trips/<slug>.geojson")
+	setPw := flag.String("set-password", "", "set this user's password, read from stdin (one line), and exit")
 	flag.Parse()
+	if *setPw != "" {
+		if err := setPasswordFile(env("DATA_DIR", "/data"), *setPw, os.Stdin); err != nil {
+			log.Fatalf("set-password: %v", err)
+		}
+		fmt.Println("password set for", *setPw)
+		return
+	}
 	if *hash != "" {
 		h, err := HashPassword(*hash)
 		if err != nil {
@@ -255,8 +263,11 @@ func main() {
 	} else {
 		log.Printf("pin precision: snap (a pin at a private place is fuzzed unless Fuzz location is unticked)")
 	}
-	if !app.auth.enabled {
-		log.Printf("WARN ADMIN_PASSWORD_HASH unset — posting is disabled, site is read-only")
+	if err := app.auth.LoadUsers(dataDir); err != nil {
+		log.Fatalf("users: %v", err)
+	}
+	if !app.auth.enabled() {
+		log.Printf("WARN no users and ADMIN_PASSWORD_HASH unset — posting is disabled, site is read-only")
 	}
 	// Whether the header path exists at all, never the token itself — this log
 	// ships to flyctl logs, and a credential that reaches a log is spent.

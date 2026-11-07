@@ -8,7 +8,7 @@
   {{with .Error}}<p class="error">{{.}}</p>{{end}}
   {{if .Saved}}<p class="plan-saved">Saved.</p>{{end}}
 
-  <form method="post" action="/admin/lodging" class="d-flex flex-column gap-3 mt-3">
+  <form method="post" action="/driver/lodging" class="d-flex flex-column gap-3 mt-3">
     {{range .Legs}}
     <fieldset class="pin">
       <legend>Leg {{.Ord}}: {{.Name}}</legend>

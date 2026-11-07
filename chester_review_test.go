@@ -109,7 +109,7 @@ func TestChesterACutStreamIsNotAnAnswer(t *testing.T) {
 	}
 
 	// The log page and the export say which costs are estimates.
-	page := send(t, app, "GET", "/admin/chester/log", testToken, "", nil).Body.String()
+	page := send(t, app, "GET", "/driver/chester/log", testToken, "", nil).Body.String()
 	if n := strings.Count(page, "(an estimate)"); n != 3 {
 		t.Errorf("the log page marks %d cost(s) as an estimate, want 3 of the 4", n)
 	}
@@ -119,7 +119,7 @@ func TestChesterACutStreamIsNotAnAnswer(t *testing.T) {
 	var export struct {
 		Queries []ChesterQuery `json:"queries"`
 	}
-	if err := json.Unmarshal(send(t, app, "GET", "/admin/chester/log.json", testToken, "", nil).Body.Bytes(), &export); err != nil {
+	if err := json.Unmarshal(send(t, app, "GET", "/driver/chester/log.json", testToken, "", nil).Body.Bytes(), &export); err != nil {
 		t.Fatal(err)
 	}
 	estimates := 0
@@ -566,7 +566,7 @@ func TestChesterAPartialAnswerIsNeverAnAnswer(t *testing.T) {
 		t.Errorf("the summary: %d question(s), %d failed, rows %+v", sum.N, sum.Failed, sum.Rows)
 	}
 	// The log page never shows a partial where an answer goes.
-	page := send(t, app, "GET", "/admin/chester/log", testToken, "", nil).Body.String()
+	page := send(t, app, "GET", "/driver/chester/log", testToken, "", nil).Body.String()
 	if n := strings.Count(page, `class="ch-answer ch-answer-log"`); n != 1 {
 		t.Errorf("the log page shows %d answer(s), want 1: a partial is not one", n)
 	}
@@ -584,7 +584,7 @@ func TestChesterAPartialAnswerIsNeverAnAnswer(t *testing.T) {
 		}
 	}
 	// The export keeps the two apart.
-	export := send(t, app, "GET", "/admin/chester/log.json", testToken, "", nil).Body.String()
+	export := send(t, app, "GET", "/driver/chester/log.json", testToken, "", nil).Body.String()
 	if strings.Contains(export, `"answer": "The pass is`) || !strings.Contains(export, `"partial": "The pass is PARTIAL-MARK"`) ||
 		!strings.Contains(export, `"failed": 2`) {
 		t.Error("the export gives a partial as an answer, or does not carry it as a partial")
@@ -623,7 +623,7 @@ func indexOfEvent(evs []chesterEvent, kind string) int {
 func signedInCookie(t *testing.T, app *App) *http.Cookie {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	app.auth.Issue(rec, false)
+	app.auth.Issue(rec, false, testAdminUser(t, app))
 	for _, c := range rec.Result().Cookies() {
 		if c.Name == sessionCookie {
 			return c
@@ -718,7 +718,7 @@ func TestSignedInWritesMustComeFromThisSite(t *testing.T) {
 
 	// A verdict: it writes to the log.
 	id := logRow(t, app, chesterQuick, 1000, 0.01)
-	target := "/admin/chester/log/" + strconv.FormatInt(id, 10)
+	target := "/driver/chester/log/" + strconv.FormatInt(id, 10)
 	for _, c := range cases {
 		verdict := "right"
 		if c.want != http.StatusOK {
@@ -738,13 +738,13 @@ func TestSignedInWritesMustComeFromThisSite(t *testing.T) {
 
 	// Every other signed-in write goes through the same gate.
 	foreign := originCase{cookie: true, origin: sibling}
-	for _, target := range []string{"/admin/lodging", "/admin/ride/active", "/admin/plan", "/admin/post/1/delete"} {
+	for _, target := range []string{"/driver/lodging", "/driver/ride/active", "/driver/plan", "/driver/post/1/delete"} {
 		if w := originRequest(app, foreign, cookie, "POST", target, url.Values{}); w.Code != http.StatusForbidden {
 			t.Errorf("POST %s with the cookie from a sibling host: status %d, want 403", target, w.Code)
 		}
 	}
 	// Reading is not writing: a signed-in GET is unchanged whatever its Origin.
-	if w := originRequest(app, foreign, cookie, "GET", "/admin/chester/log.json", url.Values{}); w.Code != http.StatusOK {
+	if w := originRequest(app, foreign, cookie, "GET", "/driver/chester/log.json", url.Values{}); w.Code != http.StatusOK {
 		t.Errorf("a signed-in GET from a sibling host: status %d, want 200", w.Code)
 	}
 

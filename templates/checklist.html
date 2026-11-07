@@ -38,7 +38,7 @@
         {{if $.Authed}}
         <details class="cl-edit">
           <summary>{{if .Done}}Edit{{else}}Mark done{{end}}</summary>
-          <form method="post" action="/admin/checklist/step/{{.ID}}" class="d-flex flex-column gap-3">
+          <form method="post" action="/driver/checklist/step/{{.ID}}" class="d-flex flex-column gap-3">
             <label class="form-label d-block">When
               <input class="form-control" type="datetime-local" name="at" value="{{if .Done}}{{wall .DoneAt .DoneTZ}}{{end}}">
               <span class="form-text d-block fw-normal">Leave empty for now. The time is read in {{.FormTZ}}.</span>
@@ -54,7 +54,7 @@
             <button type="submit" class="btn btn-primary cl-go align-self-start">{{if .Done}}Save{{else}}Done{{end}}</button>
           </form>
           {{if .Done}}
-          <form method="post" action="/admin/checklist/step/{{.ID}}" class="cl-undo">
+          <form method="post" action="/driver/checklist/step/{{.ID}}" class="cl-undo">
             <input type="hidden" name="clear" value="1">
             <button type="submit" class="btn btn-outline-secondary cl-go">Undo</button>
             <span class="muted small">Clears the time. The notes are kept.</span>
@@ -91,7 +91,7 @@
         {{if $.Authed}}
         <details class="cl-edit">
           <summary>{{if .Done}}Edit{{else}}Answer{{end}}</summary>
-          <form method="post" action="/admin/checklist/question/{{.ID}}" class="d-flex flex-column gap-3">
+          <form method="post" action="/driver/checklist/question/{{.ID}}" class="d-flex flex-column gap-3">
             <label class="form-label d-block">Answer
               <textarea class="form-control" name="outcome" rows="3" maxlength="2000">{{.Outcome}}</textarea>
               <span class="form-text d-block fw-normal">Public. What you were told, for the next person.</span>
@@ -107,7 +107,7 @@
             <button type="submit" class="btn btn-primary cl-go align-self-start">{{if .Done}}Save{{else}}Answered{{end}}</button>
           </form>
           {{if .Done}}
-          <form method="post" action="/admin/checklist/question/{{.ID}}" class="cl-undo">
+          <form method="post" action="/driver/checklist/question/{{.ID}}" class="cl-undo">
             <input type="hidden" name="clear" value="1">
             <button type="submit" class="btn btn-outline-secondary cl-go">Undo</button>
             <span class="muted small">Clears the time. The notes are kept.</span>

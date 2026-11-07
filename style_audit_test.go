@@ -297,7 +297,7 @@ func TestStyleNoThirdPartyAssets(t *testing.T) {
 // app's own stylesheet.
 func TestStylePageDeclaresLightThemeAndLoadsVendoredBootstrap(t *testing.T) {
 	app := testApp(t)
-	for _, path := range []string{"/", "/photos", "/plan", "/admin/login"} {
+	for _, path := range []string{"/", "/photos", "/plan", "/driver/login"} {
 		w := send(t, app, "GET", path, "", "", nil)
 		if w.Code != 200 {
 			t.Fatalf("GET %s: status %d", path, w.Code)

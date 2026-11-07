@@ -42,7 +42,7 @@ func bearer(t *testing.T, app *App, method, target, token string) *httptest.Resp
 func TestPushTokenOpensAnAdminPost(t *testing.T) {
 	app := tokenApp(t, testToken)
 	cp := firstCheckpoint(t, testLegs(t, app))
-	target := "/admin/checkpoint/" + strconv.FormatInt(cp.ID, 10) + "/arrive"
+	target := "/driver/checkpoint/" + strconv.FormatInt(cp.ID, 10) + "/arrive"
 
 	if w := bearer(t, app, "POST", target, testToken); w.Code != http.StatusSeeOther {
 		t.Fatalf("status %d, want 303: %s", w.Code, w.Body.String())
@@ -56,7 +56,7 @@ func TestPushTokenOpensAnAdminPost(t *testing.T) {
 func TestPushTokenWrongValueIsRefused(t *testing.T) {
 	app := tokenApp(t, testToken)
 	cp := firstCheckpoint(t, testLegs(t, app))
-	target := "/admin/checkpoint/" + strconv.FormatInt(cp.ID, 10) + "/arrive"
+	target := "/driver/checkpoint/" + strconv.FormatInt(cp.ID, 10) + "/arrive"
 
 	if w := bearer(t, app, "POST", target, "0123456789abcdef0123456X"); w.Code != http.StatusUnauthorized {
 		t.Errorf("status %d, want 401", w.Code)
@@ -74,7 +74,7 @@ func TestPushTokenWrongValueIsRefused(t *testing.T) {
 func TestPushTokenUnsetIgnoresTheHeader(t *testing.T) {
 	app := tokenApp(t, "")
 	cp := firstCheckpoint(t, testLegs(t, app))
-	target := "/admin/checkpoint/" + strconv.FormatInt(cp.ID, 10) + "/arrive"
+	target := "/driver/checkpoint/" + strconv.FormatInt(cp.ID, 10) + "/arrive"
 
 	if w := bearer(t, app, "POST", target, testToken); w.Code != http.StatusUnauthorized {
 		t.Errorf("status %d, want 401", w.Code)
@@ -111,10 +111,10 @@ func TestSessionCookieStillWorks(t *testing.T) {
 	for _, token := range []string{testToken, ""} {
 		app := tokenApp(t, token)
 		rec := httptest.NewRecorder()
-		app.auth.Issue(rec, false)
+		app.auth.Issue(rec, false, testAdminUser(t, app))
 		cookie := rec.Result().Cookies()[0]
 
-		req := httptest.NewRequest("GET", "/admin/posts.json", nil)
+		req := httptest.NewRequest("GET", "/driver/posts.json", nil)
 		req.AddCookie(cookie)
 		w := httptest.NewRecorder()
 		app.routes().ServeHTTP(w, req)
@@ -124,7 +124,7 @@ func TestSessionCookieStillWorks(t *testing.T) {
 		// A tampered cookie is still refused, token or no token.
 		bad := *cookie
 		bad.Value = "nonsense"
-		req = httptest.NewRequest("GET", "/admin/posts.json", nil)
+		req = httptest.NewRequest("GET", "/driver/posts.json", nil)
 		req.AddCookie(&bad)
 		w = httptest.NewRecorder()
 		app.routes().ServeHTTP(w, req)
@@ -154,7 +154,7 @@ func TestPushTokenHeaderShapes(t *testing.T) {
 		{"", false},
 	}
 	for _, c := range cases {
-		req := httptest.NewRequest("GET", "/admin/posts.json", nil)
+		req := httptest.NewRequest("GET", "/driver/posts.json", nil)
 		if c.header != "" {
 			req.Header.Set("Authorization", c.header)
 		}

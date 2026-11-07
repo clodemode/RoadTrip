@@ -37,7 +37,7 @@
         {{else if .PlannedArrive}}<span class="muted">Plan: arrive {{clock .PlannedArrive .TZ}}</span>
         {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
         {{if $.Authed}}
-          <form method="post" action="/admin/checkpoint/{{.ID}}/arrive" class="d-inline">
+          <form method="post" action="/driver/checkpoint/{{.ID}}/arrive" class="d-inline">
             {{if .ArrivedAt}}<input type="hidden" name="clear" value="1"><button class="btn btn-sm btn-outline-secondary">Undo</button>
             {{else}}<button class="btn btn-sm btn-primary">Arrived</button>{{end}}
           </form>
@@ -63,7 +63,7 @@
 <section class="timeline">
   <div class="section-head">
     <h2>On this leg</h2>
-    {{if .Authed}}<a class="btn btn-primary" href="/admin/post">New post</a>{{end}}
+    {{if .Authed}}<a class="btn btn-primary" href="/driver/post">New post</a>{{end}}
   </div>
   {{if not .Posts}}<p class="muted">Nothing posted on this leg yet.</p>{{end}}
   {{range .Posts}}

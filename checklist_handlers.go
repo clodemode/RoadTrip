@@ -213,7 +213,7 @@ func parseStamp(v string, loc *time.Location) (time.Time, error) {
 }
 
 // checklistMark checks a step off, answers a question, corrects either, or
-// undoes it. POST /admin/checklist/{kind}/{id}, where kind is step or
+// undoes it. POST /driver/checklist/{kind}/{id}, where kind is step or
 // question and id is the document's own id for it.
 //
 //	(no fields)       done, now

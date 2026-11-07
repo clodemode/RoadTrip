@@ -20,7 +20,7 @@ entries:
   description: |-
     Kris, 2026-11-06: the car import is a big part of the trip, its plan would help someone later, and personal details such as the VIN must never reach the public site. Written as if public.
 
-    A. THE DOCUMENT. A checklist document belongs to one ride and lives on the volume beside its trip file ($DATA_DIR/trips/<slug>.checklist.json), pushed whole by POST /admin/checklist (session or PUSH_TOKEN, the trip-push conventions: parse fully, write atomically, apply at once). Shape: title, intro, disclaimer, stages [{id, title, tz, when, steps [{id, title, detail, private}]}], questions [{id, group, ask, why, private}], sources [{label, url}]. It never enters the repo; fixtures are synthetic.
+    A. THE DOCUMENT. A checklist document belongs to one ride and lives on the volume beside its trip file ($DATA_DIR/trips/<slug>.checklist.json), pushed whole by POST /driver/checklist (session or PUSH_TOKEN, the trip-push conventions: parse fully, write atomically, apply at once). Shape: title, intro, disclaimer, stages [{id, title, tz, when, steps [{id, title, detail, private}]}], questions [{id, group, ask, why, private}], sources [{label, url}]. It never enters the repo; fixtures are synthetic.
 
     B. PUBLIC AND PRIVATE. title, detail, ask, why and the outcome notes are public. private is text for the signed-in trip-keeper only: it is rendered on no anonymous page and appears in no open endpoint. A push is REFUSED when a public field holds a 17-character VIN-shaped token; the refusal names the field, never the value.
 
