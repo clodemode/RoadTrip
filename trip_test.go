@@ -365,7 +365,7 @@ func TestActiveRideResolution(t *testing.T) {
 		t.Fatalf("active ride %s, want %s", got, fixtureSlug)
 	}
 	// Every surface moves together: the open data names the same ride.
-	geo := send(t, app, "GET", "/route.geojson", "", "", nil)
+	geo := send(t, app, "GET", "/route.geojson", testToken, "", nil)
 	if !strings.Contains(geo.Body.String(), `"ride": "`+fixtureSlug+`"`) {
 		t.Error("/route.geojson does not name the active ride")
 	}
@@ -825,6 +825,12 @@ func TestNoSurfaceCarriesTheRawPrivateNumbers(t *testing.T) {
 	for _, token := range []string{"", testToken} {
 		for _, p := range paths {
 			w := send(t, app, "GET", p, token, "", nil)
+			if token == "" && p == "/route.geojson" {
+				if w.Code != http.StatusFound {
+					t.Fatalf("%s for a visitor: status %d, want the sign-in redirect", p, w.Code)
+				}
+				continue
+			}
 			if w.Code != http.StatusOK {
 				t.Fatalf("%s: status %d", p, w.Code)
 			}
@@ -852,7 +858,7 @@ func TestNoSurfaceCarriesTheRawPrivateNumbers(t *testing.T) {
 		t.Fatalf("save: %d %s", w.Code, w.Body.String())
 	}
 	for _, p := range []string{"/", "/route.geojson", "/legs/day-4-stopover", "/plan"} {
-		body := send(t, app, "GET", p, "", "", nil).Body.String()
+		body := send(t, app, "GET", p, testToken, "", nil).Body.String()
 		for _, raw := range fixtureRaw {
 			if strings.Contains(body, raw) {
 				t.Errorf("%s carries %s after the finish changed", p, raw)
@@ -1226,7 +1232,7 @@ func TestVolumeTripPinnedPostDrawsTheTrack(t *testing.T) {
 	if !strings.Contains(home, `"tracks":[{"leg":1`) {
 		t.Error("window.RIDE on / has no track for leg 1")
 	}
-	geo := send(t, app, "GET", "/route.geojson", "", "", nil).Body.String()
+	geo := send(t, app, "GET", "/route.geojson", testToken, "", nil).Body.String()
 	if !strings.Contains(geo, `"kind": "track"`) || !strings.Contains(geo, `"made_it": true`) {
 		t.Error("/route.geojson lacks the track or the arrival")
 	}
@@ -1300,7 +1306,7 @@ func TestVolumeTripFirstPinDrawsATrackFromThePlannedStart(t *testing.T) {
 	if !strings.Contains(home, `"planned_start":true`) {
 		t.Error("window.RIDE on / does not mark the track's start as planned")
 	}
-	geo := send(t, app, "GET", "/route.geojson", "", "", nil).Body.String()
+	geo := send(t, app, "GET", "/route.geojson", testToken, "", nil).Body.String()
 	if !strings.Contains(geo, `"kind": "track"`) || !strings.Contains(geo, `"planned_start": true`) {
 		t.Error("/route.geojson lacks the track, or does not mark its start as planned")
 	}
@@ -1340,7 +1346,7 @@ func TestVolumeTripFirstPinDrawsATrackFromThePlannedStart(t *testing.T) {
 	if track := legTracks(rv.Legs, posts)[legs[0].ID]; len(track) != 3 {
 		t.Errorf("stamping the origin changed the track's length: %v", track)
 	}
-	if geo := send(t, app, "GET", "/route.geojson", "", "", nil).Body.String(); strings.Contains(geo, `"planned_start"`) {
+	if geo := send(t, app, "GET", "/route.geojson", testToken, "", nil).Body.String(); strings.Contains(geo, `"planned_start"`) {
 		t.Error("/route.geojson still marks a planned start after the origin was stamped")
 	}
 }

@@ -11,13 +11,13 @@
   </header>{{end}}
 
   <nav class="hud-tools hud-left" aria-label="Driver tools, left">
-    <a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>Post photo</a>
+    {{if .Driver}}<a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>Post photo</a>{{end}}
     {{if .ChesterOn}}<a class="hud-tool" href="/chester"><span class="hud-ico" aria-hidden="true">&#128172;</span>Ask Chester</a>{{end}}
   </nav>
 
   {{if .Destined}}<section class="hud-road hud-free" id="hud-free" aria-label="FreeLance drive">
     <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
-      <button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>
+      {{if .Driver}}<button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>{{end}}
       <button class="btn btn-sm {{if .Destined}}btn-dark{{else}}btn-outline-dark{{end}}" name="mode" value="destined"{{if .Destined}} aria-current="true"{{end}}>FreeLance: Destined</button>
     </form>
     <form class="hud-dest" method="post" action="/driver/freelance/dest">
@@ -47,7 +47,7 @@
     {{if .ChesterOn}}<p class="hud-s"><a href="/driver/chester/memory">What Chester remembers about you</a></p>{{end}}
   </section>{{else}}<section class="hud-road" aria-label="Road ahead">
     <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
-      <button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>
+      {{if .Driver}}<button class="btn btn-sm {{if .Destined}}btn-outline-dark{{else}}btn-dark{{end}}" name="mode" value="trip"{{if not .Destined}} aria-current="true"{{end}}>Trip</button>{{end}}
       <button class="btn btn-sm {{if .Destined}}btn-dark{{else}}btn-outline-dark{{end}}" name="mode" value="destined"{{if .Destined}} aria-current="true"{{end}}>FreeLance: Destined</button>
     </form>
     <p class="hud-k">Next</p>
@@ -62,7 +62,7 @@
   </section>{{end}}
 
   <nav class="hud-tools hud-right" aria-label="Driver tools, right">
-    <a class="hud-tool" href="/checklist"><span class="hud-ico" aria-hidden="true">&#9745;</span>Checklist</a>
+    {{if .Driver}}<a class="hud-tool" href="/checklist"><span class="hud-ico" aria-hidden="true">&#9745;</span>Checklist</a>{{end}}
     <a class="hud-tool" href="/plan"><span class="hud-ico" aria-hidden="true">&#128506;</span>Plan</a>
   </nav>
 

@@ -360,12 +360,10 @@ func testAdminUser(t *testing.T, app *App) string {
 func TestChecklistTapBoxesAreForSignedInOnly(t *testing.T) {
 	app := checklistApp(t)
 	markOK(t, app, clStep, "call-ahead", url.Values{})
-	anon := doAs(t, app, nil, "GET", "/checklist", nil).Body.String()
-	if strings.Contains(anon, "cl-check") || strings.Contains(anon, "checklist.js") {
-		t.Fatal("a visitor must see no checkbox and no script")
-	}
-	if !strings.Contains(anon, "Done") {
-		t.Fatal("a visitor still sees the read-only state")
+	anonW := doAs(t, app, nil, "GET", "/checklist", nil)
+	anon := anonW.Body.String()
+	if anonW.Code != http.StatusFound || strings.Contains(anon, "cl-check") || strings.Contains(anon, "checklist.js") {
+		t.Fatalf("a visitor must be sent to sign-in and see no checkbox and no script: status %d", anonW.Code)
 	}
 	c := asUser(t, app, "pat", roleEditor)
 	in := doAs(t, app, c, "GET", "/checklist", nil).Body.String()

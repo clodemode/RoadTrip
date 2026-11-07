@@ -127,6 +127,16 @@ func (a *Auth) IsAdmin(r *http.Request) bool {
 	return ok && u.Role == roleAdmin
 }
 
+// mayRide reports whether the request may see and write ride slug: the push
+// token and an admin always, a driver only on the rides an admin assigned.
+func (a *Auth) mayRide(r *http.Request, slug, active string) bool {
+	if a.pushAuthed(r) {
+		return true
+	}
+	u, ok := a.sessionUser(r)
+	return ok && u.mayRide(slug, active)
+}
+
 // pushAuthed reports whether the request carries the fixed push token as
 // `Authorization: Bearer <token>`. The comparison is constant-time because the
 // token never changes: a per-request secret leaks nothing to a timing oracle,

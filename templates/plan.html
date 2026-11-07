@@ -36,7 +36,7 @@
   </label>
   <div class="plan-actions">
     <button type="submit" class="btn btn-outline-secondary plan-update">Show this plan</button>
-    {{if .Authed}}
+    {{if .Driver}}
     <button type="submit" class="btn btn-primary" formmethod="post" formaction="/driver/plan">Save this plan</button>
     <span class="muted small">Saving makes it the plan every visitor sees.</span>
     {{else}}

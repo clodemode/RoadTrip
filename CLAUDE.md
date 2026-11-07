@@ -79,7 +79,7 @@ Deterministic first, browser second:
    docker run --rm -v "$PWD":/src -v roadtrip-gomod:/go/pkg/mod -w /src golang:1.25 \
      sh -c 'test -z "$(gofmt -l .)" && go vet ./... && go build ./... && go test -race -count=1 ./...'
    ```
-2. Against a live instance, `GET /driver/posts.json` is the census — **every** post with its photo identity, signed-in only. `/route.geojson` is open data and drops unpinned posts, so it cannot stand in for it. `GET /driver/rides.json` lists every ride with its row counts and which one is active; `GET /plan.json` is the active plan's days and totals. `GET /driver/checklist.json` is the checklist with its private text; `/checklist.json` is the public copy. `GET /driver/chester/log.json` is every question Chester was asked, with its cost and its verdict.
+2. Against a live instance, `GET /driver/posts.json` is the census — **every** post with its photo identity, signed-in only. `/route.geojson` (signed-in only) drops unpinned posts, so it cannot stand in for it. `GET /driver/rides.json` lists every ride with its row counts and which one is active; `GET /plan.json` is the active plan's days and totals. `GET /driver/checklist.json` is the checklist with its private text; `/checklist.json` is the same without private text (both signed-in only since 2026-11-07). `GET /driver/chester/log.json` is every question Chester was asked, with its cost and its verdict.
 3. `/healthz` answers on any host, even while `SITE_VISIBILITY=private` closes the rest of the site.
 
 ## SessionStart hook
