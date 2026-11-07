@@ -209,24 +209,44 @@ func parseFix(r *http.Request) (lat, lng *float64) {
 // driverHome is where sign-in lands: the HUD, drawn from the plan alone so it
 // is instant. The phone then asks /driver/hud.json for the live parts.
 func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
-	h, _, err := a.hudData(time.Now(), nil, nil)
-	if err != nil {
-		http.Error(w, "the ride could not be read", http.StatusInternalServerError)
-		return
-	}
 	st := a.freeSvc().get(a.userOf(r))
+	onRide := a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
+	var h hudView
+	if onRide {
+		var err error
+		if h, _, err = a.hudData(time.Now(), nil, nil); err != nil {
+			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
+			return
+		}
+	}
+	// A driver on no ride has only FreeLance Destined, which has no ride; the
+	// screen is drawn that way, so the mode it polls for is set to match.
+	if !onRide && st.Mode != modeDestined {
+		a.freeSvc().set(a.userOf(r), func(s *freeState) { s.Mode = modeDestined })
+	}
 	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h,
-		"Destined": st.Mode == modeDestined, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
+		"Destined": st.Mode == modeDestined || !onRide, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 
 // hudJSON is the live HUD: position-aware, with the hazard chips of the leg.
 // The position is used for this answer and is neither stored nor logged.
 func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	lat, lng := parseFix(r)
-	h, legs, err := a.hudData(time.Now(), lat, lng)
-	if err != nil {
-		http.Error(w, "the ride could not be read", http.StatusInternalServerError)
+	// The trip HUD is the ride's; a driver off the ride gets only FreeLance
+	// Destined, with none of the ride's numbers.
+	onRide := a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
+	if !onRide && a.freeSvc().get(a.userOf(r)).Mode != modeDestined {
+		a.refuseRide(w, r)
 		return
+	}
+	var h hudView
+	var legs []Leg
+	if onRide {
+		var err error
+		if h, legs, err = a.hudData(time.Now(), lat, lng); err != nil {
+			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
+			return
+		}
 	}
 	hz := a.hazards
 	if hz == nil {

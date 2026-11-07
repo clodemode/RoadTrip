@@ -144,7 +144,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /legs/{slug}", a.legPage)
 	mux.HandleFunc("GET /photos", a.photos)
 	// Driver-only (Kris, 2026-11-07): the cookie or the PUSH_TOKEN bearer.
-	mux.Handle("GET /route.geojson", a.requireAuth(a.routeGeoJSON))
+	mux.Handle("GET /route.geojson", a.requireRide(a.routeGeoJSON))
 	// The planner: the active ride's days and, for a trip with options, every
 	// alternative. /plan.json is the same arithmetic as data.
 	mux.HandleFunc("GET /plan", a.planPage)
@@ -152,14 +152,14 @@ func (a *App) routes() http.Handler {
 	// The checklist: the active ride's steps and questions. Private text is
 	// read only for a signed-in request; /checklist.json never carries it.
 	// Both are driver-only (Kris, 2026-11-07).
-	mux.Handle("GET /checklist", a.requireAuth(a.checklistPage))
-	mux.Handle("GET /checklist.json", a.requireAuth(a.checklistJSON))
+	mux.Handle("GET /checklist", a.requireRide(a.checklistPage))
+	mux.Handle("GET /checklist.json", a.requireRide(a.checklistJSON))
 
 	mux.HandleFunc("GET /driver/login", a.loginForm)
 	mux.HandleFunc("POST /driver/login", a.loginSubmit)
 	mux.HandleFunc("POST /driver/logout", a.logout)
 	mux.Handle("GET /driver", a.requireAuth(a.driverHome))
-	mux.Handle("GET /driver/hud.json", a.requireAuth(a.hudJSON))
+	mux.Handle("GET /driver/hud.json", a.requireAuth(a.hudJSON)) // gates itself: FreeLance has no ride
 	mux.Handle("POST /driver/freelance/mode", a.requireAuth(a.freeMode))
 	mux.Handle("POST /driver/freelance/dest", a.requireAuth(a.freeDest))
 	mux.Handle("POST /driver/freelance/picks", a.requireAuth(a.freePicks))
@@ -168,17 +168,18 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))
 	mux.Handle("POST /driver/users/{name}/disable", a.requireAdmin(a.usersDisable))
 	mux.Handle("POST /driver/users/{name}/enable", a.requireAdmin(a.usersEnable))
-	mux.Handle("GET /driver/post", a.requireAuth(a.postForm))
-	mux.Handle("POST /driver/post", a.requireAuth(a.postCreate))
-	mux.Handle("POST /driver/checkpoint/{id}/arrive", a.requireAuth(a.checkpointArrive))
-	mux.Handle("POST /driver/post/{id}/delete", a.requireAuth(a.postDelete))
+	mux.Handle("POST /driver/users/{name}/rides", a.requireAdmin(a.usersRides))
+	mux.Handle("GET /driver/post", a.requireRide(a.postForm))
+	mux.Handle("POST /driver/post", a.requireRide(a.postCreate))
+	mux.Handle("POST /driver/checkpoint/{id}/arrive", a.requireRide(a.checkpointArrive))
+	mux.Handle("POST /driver/post/{id}/delete", a.requireRide(a.postDelete))
 	// The census: every post, for finding duplicates the road left behind.
-	mux.Handle("GET /driver/posts.json", a.requireAuth(a.postsJSON))
-	mux.Handle("POST /driver/post/{id}/pin", a.requireAuth(a.postRepin))
-	mux.Handle("GET /driver/post/{id}/edit", a.requireAuth(a.postEditForm))
-	mux.Handle("POST /driver/post/{id}/edit", a.requireAuth(a.postEditSave))
-	mux.Handle("GET /driver/lodging", a.requireAuth(a.lodgingForm))
-	mux.Handle("POST /driver/lodging", a.requireAuth(a.lodgingSave))
+	mux.Handle("GET /driver/posts.json", a.requireRide(a.postsJSON))
+	mux.Handle("POST /driver/post/{id}/pin", a.requireRide(a.postRepin))
+	mux.Handle("GET /driver/post/{id}/edit", a.requireRide(a.postEditForm))
+	mux.Handle("POST /driver/post/{id}/edit", a.requireRide(a.postEditSave))
+	mux.Handle("GET /driver/lodging", a.requireRide(a.lodgingForm))
+	mux.Handle("POST /driver/lodging", a.requireRide(a.lodgingSave))
 	// The data carriage's landing point. Same admin session as every other
 	// /driver route — the carriage signs in the way a person does, so there is
 	// no second credential and no second auth path to get wrong.
@@ -188,15 +189,15 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/trip", a.requireAuth(a.tripPush))
 	mux.Handle("POST /driver/ride/active", a.requireAuth(a.rideActivate))
 	mux.Handle("GET /driver/rides.json", a.requireAuth(a.ridesJSON))
-	mux.Handle("POST /driver/plan", a.requireAuth(a.planSave))
+	mux.Handle("POST /driver/plan", a.requireRide(a.planSave))
 	// The checklist carriage, its signed-in census, and the check-off.
 	mux.Handle("POST /driver/checklist", a.requireAuth(a.checklistPush))
-	mux.Handle("GET /driver/checklist.json", a.requireAuth(a.checklistCensus))
-	mux.Handle("POST /driver/checklist/{kind}/{id}", a.requireAuth(a.checklistMark))
+	mux.Handle("GET /driver/checklist.json", a.requireRide(a.checklistCensus))
+	mux.Handle("POST /driver/checklist/{kind}/{id}", a.requireRide(a.checklistMark))
 	// Chester, the en-route helper, and its log. Signed in only, every one:
 	// a question spends money and the log is the trip-keeper's own.
 	mux.Handle("GET /chester", a.requireAuth(a.chesterPage))
-	mux.Handle("POST /chester/ask", a.requireAuth(a.chesterAsk))
+	mux.Handle("POST /chester/ask", a.requireRide(a.chesterAsk))
 	mux.Handle("GET /driver/chester/log", a.requireAuth(a.chesterLog))
 	mux.Handle("GET /driver/chester/log.json", a.requireAuth(a.chesterLogJSON))
 	mux.Handle("POST /driver/chester/log/{id}", a.requireAuth(a.chesterVerdict))
@@ -295,6 +296,29 @@ func logRequests(h http.Handler) http.Handler {
 	})
 }
 
+// requireRide is requireAuth plus a ride check: a driver is on the ride the
+// request is for or gets a 403. The ride is ?ride= when named, else the ride the
+// site shows. An admin and the push token are on every ride. A write that names
+// its ride in the form (a checklist mark) is checked again where the form is read.
+func (a *App) requireRide(next http.HandlerFunc) http.Handler {
+	return a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		slug := a.activeSlug()
+		if v := strings.TrimSpace(r.URL.Query().Get("ride")); v != "" {
+			slug = v
+		}
+		if !a.auth.mayRide(r, slug, a.activeSlug()) {
+			a.refuseRide(w, r)
+			return
+		}
+		next(w, r)
+	})
+}
+
+func (a *App) refuseRide(w http.ResponseWriter, r *http.Request) {
+	log.Printf("refused: %s %s, %s is not assigned to that ride", r.Method, r.URL.Path, a.userOf(r))
+	http.Error(w, "not your ride: an admin has not assigned you to it", http.StatusForbidden)
+}
+
 // requireAdmin is requireAuth plus a role check: a signed-in editor, and the
 // push token (a machine, not a person), get a 403.
 func (a *App) requireAdmin(next http.HandlerFunc) http.Handler {
@@ -364,6 +388,9 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	authed := a.auth.IsAuthed(r)
 	data["Authed"] = authed
 	data["IsAdmin"] = a.auth.IsAdmin(r)
+	// Driver: signed in AND on the ride the site shows. The ride's tools (post,
+	// lodging, checklist, GeoJSON, plan controls) are drawn only for these.
+	data["Driver"] = authed && a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
 	if authed {
 		// Every page goes through here, and this is where the session is known.
 		// A signed-in page is served on the SAME address a visitor uses and can

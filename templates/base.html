@@ -39,13 +39,13 @@
       <span class="mast-links">
         <a href="/">Ride</a>
         <a href="/plan">Plan</a>
-        {{if and .Authed .HasChecklist}}<a href="/checklist">Checklist</a>{{end}}
+        {{if and .Driver .HasChecklist}}<a href="/checklist">Checklist</a>{{end}}
         <a href="/photos">Photos</a>
-        {{if .Authed}}<a href="/route.geojson">GeoJSON</a>{{end}}
+        {{if .Driver}}<a href="/route.geojson">GeoJSON</a>{{end}}
         {{if .Authed}}
-          <a href="/driver/post" class="post-link">Post</a>
+          {{if .Driver}}<a href="/driver/post" class="post-link">Post</a>{{end}}
           {{if .ChesterOn}}<a href="/chester">Chester</a>{{end}}
-          <a href="/driver/lodging">Lodging</a>
+          {{if .Driver}}<a href="/driver/lodging">Lodging</a>{{end}}
           <form method="post" action="/driver/logout"><button class="linkish">Sign out</button></form>
         {{else}}
           <a href="/driver/login">Sign in</a>
@@ -61,10 +61,10 @@
 </header>
 {{if and .Authed (not .HUD)}}
 <nav class="driver-bar" aria-label="Driver tools">
-  <a href="/driver/post">Post photo</a>
+  {{if .Driver}}<a href="/driver/post">Post photo</a>{{end}}
   {{if .ChesterOn}}<a href="/chester">Ask Chester</a>{{end}}
   <a href="/plan">Plan</a>
-  <a href="/checklist">Checklist</a>
+  {{if .Driver}}<a href="/checklist">Checklist</a>{{end}}
   {{if .IsAdmin}}<a href="/driver/users">Users</a>{{end}}
 </nav>
 {{end}}

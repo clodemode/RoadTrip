@@ -10,11 +10,16 @@
   </div>
   {{end}}
   <table class="table">
-    <thead><tr><th>User</th><th>Role</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Rides</th><th></th></tr></thead>
     <tbody>
     {{range .Users}}
       <tr>
         <td>{{.Name}}</td><td>{{.Role}}</td><td>{{if .Disabled}}disabled{{else}}active{{end}}</td>
+        <td>{{if .All}}<span class="text-muted">every ride</span>{{else}}
+          <form method="post" action="/driver/users/{{.Name}}/rides" class="d-flex gap-2 flex-wrap align-items-center">
+            {{range .Rides}}<label class="form-check"><input class="form-check-input" type="checkbox" name="ride" value="{{.Slug}}"{{if .On}} checked{{end}}> {{.Slug}}{{if .Active}} (active){{end}}</label>{{end}}
+            <button class="btn btn-sm btn-outline-secondary">Save rides</button>
+          </form>{{end}}</td>
         <td class="d-flex gap-2 flex-wrap">
           <form method="post" action="/driver/users/{{.Name}}/reset" class="d-flex gap-1">
             <input class="form-control form-control-sm" name="password" type="password" placeholder="new password" autocomplete="new-password">
@@ -36,6 +41,9 @@
     <label class="form-label d-block">Username<input class="form-control" name="username" required pattern="[a-z0-9_-]{2,32}" autocomplete="off"></label>
     <label class="form-label d-block">Password (blank and tick Generate to have one made)<input class="form-control" name="password" type="password" autocomplete="new-password"></label>
     <label class="form-check"><input class="form-check-input" type="checkbox" name="generate" value="1"> Generate a strong password and show it once</label>
+    <fieldset class="form-label d-block">Rides (a driver sees and writes only these; an admin is on every ride)
+      {{range .RideChoices}}<label class="form-check"><input class="form-check-input" type="checkbox" name="ride" value="{{.Slug}}"{{if .On}} checked{{end}}> {{.Slug}}{{if .Active}} (active){{end}}</label>{{end}}
+    </fieldset>
     <label class="form-label d-block">Role<select class="form-select" name="role"><option value="editor">editor</option><option value="admin">admin</option></select></label>
     <button type="submit" class="btn btn-primary">Add user</button>
   </form>

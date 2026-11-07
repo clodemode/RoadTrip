@@ -39,6 +39,29 @@ type User struct {
 	Role     string    `json:"role"`
 	Created  time.Time `json:"created"`
 	Disabled bool      `json:"disabled,omitempty"`
+	// Rides are the ride slugs a non-admin driver is assigned to. Admins are
+	// implicitly on every ride and their list is ignored. nil (no "rides" key
+	// in the file, or null) is a user from before assignment existed: they are
+	// on whatever ride is active until an admin sets a list, and boot pins it
+	// (migrateLegacyRides). An empty, non-nil list is a driver on no ride.
+	Rides []string `json:"rides"`
+}
+
+// mayRide reports whether u may see and write ride slug; active is the ride
+// the site is showing, which is the only ride a legacy (nil list) user has.
+func (u User) mayRide(slug, active string) bool {
+	if u.Role == roleAdmin {
+		return true
+	}
+	if u.Rides == nil {
+		return slug == active
+	}
+	for _, r := range u.Rides {
+		if r == slug {
+			return true
+		}
+	}
+	return false
 }
 
 type userStore struct {
@@ -191,6 +214,52 @@ func (s *userStore) list() []User {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// setRides replaces a user's assigned rides (de-duplicated, sorted). An empty
+// list is kept as a non-nil empty list: no rides, not "legacy".
+func (s *userStore) setRides(name string, rides []string) error {
+	s.refresh()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[name]
+	if !ok {
+		return errors.New("no such user")
+	}
+	seen := map[string]bool{}
+	list := []string{}
+	for _, r := range rides {
+		if r != "" && !seen[r] {
+			seen[r] = true
+			list = append(list, r)
+		}
+	}
+	sort.Strings(list)
+	u.Rides = list
+	s.users[name] = u
+	return s.saveLocked()
+}
+
+// migrateLegacyRides pins every user who has no ride list (written before
+// assignment existed) to the active ride, so the deploy that introduces
+// assignment locks nobody out and changes nobody's access. It returns how many
+// users it pinned. Admins are left alone: they are on every ride anyway.
+func (s *userStore) migrateLegacyRides(active string) (int, error) {
+	s.refresh()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for name, u := range s.users {
+		if u.Role != roleAdmin && u.Rides == nil && active != "" {
+			u.Rides = []string{active}
+			s.users[name] = u
+			n++
+		}
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	return n, s.saveLocked()
 }
 
 func (s *userStore) create(name, hash, role string) error {

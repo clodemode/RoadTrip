@@ -29,13 +29,13 @@
     <li class="cl-item{{if .Done}} done{{end}}" id="step-{{.ID}}">
       <span class="cl-state">{{if .Done}}Done{{else}}To do{{end}}</span>
       <div class="cl-main">
-        <h3>{{if $.Authed}}<input type="checkbox" class="cl-check form-check-input" data-kind="step" data-id="{{.ID}}"{{if .Done}} checked{{end}} aria-label="Done: {{.Title}}"> {{end}}{{.Title}}</h3>
+        <h3>{{if $.Driver}}<input type="checkbox" class="cl-check form-check-input" data-kind="step" data-id="{{.ID}}"{{if .Done}} checked{{end}} aria-label="Done: {{.Title}}"> {{end}}{{.Title}}</h3>
         {{with .Detail}}<p class="cl-detail">{{.}}</p>{{end}}
         {{if .Done}}<p class="cl-stamp figure">Done <time datetime="{{.DoneAt}}">{{local .DoneAt .DoneTZ}}</time></p>{{end}}
         {{if and .Done .Outcome}}<p class="cl-outcome"><b>What happened</b> {{.Outcome}}</p>{{end}}
         {{with .Private}}<p class="cl-private"><b>Private note</b> {{.}}</p>{{end}}
         {{with .PrivateNote}}<p class="cl-private"><b>Private note, after</b> {{.}}</p>{{end}}
-        {{if $.Authed}}
+        {{if $.Driver}}
         <details class="cl-edit">
           <summary>{{if .Done}}Edit{{else}}Mark done{{end}}</summary>
           <form method="post" action="/driver/checklist/step/{{.ID}}" class="d-flex flex-column gap-3">
@@ -88,7 +88,7 @@
         {{if and .Done .Outcome}}<p class="cl-outcome"><b>Answer</b> {{.Outcome}}</p>{{end}}
         {{with .Private}}<p class="cl-private"><b>Private note</b> {{.}}</p>{{end}}
         {{with .PrivateNote}}<p class="cl-private"><b>Private note, after</b> {{.}}</p>{{end}}
-        {{if $.Authed}}
+        {{if $.Driver}}
         <details class="cl-edit">
           <summary>{{if .Done}}Edit{{else}}Answer{{end}}</summary>
           <form method="post" action="/driver/checklist/question/{{.ID}}" class="d-flex flex-column gap-3">
@@ -133,5 +133,5 @@
 {{end}}
 <p class="cl-disclaimer cl-foot" role="note">{{.CL.Disclaimer}}</p>
 {{end}}
-{{if .Authed}}<script src="/static/js/checklist.js?v={{.V}}" defer></script>{{end}}
+{{if .Driver}}<script src="/static/js/checklist.js?v={{.V}}" defer></script>{{end}}
 {{template "foot" .}}
