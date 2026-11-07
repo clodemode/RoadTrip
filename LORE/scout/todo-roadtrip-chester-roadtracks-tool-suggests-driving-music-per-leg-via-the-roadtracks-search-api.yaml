@@ -1,0 +1,31 @@
+entries:
+- slug: todo-roadtrip-chester-roadtracks-tool-suggests-driving-music-per-leg-via-the-roadtracks-search-api
+  title: 'roadtrip Chester: a RoadTracks tool so Chester suggests driving music live and plans one pick
+    per leg, calling /driver/roadtracks/search (after musicorgan PR 74 and RoadTrip PR 11 ship)'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: scout
+  tags:
+  - roadtracks
+  - chester
+  - musicorgan
+  - driver
+  status: design
+  description: 'Filed 2026-11-07 by thread RT:roadtracks sound. First cut is in two open PRs: clodemode/musicorgan
+    PR 74 (GET /api/roadtracks/search behind MO_ROADTRACKS_TOKEN, head 6b85225) and clodemode/RoadTrip
+    PR 11 (RoadTracks card on /driver, signed-in proxy route /driver/roadtracks/search, head 743c126).
+    The shared key is staged as Fly secrets on musicorgan (MO_ROADTRACKS_TOKEN) and roadtrip-clodemode
+    (ROADTRACKS_TOKEN, ROADTRACKS_BASE), applied on each app''s next deploy. Next: give Chester a tool
+    over the RoadTrip proxy route so it suggests albums live and plans one pick per leg.'
+  dont: DONT call MusicOrgan directly from Chester with the key in a prompt; go through the RoadTrip server-side
+    proxy. DONT stream audio through RoadTrip. DONT start before PR 74 and PR 11 are deployed.
+  do_this: Add a Chester tool that calls the RoadTrip search proxy, returns album links, and plans per
+    leg; Go test against a stub.
+  depends_on:
+  - todo-roadtrip-drivetrack-soundtrack-from-musicorgan-shared-key-so-chester-can-pick-live-and-planned-driving-music
+  effort: M
+  impact: medium
+  triaged_at: '2026-11-07T14:16:08.695095+00:00'
+  triaged_by: scout

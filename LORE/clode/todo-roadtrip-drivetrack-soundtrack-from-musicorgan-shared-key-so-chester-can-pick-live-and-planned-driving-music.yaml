@@ -13,14 +13,11 @@ entries:
   - musicorgan
   - drivetrack
   - kris-idea-2026-11-07
-  status: design
-  description: 'Kris 2026-11-07. RoadTrip and MusicOrgan are both CLODE apps; share one service key (Fly
-    secret on both) so RoadTrip can search MusicOrgan (albums, playlists) and open or embed the music.opeongo.net
-    player. Chester gets a tool to suggest DriveTrack picks for the current leg (live) and a planned per-leg
-    soundtrack. Unknown before building: whether MusicOrgan exposes a search/playlist API usable by a
-    bearer key today (verify first). First cut: a token-guarded read-only MO endpoint + RoadTrip "DriveTrack"
-    card on /driver linking into the player; Chester suggestions second. Estimate: two CODIs across two
-    repos, about 300k-450k subagent tokens; less if MO already has the API.'
+  status: building
+  description: |-
+    Kris 2026-11-07. RoadTrip and MusicOrgan are both CLODE apps; share one service key (Fly secret on both) so RoadTrip can search MusicOrgan (albums, playlists) and open or embed the music.opeongo.net player. Chester gets a tool to suggest DriveTrack picks for the current leg (live) and a planned per-leg soundtrack. Unknown before building: whether MusicOrgan exposes a search/playlist API usable by a bearer key today (verify first). First cut: a token-guarded read-only MO endpoint + RoadTrip "DriveTrack" card on /driver linking into the player; Chester suggestions second. Estimate: two CODIs across two repos, about 300k-450k subagent tokens; less if MO already has the API.
+
+    PROPOSED CLOSE (2026-11-07, thread RT:driver screen phone test, awaiting Kris or Told): the first cut shipped under the name RoadTracks: MusicOrgan v80 GET /api/roadtracks/search behind MO_ROADTRACKS_TOKEN, RoadTrip /driver/roadtracks/search (PR 11) linking into music.opeongo.net album pages, verified live on v41. The Chester half is its own open row, todo-roadtrip-chester-roadtracks-tool-suggests-driving-music-per-leg-via-the-roadtracks-search-api. On a yes: status superseded, pointing at those two.
   dont: DONT give RoadTrip a MusicOrgan user login; a scoped read-only service key only. DONT stream audio
     through RoadTrip.
   do_this: Verify MusicOrgan's existing API and auth first; then one read-only search endpoint behind

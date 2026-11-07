@@ -13,7 +13,7 @@ entries:
   - chester
   - freelance
   - kris-idea-2026-11-07
-  status: building
+  status: shipped
   description: 'Kris 2026-11-07. Signed-in /driver mode switch: Trip (planned ride) / FreeLance Destined
     / FreeLance AIMLESS. DESTINED is built in clodemode/RoadTrip PR 8 (freelance.go: TomTom fuzzy search
     + calculateRoute traffic=true + searchAlongRoute picks, ranked by Chester with web search capped at
@@ -23,7 +23,8 @@ entries:
     view and clear at /driver/chester/memory). REMAINING: (1) AIMLESS mode: no destination, HUD shows
     position (TomTom reverse geocode), hazards and picks around the current location. (Closed by PR 9
     once merged: Chester not given the Destined destination as context; hazard sampling along a Destined
-    route not dropping points near fuzzed private places.) Estimate for AIMLESS: one short CODI.'
+    route not dropping points near fuzzed private places.) Estimate for AIMLESS: one short CODI. Aimless
+    in PR 19, 2026-11-07'
   dont: 'DONT start before the leg-2 /driver screen PR is merged: same files. DONT write freelance drives
     into the planned ride''s data or checklist.'
   do_this: Build on the merged /driver HUD; one mode switch; test-first with httptest stubs for hazards;
@@ -32,3 +33,5 @@ entries:
   impact: high
   triaged_at: '2026-11-07T12:30:18.772483+00:00'
   triaged_by: clode
+  closed_at: '2026-11-07T19:04:52.079289+00:00'
+  closed_by_actor: 70acc5b3-b7de-4927-9090-e6ea89962d13
