@@ -9,10 +9,31 @@
  */
 (function () {
   'use strict';
+  // Telemetry to /driver/telemetry. telemetryBody is the one place a body is
+  // built: it returns null for a coordinate-shaped key at any depth, so the
+  // page can never send a position. Exported for node like sim.js.
+  var BANNED = { lat: 1, lng: 1, latitude: 1, longitude: 1, coords: 1 };
+  function hasBanned(v) {
+    if (!v || typeof v !== 'object') return false;
+    return Object.keys(v).some(function (k) { return BANNED[k.toLowerCase()] || hasBanned(v[k]); });
+  }
+  function telemetryBody(event, fields) {
+    fields = fields || {};
+    if (hasBanned(fields)) return null;
+    return JSON.stringify({ event: event, fields: fields });
+  }
+  if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody };
+  function send(event, fields) {
+    var b = telemetryBody(event, fields);
+    if (b === null) return;
+    try { if (navigator.sendBeacon) navigator.sendBeacon('/driver/telemetry', b); } catch (e) { /* telemetry never breaks the page */ }
+  }
+
   var root = document.getElementById('hud');
   if (!root) return;
   var $ = function (id) { return document.getElementById(id); };
   var fix = null, lastAsk = 0, busy = false, again = false;
+  var simOn = !!(window.location && /[?&]sim=/.test(window.location.search || ''));
 
   function setText(id, v) { var el = $(id); if (el && v !== undefined && v !== null) el.textContent = v; }
 
@@ -101,7 +122,11 @@
     busy = true;
     again = false;
     var url = root.getAttribute('data-url');
-    if (fix) url += '?lat=' + encodeURIComponent(fix.latitude.toFixed(4)) + '&lng=' + encodeURIComponent(fix.longitude.toFixed(4));
+    var q = [];
+    if (fix) q.push('lat=' + encodeURIComponent(fix.latitude.toFixed(4)), 'lng=' + encodeURIComponent(fix.longitude.toFixed(4)));
+    // A simulated drive says so, so its hud_served records are not mistaken for the road.
+    if (simOn) q.push('sim=1');
+    if (q.length) url += '?' + q.join('&');
     lastAsk = Date.now();
     fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
       .then(function (r) { if (!r.ok) throw new Error('status ' + r.status); return r.json(); })
@@ -199,6 +224,7 @@
       gps.textContent = 'fix, within ' + Math.round(p.coords.accuracy * 3.28084) + ' ft';
       if (first || Date.now() - lastAsk > 60000) refresh();
     }, function (e) {
+      send('geo_error', { code: (e && e.code) | 0 });
       gps.textContent = e && e.code === 1 ? 'off (not allowed)' : 'no fix';
     }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 });
   }
@@ -238,6 +264,36 @@
         .catch(function () { setText('rt-msg', 'Music library unavailable'); });
     });
   }
+
+  // --- telemetry: nav taps, script errors, the page view -------------------------
+  // A nav tap is judged by whether the page goes hidden within 1.5 s (the phone
+  // opened the app) or not (the tap did nothing). The link still navigates.
+  var tapped = null;
+  ['hud-waze', 'hud-google', 'hud-apple', 'free-waze', 'free-google', 'free-apple'].forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    var app = id.split('-')[1];
+    el.addEventListener('click', function () {
+      if (tapped) return;
+      var t = { app: app, mode: $('hud-free') ? 'destined' : 'trip', done: false };
+      tapped = t;
+      setTimeout(function () {
+        if (!t.done) { t.done = true; send('nav_tap', { app: t.app, mode: t.mode, hidden: false }); }
+        if (tapped === t) tapped = null;
+      }, 1500);
+    });
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && tapped && !tapped.done) {
+      tapped.done = true;
+      send('nav_tap', { app: tapped.app, mode: tapped.mode, hidden: true });
+    }
+  });
+  window.addEventListener('error', function (e) {
+    var src = String((e && e.filename) || '').replace(/^https?:\/\/[^/]+/, '').split(/[?#]/)[0];
+    send('js_error', { msg: String((e && e.message) || ''), src: src, line: (e && e.lineno) | 0 });
+  });
+  send('page_view', { path: (window.location && window.location.pathname) || '/driver' });
 
   paintClock();
   setInterval(paintClock, 20000);

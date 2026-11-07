@@ -93,6 +93,8 @@ session cookie will never come back.
 | `DATA_DIR` | default `/data`; holds `roadtrip.sqlite3`, `media/`, `tmp/` (upload spill, swept on boot), the optional `private.json` and the trip files in `trips/` |
 | `$DATA_DIR/trips/<slug>.geojson` | a trip that is not in the image: pushed with `POST /driver/trip`, read at boot after the embedded seeds; never in the repo. Absent = only the embedded rides |
 | `GOMEMLIMIT` | optional; unset ⇒ the GC's soft limit is 75 % of the cgroup limit or MemTotal (logged at boot as `memory limit: …`) |
+| `MELT_REDIS_ADDR` | optional `host:port` of the fleet Redis (e.g. `redis:6379`); the app then publishes MELT records to `clode:state:melt:roadtrip:{events,errors}` (read them with `melt_tail(source='roadtrip')`). Unset ⇒ the sink is off, which is the case on Fly. No coordinate, typed destination or private text is ever published |
+| `MELT_VENUE` | the `venue` stamped on every MELT record; default `kate` |
 | `$DATA_DIR/trips/<slug>.checklist.json` | a trip's checklist: pushed with `POST /driver/checklist`, read at boot after the trips; never in the repo. Holds private text. See "A trip's checklist" |
 | `$DATA_DIR/private.json` | private overlay, keyed by ride and then by checkpoint ord: the top-level `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` is the first ride's (`RIDE_SLUG`), every other ride has its own block under `"rides":{"<slug>":{"checkpoints":{…}}}`; rendered on admin pages only, never in the repo or the seed; absent = no private data |
 | `SITE_URL` | the canonical origin, e.g. `https://roadtrip.opeongo.net`; unset (the local default) ⇒ no redirect and no canonical/og tags |

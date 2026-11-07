@@ -112,9 +112,11 @@ func (a *App) roadtracksSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	albums, err := a.tracks.search(r.Context(), q)
 	if err != nil {
+		a.melt.Event("roadtracks_search", map[string]any{"qlen": len(q), "count": 0, "status": http.StatusBadGateway})
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "Music library unavailable"})
 		return
 	}
+	a.melt.Event("roadtracks_search", map[string]any{"qlen": len(q), "count": len(albums), "status": http.StatusOK})
 	_ = json.NewEncoder(w).Encode(map[string]any{"albums": albums})
 }
