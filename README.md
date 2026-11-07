@@ -950,6 +950,7 @@ Each person signs in with a username and password. Users live in `$DATA_DIR/user
 Reset a password from the machine (the old one cannot be recovered):
 
 ```bash
-fly ssh console -a roadtrip-clodemode
-/app/roadtrip -set-password kris        # type the new password (10+ characters), one line, press Enter
+fly ssh console -a roadtrip-clodemode -C "/app/roadtrip -set-password kris"   # type the new password, one line, press Enter
 ```
+
+The image has no shell, so the command is passed with `-C`; a plain `fly ssh console` fails. A password is six or more characters and length is the only rule. The running server re-reads `users.json` whenever the file changes, so the new password works at once and nothing is restarted.
