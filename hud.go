@@ -244,6 +244,14 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 // The position is used for this answer and is neither stored nor logged.
 func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	lat, lng := parseFix(r)
+	// No position from the browser and a simulated drive running for this
+	// driver: the server's own position stands in, as a phone fix would.
+	simUsed := false
+	if lat == nil {
+		if sl, sg := a.simFix(r); sl != nil {
+			lat, lng, simUsed = sl, sg, true
+		}
+	}
 	// The trip HUD is the ride's; a driver off the ride gets only FreeLance
 	// Destined, with none of the ride's numbers.
 	onRide := a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
@@ -278,7 +286,7 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*hazardTimeout)
 		defer cancel()
 		h.Hazards = hz.ForLeg(ctx, key, a.aimlessPoints(lat, lng))
-		a.hudServed(r, mode, h, lat != nil)
+		a.hudServed(r, mode, h, lat != nil, simUsed)
 		w.Header().Set("Cache-Control", "private, no-store")
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(h)
@@ -296,7 +304,7 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 		// asked about points near one, as on a planned leg.
 		fpts = dropNearFuzzed(fpts, fuzzedOf(rideCheckpoints(legs)))
 		h.Hazards = hz.ForLeg(ctx, "free:"+user+"|"+strings.ToLower(st.Query), fpts)
-		a.hudServed(r, mode, h, lat != nil)
+		a.hudServed(r, mode, h, lat != nil, simUsed)
 		w.Header().Set("Cache-Control", "private, no-store")
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(h)
@@ -311,24 +319,25 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*hazardTimeout)
 	defer cancel()
 	h.Hazards = hz.ForLeg(ctx, h.LegSlug, pts)
-	a.hudServed(r, mode, h, lat != nil)
+	a.hudServed(r, mode, h, lat != nil, simUsed)
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(h)
 }
 
-// hudServed is the one MELT line per HUD request: what the screen was given,
+// hudServed is the one MELT line per HUD request (pos_source, not source: the
+// sink stamps its own source on every record): what the screen was given,
 // never where the car is.
-func (a *App) hudServed(r *http.Request, mode string, h hudView, hasFix bool) {
+func (a *App) hudServed(r *http.Request, mode string, h hudView, hasFix, sim bool) {
 	source := "plan"
-	if h.Source == "position" || (mode != modeTrip && hasFix) {
+	if h.Source == "position" || (mode != modeTrip && hasFix) || sim {
 		source = "fix"
 	}
 	miles := 0
 	if h.HaveMiles {
 		miles = int(math.Round(h.MilesLeftN))
 	}
-	a.melt.Event("hud_served", map[string]any{"mode": mode, "source": source, "has_fix": hasFix,
+	a.melt.Event("hud_served", map[string]any{"mode": mode, "pos_source": source, "has_fix": hasFix,
 		"has_next": h.HasNext, "next_name": h.NextName, "miles_left": miles,
-		"eta_shown": h.ETA != "" && h.ETA != "—", "sim": r.URL.Query().Get("sim") == "1"})
+		"eta_shown": h.ETA != "" && h.ETA != "—", "sim": sim})
 }
