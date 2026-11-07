@@ -904,3 +904,20 @@ func TestAimlessLeavesThePlannedRideUntouched(t *testing.T) {
 		t.Fatal("an Aimless session changed the planned ride")
 	}
 }
+
+func TestAimlessPicksAreLoggedAsNearbyPicksUnderTheNewPromptVersion(t *testing.T) {
+	tt := newTT(t)
+	app, c := aimlessApp(t, tt)
+	stub := newAPIStub(t, messageJSON(`{"picks":[{"id":"coffee-1","note":"Small roaster."}]}`))
+	app.chester = newChester(chesterEnv(t, stub, nil))
+	if o := findPicksAt(t, app, c, "35.0000", "-90.0000"); o.State != "ok" {
+		t.Fatalf("picks: %+v", o)
+	}
+	rows := chesterRows(t, app)
+	if len(rows) != 1 || !strings.HasPrefix(rows[0].Question, "nearby picks: ") || rows[0].PromptVersion != "freelance-picks-4" {
+		t.Fatalf("an Aimless picks call is logged as nearby picks under freelance-picks-4: %+v", rows)
+	}
+	if raw := string(stub.requests()[0].Body); !strings.Contains(raw, "near the car when there is no route") {
+		t.Fatal("the picks prompt must say it also serves a drive with no route")
+	}
+}
