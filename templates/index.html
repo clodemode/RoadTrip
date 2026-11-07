@@ -11,7 +11,7 @@
     <span class="muted figure">{{day .Ride.StartDate}} &ndash; {{day .Ride.EndDate}} &middot; {{.Ride.Mode}}</span>
   </p>
   <p class="cast">Trip-keeper: Kris &middot; Guide: {{.GuideName}} &middot; {{.CreatureName}}</p>
-  {{with .Checklist}}<p class="cl-summary figure"><a href="/checklist">Checklist</a>: {{.Done}} of {{.Total}} done{{if .Questions}} &middot; {{.Answered}} of {{.Questions}} questions answered{{end}}</p>{{end}}
+  {{if .Authed}}{{with .Checklist}}<p class="cl-summary figure"><a href="/checklist">Checklist</a>: {{.Done}} of {{.Total}} done{{if .Questions}} &middot; {{.Answered}} of {{.Questions}} questions answered{{end}}</p>{{end}}{{end}}
   <ol class="leg-strip">
     <li class="leg-guide">
       <img src="/static/img/lance.svg?v={{.V}}" width="40" height="40" alt="{{.GuideName}}">

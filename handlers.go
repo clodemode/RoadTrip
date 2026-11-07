@@ -143,15 +143,17 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /{$}", a.index)
 	mux.HandleFunc("GET /legs/{slug}", a.legPage)
 	mux.HandleFunc("GET /photos", a.photos)
-	mux.HandleFunc("GET /route.geojson", a.routeGeoJSON)
+	// Driver-only (Kris, 2026-11-07): the cookie or the PUSH_TOKEN bearer.
+	mux.Handle("GET /route.geojson", a.requireAuth(a.routeGeoJSON))
 	// The planner: the active ride's days and, for a trip with options, every
 	// alternative. /plan.json is the same arithmetic as data.
 	mux.HandleFunc("GET /plan", a.planPage)
 	mux.HandleFunc("GET /plan.json", a.planJSON)
 	// The checklist: the active ride's steps and questions. Private text is
 	// read only for a signed-in request; /checklist.json never carries it.
-	mux.HandleFunc("GET /checklist", a.checklistPage)
-	mux.HandleFunc("GET /checklist.json", a.checklistJSON)
+	// Both are driver-only (Kris, 2026-11-07).
+	mux.Handle("GET /checklist", a.requireAuth(a.checklistPage))
+	mux.Handle("GET /checklist.json", a.requireAuth(a.checklistJSON))
 
 	mux.HandleFunc("GET /driver/login", a.loginForm)
 	mux.HandleFunc("POST /driver/login", a.loginSubmit)

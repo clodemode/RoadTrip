@@ -56,7 +56,7 @@ func TestPagesAndMapDataUseTheMarks(t *testing.T) {
 	if !strings.Contains(page, `"mark":"`+landmark.Mark+`"`) {
 		t.Errorf("the map data on the page lacks the landmark mark")
 	}
-	gj := doAs(t, app, nil, "GET", "/route.geojson", nil).Body.String()
+	gj := send(t, app, "GET", "/route.geojson", testToken, "", nil).Body.String()
 	if !strings.Contains(gj, `"mark": "`+landmark.Mark+`"`) {
 		t.Errorf("geojson lacks the landmark mark")
 	}

@@ -39,9 +39,9 @@
       <span class="mast-links">
         <a href="/">Ride</a>
         <a href="/plan">Plan</a>
-        {{if .HasChecklist}}<a href="/checklist">Checklist</a>{{end}}
+        {{if and .Authed .HasChecklist}}<a href="/checklist">Checklist</a>{{end}}
         <a href="/photos">Photos</a>
-        <a href="/route.geojson">GeoJSON</a>
+        {{if .Authed}}<a href="/route.geojson">GeoJSON</a>{{end}}
         {{if .Authed}}
           <a href="/driver/post" class="post-link">Post</a>
           {{if .ChesterOn}}<a href="/chester">Chester</a>{{end}}
