@@ -72,6 +72,9 @@ jobs:
       - name: gate — js syntax
         run: for f in static/js/*.js; do node --check "$f" || exit 1; done
 
+      - name: gate — js tests
+        run: node --test static/js/*_test.mjs
+
       - name: gate — go test
         run: go test -race -count=1 ./...
 
