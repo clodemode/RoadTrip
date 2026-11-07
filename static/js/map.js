@@ -57,6 +57,62 @@
     all = all.concat(pts);
   });
 
+  /* --- the hours stick ---------------------------------------------------
+     A thin, muted measuring stick beside the route: the stretch of planned
+     line still to drive, drawn HOURS_OFFSET_PX to one side, with a short
+     perpendicular tick and a small label ("h1 Trenton") at each whole hour.
+     The server sends leg.hours (points ON the planned line) and
+     leg.hours_line (the stretch they measure); the offset is computed here in
+     screen space and redrawn on zoomend, so it stays 8 px off the road at any
+     zoom. Grey and faint on purpose: a ruler, not a second route. */
+  var HOURS_OFFSET_PX = 8;
+  var hoursLayer = L.layerGroup().addTo(map);
+
+  function unit(a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y, n = Math.sqrt(dx * dx + dy * dy) || 1;
+    return { x: dx / n, y: dy / n };
+  }
+  function drawHours() {
+    hoursLayer.clearLayers();
+    (data.legs || []).forEach(function (leg) {
+      var stretch = (leg.hours_line || []).map(function (c) { return map.latLngToLayerPoint([c[1], c[0]]); });
+      if (stretch.length < 2) return;
+      // The right-hand normal of each segment; a vertex takes the mean of its two.
+      var segN = [];
+      for (var i = 1; i < stretch.length; i++) {
+        var u = unit(stretch[i - 1], stretch[i]);
+        segN.push({ x: -u.y, y: u.x });
+      }
+      function normalAt(i) {
+        var a = segN[Math.max(0, i - 1)], b = segN[Math.min(segN.length - 1, i)];
+        var x = a.x + b.x, y = a.y + b.y, n = Math.sqrt(x * x + y * y) || 1;
+        return { x: x / n, y: y / n };
+      }
+      function off(p, n, d) { return map.layerPointToLatLng(L.point(p.x + n.x * d, p.y + n.y * d)); }
+      var side = stretch.map(function (p, i) { return off(p, normalAt(i), HOURS_OFFSET_PX); });
+      L.polyline(side, { color: '#6b7280', weight: 2, opacity: 0.5, interactive: false }).addTo(hoursLayer);
+      (leg.hours || []).forEach(function (h) {
+        var p = map.latLngToLayerPoint([h.lat, h.lng]);
+        // The segment the tick sits on: the nearest one.
+        var best = 0, bd = Infinity;
+        for (var i = 1; i < stretch.length; i++) {
+          var a = stretch[i - 1], b = stretch[i], dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
+          var t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+          var d = Math.pow(a.x + t * dx - p.x, 2) + Math.pow(a.y + t * dy - p.y, 2);
+          if (d < bd) { bd = d; best = i - 1; }
+        }
+        var n = segN[best];
+        L.polyline([off(p, n, HOURS_OFFSET_PX - 5), off(p, n, HOURS_OFFSET_PX + 5)],
+          { color: '#6b7280', weight: 2, opacity: 0.5, interactive: false }).addTo(hoursLayer);
+        L.marker(off(p, n, HOURS_OFFSET_PX + 12), { interactive: false, keyboard: false,
+          icon: L.divIcon({ className: 'hours-lbl', iconSize: null,
+            html: '<span>' + esc(h.label + (h.name ? ' ' + h.name : '')) + '</span>' }) }).addTo(hoursLayer);
+      });
+    });
+  }
+  map.whenReady(drawHours);   /* after the first fit: projection needs a view */
+  map.on('zoomend', drawHours);
+
   /* --- the actual track -------------------------------------------------- */
   /* Where the car is known to have gone: the arrived origin, the leg's pinned
      posts in the order they happened, the arrived terminus. The server only

@@ -70,9 +70,10 @@ type Checkpoint struct {
 	PlannedArrive string  `json:"planned_arrive,omitempty"` // RFC3339 UTC or ""
 	PlannedDepart string  `json:"planned_depart,omitempty"`
 	ArrivedAt     string  `json:"arrived_at,omitempty"`
-	// Mark is the label a map pin and a list row carry: the leg number for a
-	// day-leg end, a letter (A, B, C…) for a landmark or milestone. Numbers are
-	// reserved for driving days. Set by markCheckpoints, never stored.
+	// Mark is the label a map pin and a list row carry: a letter
+	// (A, B, C…) for a landmark or milestone, or "d2" for the end of driving
+	// day 2 on a ride of several days. Numbers are reserved for days and carry
+	// their unit. Set by markCheckpoints, never stored.
 	Mark string `json:"-"`
 }
 
@@ -99,6 +100,15 @@ type Sight struct {
 	Lat   float64 `json:"lat"`
 	Lng   float64 `json:"lng"`
 	Kind  string  `json:"kind"`
+}
+
+// Place is a public town name along the route (a trip document's Point with
+// kind=place). It is never drawn on the map and never offered as a stop: the
+// hours bar uses it only to say where the car should be at a whole hour, and
+// the page never carries its coordinate.
+type Place struct {
+	Name     string
+	Lat, Lng float64
 }
 
 // Photo is an uploaded JPEG plus what its EXIF said.
@@ -202,6 +212,14 @@ CREATE TABLE IF NOT EXISTS sights (
   lng    REAL NOT NULL,
   kind   TEXT NOT NULL DEFAULT 'SIGHT'
 );
+CREATE TABLE IF NOT EXISTS places (
+  id        INTEGER PRIMARY KEY,
+  ride_slug TEXT NOT NULL REFERENCES rides(slug) ON DELETE CASCADE,
+  name      TEXT NOT NULL,
+  lat       REAL NOT NULL,
+  lng       REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS places_ride ON places(ride_slug);
 CREATE TABLE IF NOT EXISTS photos (
   id         INTEGER PRIMARY KEY,
   path       TEXT NOT NULL,
@@ -1275,6 +1293,11 @@ type seedCP struct {
 	Option, Choice               string
 }
 
+type seedPlace struct {
+	Name     string
+	Lat, Lng float64
+}
+
 type seedSight struct {
 	LegOrd    int
 	Name, Why string
@@ -1289,6 +1312,7 @@ type seedData struct {
 	Legs        []seedLeg
 	Checkpoints []seedCP
 	Sights      []seedSight
+	Places      []seedPlace
 	// Options is what the document offers; Selection is what this parse took,
 	// fully resolved — every option answered and the start date filled in.
 	Options      []tripOption
@@ -1555,6 +1579,13 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 		if err := json.Unmarshal(f.Geometry.Coordinates, &xy); err != nil || len(xy) < 2 {
 			continue
 		}
+		if pstr(p, "kind") == "place" {
+			// A public town name along the route: belongs to no leg.
+			if n := strings.TrimSpace(pstr(p, "name")); n != "" {
+				sd.Places = append(sd.Places, seedPlace{Name: n, Lat: xy[1], Lng: xy[0]})
+			}
+			continue
+		}
 		legOrd := int(pnum(p, "leg"))
 		if !legOrds[legOrd] {
 			return nil, fmt.Errorf("seed point %q: unknown leg %v", pstr(p, "name"), p["leg"])
@@ -1674,12 +1705,48 @@ func (s *Store) seedPlan(sd *seedData, after func(*sql.Tx) error) error {
 			return fmt.Errorf("seed sight %q: %w", x.Name, err)
 		}
 	}
+	if err := replacePlaces(tx, r.Slug, sd.Places); err != nil {
+		return err
+	}
 	if after != nil {
 		if err := after(tx); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
+}
+
+// replacePlaces makes a ride's places exactly the document's.
+func replacePlaces(tx *sql.Tx, slug string, places []seedPlace) error {
+	if _, err := tx.Exec(`DELETE FROM places WHERE ride_slug=?`, slug); err != nil {
+		return err
+	}
+	for _, p := range places {
+		if _, err := tx.Exec(`INSERT INTO places (ride_slug,name,lat,lng) VALUES (?,?,?,?)`,
+			slug, p.Name, p.Lat, p.Lng); err != nil {
+			return fmt.Errorf("place %q: %w", p.Name, err)
+		}
+	}
+	return nil
+}
+
+// Places returns a ride's place names. Published to no page as a point: the
+// hours bar reads them here and prints only a name.
+func (s *Store) Places(slug string) ([]Place, error) {
+	rows, err := s.db.Query(`SELECT name,lat,lng FROM places WHERE ride_slug=? ORDER BY id`, slug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Place
+	for rows.Next() {
+		var p Place
+		if err := rows.Scan(&p.Name, &p.Lat, &p.Lng); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // RefreshCounts is the one-line boot summary of RefreshPlanning.
@@ -1971,6 +2038,9 @@ func (s *Store) refreshPlan(sd *seedData, prune bool, after func(*sql.Tx) error)
 		}
 		n.Sights++
 	}
+	if err := replacePlaces(tx, r.Slug, sd.Places); err != nil {
+		return n, err
+	}
 	if after != nil {
 		if err := after(tx); err != nil {
 			return n, err
@@ -2096,16 +2166,18 @@ func (s *Store) Rides() ([]RideCensus, error) {
 	return out, rows.Err()
 }
 
-// markCheckpoints sets every checkpoint's Mark, walking the ride in order:
-// a terminal checkpoint carries its leg's number; any other takes the next
-// letter. Call it wherever legs are loaded for a page.
+// markCheckpoints sets every checkpoint's Mark, walking the ride in order.
+// A ride of one leg is one day, so every point on it is a letter, the start
+// and the finish included. On a ride of several days a terminal checkpoint
+// carries its day as "d1", "d2"…; any other takes the next letter. A number
+// always carries its unit. Call it wherever legs are loaded for a page.
 func markCheckpoints(legs []Leg) {
 	n := 0
 	for i := range legs {
 		for j := range legs[i].Checkpoints {
 			c := &legs[i].Checkpoints[j]
-			if c.IsTerminal {
-				c.Mark = strconv.Itoa(legs[i].Ord)
+			if c.IsTerminal && len(legs) > 1 {
+				c.Mark = "d" + strconv.Itoa(legs[i].Ord)
 			} else {
 				c.Mark = letterMark(n)
 				n++
