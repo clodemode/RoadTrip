@@ -100,10 +100,10 @@ h2 { margin: 1.5rem 0 .5rem; }
   border-radius: var(--ds-radius); background: var(--ds-surface); box-shadow: var(--ds-shadow);
   color: inherit; text-decoration: none; }
 .leg-chip.today a { box-shadow: 0 0 0 2px var(--leg); }
-.leg-n { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
-  border-radius: 50%; background: var(--leg, var(--ds-primary)); color: #fff; font-size: .78rem; font-weight: 800;
+.leg-n { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 .3rem;
+  border-radius: 11px; background: var(--leg, var(--ds-primary)); color: #fff; font-size: .78rem; font-weight: 800;
   font-variant-numeric: tabular-nums; }
-.leg-n.big { width: 34px; height: 34px; font-size: 1rem; vertical-align: middle; }
+.leg-n.big { min-width: 34px; height: 34px; border-radius: 17px; font-size: 1rem; vertical-align: middle; }
 .leg-name { font-weight: 600; font-size: .92rem; line-height: 1.25; }
 .leg-sub { font-size: .8rem; color: var(--bs-secondary-color); }
 
@@ -148,8 +148,8 @@ h2 { margin: 1.5rem 0 .5rem; }
 .cp { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .3rem .7rem; align-items: center;
   padding: .55rem .8rem; border-bottom: 1px solid var(--ds-hairline); border-left: 5px solid var(--leg); }
 .cp:last-child { border-bottom: 0; }
-.cp-n { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-  border-radius: 50%; background: var(--rt-pin); color: #fff; font-size: .8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cp-n { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 .3rem;
+  border-radius: 12px; background: var(--rt-pin); color: #fff; font-size: .8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .cp.arrived .cp-n { background: var(--rt-ok); }
 .cp-main { display: flex; flex-direction: column; min-width: 0; }
 .cp-name { font-weight: 600; overflow-wrap: anywhere; }
@@ -509,3 +509,21 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 .rt-list a { display: block; padding: .6rem .7rem; border: 2px solid #111827; border-radius: .6rem; background: #fff; color: #111827; font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
 .ms-suggested { font-weight: 700; }
 .ms-near { margin-left: .4rem; }
+
+/* --- the hours bar: a day's drive in whole hours, light theme only -------- */
+.hours { margin: .9rem 0 1.1rem; }
+.hours-title { margin: 0 0 .3rem; font-weight: 600; font-size: .9rem; }
+.hours-bar { list-style: none; margin: 0; padding: 0 .6rem; position: relative; height: 4.6rem; }
+.hours-bar::before { content: ""; position: absolute; left: .6rem; right: .6rem; top: .55rem; height: 4px;
+  border-radius: 2px; background: var(--ds-hairline); }
+.hours-bar li { position: absolute; top: 0; left: calc(.6rem + (100% - 1.2rem) * var(--at) / 100);
+  transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: .15rem;
+  max-width: 5.2rem; text-align: center; font-size: .78rem; line-height: 1.15; }
+.hours-bar li::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--rt-pin);
+  border: 2px solid #fff; box-shadow: 0 0 0 1px var(--ds-hairline); }
+.hours-bar li:first-child { transform: translateX(-.6rem); align-items: flex-start; text-align: left; }
+.hours-bar li:last-child { transform: translateX(calc(-100% + .6rem)); align-items: flex-end; text-align: right; }
+.h-n { font-weight: 800; font-variant-numeric: tabular-nums; }
+.h-name { overflow-wrap: anywhere; color: var(--bs-secondary-color); }
+.hours-lbl span { display: inline-block; transform: translate(-50%, -50%); white-space: nowrap; font-size: .68rem;
+  color: #6b7280; opacity: .85; text-shadow: 0 0 2px #fff, 0 0 2px #fff; pointer-events: none; }
