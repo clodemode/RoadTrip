@@ -11,7 +11,7 @@
     <span class="muted figure">{{day .Ride.StartDate}} &ndash; {{day .Ride.EndDate}} &middot; {{.Ride.Mode}}</span>
   </p>
   <p class="cast">Trip-keeper: Kris &middot; Guide: {{.GuideName}} &middot; {{.CreatureName}}</p>
-  {{with .Checklist}}<p class="cl-summary figure"><a href="/checklist">Checklist</a>: {{.Done}} of {{.Total}} done{{if .Questions}} &middot; {{.Answered}} of {{.Questions}} questions answered{{end}}</p>{{end}}
+  {{if .Driver}}{{with .Checklist}}<p class="cl-summary figure"><a href="/checklist">Checklist</a>: {{.Done}} of {{.Total}} done{{if .Questions}} &middot; {{.Answered}} of {{.Questions}} questions answered{{end}}</p>{{end}}{{end}}
   <ol class="leg-strip">
     <li class="leg-guide">
       <img src="/static/img/lance.svg?v={{.V}}" width="40" height="40" alt="{{.GuideName}}">
@@ -45,7 +45,7 @@
         {{if .ArrivedAt}}<span class="arrived-at">Arrived {{local .ArrivedAt .TZ}}</span>
         {{else if .PlannedArrive}}<span class="muted">Plan: arrive {{clock .PlannedArrive .TZ}}</span>
         {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
-        {{if $.Authed}}
+        {{if $.Driver}}
           <a class="btn btn-sm btn-outline-primary" href="{{waze .Name .Lat .Lng}}" rel="noopener">Navigate in Waze</a>
           <a class="btn btn-sm btn-outline-secondary" href="{{gmaps .Name .Lat .Lng}}" rel="noopener">Google Maps</a>
           <a class="btn btn-sm btn-outline-secondary" href="{{applemaps .Name .Lat .Lng}}" rel="noopener">Apple Maps</a>
@@ -64,12 +64,12 @@
 <section class="timeline">
   <div class="section-head">
     <h2>From the road</h2>
-    {{if .Authed}}<a class="btn btn-primary" href="/driver/post">New post</a>{{end}}
+    {{if .Driver}}<a class="btn btn-primary" href="/driver/post">New post</a>{{end}}
   </div>
   {{if not .Posts}}<p class="muted">Nothing posted yet.</p>{{end}}
   {{range .Posts}}
-    {{template "post_card" (card . $.Authed)}}
-    {{if $.Authed}}
+    {{template "post_card" (card . $.Driver)}}
+    {{if $.Driver}}
     {{template "delete_post" .}}
     {{end}}
   {{end}}

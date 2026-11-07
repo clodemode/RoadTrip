@@ -14,7 +14,7 @@ ride: **Austin → San Jose**, 2026-09-04 to 09-07, one way.
   checkpoint list with arrival stamps, and the timeline newest-first.
 - `/legs/<slug>` — one leg: its map, checkpoints, candidate stops, posts.
 - `/photos` — the gallery, grouped by leg.
-- `/route.geojson` — legs, checkpoints and pinned posts as open GeoJSON,
+- `/route.geojson` — signed-in drivers only (session cookie or `PUSH_TOKEN` bearer; a visitor is sent to sign-in, and the masthead link shows only when signed in): legs, checkpoints and pinned posts as GeoJSON,
   CORS `*`, plus a `kind=track` line per leg for what was actually driven.
 - `/plan` — the planner: the days with miles, hours and a long-day flag, the
   trip totals, and — for a trip that carries route options — each option as a
@@ -255,7 +255,7 @@ stops being shown is not touched: it stays in the database whole.
 
 A trip may carry a checklist: staged steps and open questions that the
 trip-keeper checks off as they succeed, each with a time and a public note of
-what actually happened. `GET /checklist` is public and written for the next
+what actually happened. `GET /checklist` is for signed-in drivers only (a visitor is sent to sign-in; the masthead link and the front-page line show only when signed in) and written for the next
 person who has to do the same thing; the masthead links to it and the front
 page says *n of m done*. `GET /checklist.json` is the same page as data.
 
@@ -516,7 +516,7 @@ plan** the page comes back to the line under the button: `Saved.`, or
 `Not saved:` and why. The redirect carries a short code (`/plan?ok=saved`,
 `/plan?error=conflict`, `/checklist?error=future`), never words, and each page
 maps the codes it knows to its own sentences; a code it does not know prints
-nothing. `/plan` and `/checklist` are public pages, and free text in a query
+nothing. `/plan` is a public page and `/checklist` a driver page, and free text in a query
 string would let anyone put a sentence of their choosing on the site with a
 link. curl is unaffected: it gets the status and the full reason as JSON.
 

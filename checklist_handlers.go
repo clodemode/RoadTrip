@@ -257,6 +257,10 @@ func (a *App) checklistMark(w http.ResponseWriter, r *http.Request) {
 		}
 		slug = v
 	}
+	if !a.auth.mayRide(r, slug, a.activeSlug()) {
+		a.refuseRide(w, r)
+		return
+	}
 	row, err := a.store.checklistRow(slug, kind, id)
 	if err != nil {
 		refuse(http.StatusNotFound, clErrMissing, "this checklist has no "+kind+" with that id")

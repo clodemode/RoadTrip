@@ -430,6 +430,9 @@ func TestErrorQueryPrintsOnlyFixedSentences(t *testing.T) {
 	}
 	for _, page := range []string{"/plan", "/checklist"} {
 		for _, token := range []string{"", testToken} {
+			if token == "" && page == "/checklist" {
+				continue // driver-only: a visitor is redirected, with the query in the next= link
+			}
 			for _, text := range free {
 				body := send(t, app, "GET", page+"?error="+url.QueryEscape(text)+"&ok="+url.QueryEscape(text), token, "", nil).Body.String()
 				for _, leak := range []string{"Free cake", "example.test", "alert(1)", "zzqx-more", "CONFLICT", "Not saved", "Saved."} {
@@ -446,7 +449,7 @@ func TestErrorQueryPrintsOnlyFixedSentences(t *testing.T) {
 	}
 	for page, table := range map[string]map[string]string{"/plan": planRefusals, "/checklist": checklistRefusals} {
 		for code, sentence := range table {
-			body := send(t, app, "GET", page+"?error="+url.QueryEscape(code), "", "", nil).Body.String()
+			body := send(t, app, "GET", page+"?error="+url.QueryEscape(code), testToken, "", nil).Body.String()
 			if want := "Not saved: " + template.HTMLEscapeString(sentence) + "."; !strings.Contains(body, want) {
 				t.Errorf("%s?error=%s does not print %q", page, code, want)
 			}
@@ -508,8 +511,12 @@ func TestSignedInPagesAreNeverCached(t *testing.T) {
 	for _, p := range []string{"/checklist", "/", "/plan", "/photos"} {
 		// Anonymous: exactly as it was. No cache header and no Vary.
 		anon := send(t, app, "GET", p, "", "", nil)
-		if anon.Code != http.StatusOK {
-			t.Fatalf("anonymous %s: status %d", p, anon.Code)
+		wantAnon := http.StatusOK
+		if p == "/checklist" {
+			wantAnon = http.StatusFound // driver-only
+		}
+		if anon.Code != wantAnon {
+			t.Fatalf("anonymous %s: status %d, want %d", p, anon.Code, wantAnon)
 		}
 		if cc, vary := anon.Header().Get("Cache-Control"), anon.Header().Values("Vary"); cc != "" || len(vary) != 0 {
 			t.Errorf("anonymous %s: Cache-Control %q, Vary %v; the anonymous response must not change", p, cc, vary)

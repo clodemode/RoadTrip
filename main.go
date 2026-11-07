@@ -330,6 +330,12 @@ func main() {
 	if active := app.activeSlug(); active != rideSlug {
 		log.Printf("active ride: %s (set by the trip-keeper; RIDE_SLUG=%s is the fallback)", active, rideSlug)
 	}
+	// Drivers written before ride assignment keep the ride the site shows now.
+	if n, err := app.auth.users.migrateLegacyRides(app.activeSlug()); err != nil {
+		log.Printf("WARN users: could not pin existing drivers to ride %s: %v", app.activeSlug(), err)
+	} else if n > 0 {
+		log.Printf("users: %d existing driver(s) assigned to the active ride %s", n, app.activeSlug())
+	}
 
 	srv := &http.Server{
 		Addr:              addr,

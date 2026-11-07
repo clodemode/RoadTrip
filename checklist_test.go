@@ -276,7 +276,7 @@ func TestChecklistPushNamesItsRide(t *testing.T) {
 	if census(t, app, app.rideSlug).Summary.Total != 5 {
 		t.Error("the named ride did not get its checklist")
 	}
-	if body := send(t, app, "GET", "/checklist", "", "", nil).Body.String(); strings.Contains(body, "Call the boathouse") {
+	if body := send(t, app, "GET", "/checklist", testToken, "", nil).Body.String(); strings.Contains(body, "Call the boathouse") {
 		t.Error("/checklist shows another ride's checklist")
 	}
 	if w := pushChecklist(t, app, named, ""); w.Code != http.StatusOK {
@@ -438,15 +438,16 @@ func TestChecklistPageShowsPrivateTextOnlyWhenSignedIn(t *testing.T) {
 	app := privateTextApp(t)
 
 	anon := send(t, app, "GET", "/checklist", "", "", nil)
-	if anon.Code != http.StatusOK {
-		t.Fatalf("anonymous /checklist: status %d", anon.Code)
+	if anon.Code != http.StatusFound {
+		t.Fatalf("anonymous /checklist: status %d, want the sign-in redirect", anon.Code)
 	}
-	page := anon.Body.String()
+	// The page is driver-only now; the public text and the absence of private
+	// text are read off /checklist.json, which never carries the private columns.
+	page := send(t, app, "GET", "/checklist.json", testToken, "", nil).Body.String()
 	// Positive control: this is the checklist page, with its public text on it.
-	for _, want := range []string{"Borrowing a canoe for a weekend", "One paddler&#39;s notes, not advice.",
+	for _, want := range []string{"Borrowing a canoe for a weekend",
 		"Call the boathouse", "Confirm the canoe is free", "They open at seven, not eight.",
-		"Do the paddles come with it?", "Two paddles, one spare.", "An invented boathouse handbook",
-		"1 of 5 done", "1 of 3 questions answered"} {
+		"Do the paddles come with it?", "Two paddles, one spare."} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the anonymous page lacks its public text %q", want)
 		}
@@ -456,8 +457,8 @@ func TestChecklistPageShowsPrivateTextOnlyWhenSignedIn(t *testing.T) {
 			t.Errorf("the anonymous page carries private text (%s)", mark)
 		}
 	}
-	// No way to change anything either, and an undone step's note is not shown.
-	for _, control := range []string{"<form method=\"post\" action=\"/driver/checklist", "<details", "Paid and then refunded."} {
+	// An undone step's note is not shown.
+	for _, control := range []string{"Paid and then refunded."} {
 		if strings.Contains(page, control) {
 			t.Errorf("the anonymous page carries %q", control)
 		}
@@ -484,9 +485,16 @@ func TestChecklistOpenEndpointsCarryNoPrivateText(t *testing.T) {
 	app := privateTextApp(t)
 	open := []string{"/", "/checklist.json", "/plan", "/plan.json", "/route.geojson", "/photos",
 		"/legs/day-1-ridge", "/healthz", "/robots.txt", "/driver/login"}
+	driverOnly := map[string]bool{"/checklist.json": true, "/route.geojson": true}
 	for _, token := range []string{"", testToken} {
 		for _, p := range open {
 			w := send(t, app, "GET", p, token, "", nil)
+			if token == "" && driverOnly[p] {
+				if w.Code != http.StatusFound {
+					t.Fatalf("%s without a credential: status %d, want the sign-in redirect", p, w.Code)
+				}
+				continue
+			}
 			if w.Code != http.StatusOK {
 				t.Fatalf("%s: status %d", p, w.Code)
 			}
@@ -498,7 +506,7 @@ func TestChecklistOpenEndpointsCarryNoPrivateText(t *testing.T) {
 		}
 	}
 	// /checklist.json is the public page as data: it has the public notes.
-	data := send(t, app, "GET", "/checklist.json", "", "", nil).Body.String()
+	data := send(t, app, "GET", "/checklist.json", testToken, "", nil).Body.String()
 	for _, want := range []string{"They open at seven, not eight.", "Two paddles, one spare.", `"steps_done": 1`} {
 		if !strings.Contains(data, want) {
 			t.Errorf("/checklist.json lacks %q", want)
@@ -659,7 +667,7 @@ func TestChecklistCheckOffAfterTheFactInTheStagesZone(t *testing.T) {
 		if it.DoneAt != c.wantUTC || it.DoneTZ != "America/Denver" {
 			t.Errorf("at=%s: stored %s in %s; want %s in America/Denver", c.at, it.DoneAt, it.DoneTZ, c.wantUTC)
 		}
-		if page := send(t, app, "GET", "/checklist", "", "", nil).Body.String(); !strings.Contains(page, c.wantShown) {
+		if page := send(t, app, "GET", "/checklist", testToken, "", nil).Body.String(); !strings.Contains(page, c.wantShown) {
 			t.Errorf("at=%s: the page does not show %q", c.at, c.wantShown)
 		}
 	}
@@ -732,9 +740,12 @@ func TestChecklistUndo(t *testing.T) {
 	if sum, _ := app.store.ChecklistSummary(fixtureSlug); sum.Done != 0 {
 		t.Errorf("the count after undo: %+v", sum)
 	}
-	page := send(t, app, "GET", "/checklist", "", "", nil).Body.String()
-	if strings.Contains(page, "They open at seven.") || !strings.Contains(page, "0 of 5 done") {
-		t.Error("the public page still shows the undone step as done, or its note")
+	page := send(t, app, "GET", "/checklist", testToken, "", nil).Body.String()
+	if !strings.Contains(page, "0 of 5 done") {
+		t.Error("the page still counts the undone step as done")
+	}
+	if strings.Contains(send(t, app, "GET", "/checklist.json", testToken, "", nil).Body.String(), "They open at seven.") {
+		t.Error("the open data still shows the undone step's note")
 	}
 	// Undoing an open step is a no-op, not an error.
 	if w := mark(t, app, clStep, "call-ahead", url.Values{"clear": {"1"}}); w.Code != http.StatusOK {
@@ -764,14 +775,14 @@ func TestChecklistAnswerAQuestion(t *testing.T) {
 	if sum.Answered != 1 || sum.Questions != 3 || sum.Done != 0 {
 		t.Errorf("the count: %+v", sum)
 	}
-	page := send(t, app, "GET", "/checklist", "", "", nil).Body.String()
+	page := send(t, app, "GET", "/checklist", testToken, "", nil).Body.String()
 	for _, want := range []string{"Two paddles, one spare.", "1 of 3 answered", "Answered <time"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the public page lacks %q", want)
 		}
 	}
-	if strings.Contains(page, privateNoteMark) {
-		t.Error("the public page carries the question's private note")
+	if strings.Contains(send(t, app, "GET", "/checklist.json", testToken, "", nil).Body.String(), privateNoteMark) {
+		t.Error("the open data carries the question's private note")
 	}
 	// tz= names another zone for a question; a zone that is not one is refused.
 	markOK(t, app, clQuestion, "q-roof", url.Values{"at": {"2026-07-01T09:30"}, "tz": {"America/Denver"}})
@@ -894,7 +905,7 @@ func TestChecklistRePushRefreshesOpenAndNeverTouchesDone(t *testing.T) {
 	if cl.Summary != (ChecklistSummary{Done: 2, Total: 4, Answered: 1, Questions: 2}) {
 		t.Errorf("the count after the re-push: %+v", cl.Summary)
 	}
-	page := send(t, app, "GET", "/checklist", "", "", nil).Body.String()
+	page := send(t, app, "GET", "/checklist", testToken, "", nil).Body.String()
 	if !strings.Contains(page, "One traveller&#39;s notes, not advice.") {
 		t.Error("the page shows no disclaimer when the document gives none")
 	}
@@ -932,39 +943,39 @@ func TestFrontPageSummarisesTheChecklist(t *testing.T) {
 	if strings.Contains(home, `href="/checklist"`) {
 		t.Error("/ links to a checklist the ride does not have")
 	}
-	if w := send(t, app, "GET", "/checklist", "", "", nil); w.Code != http.StatusOK ||
+	if w := send(t, app, "GET", "/checklist", testToken, "", nil); w.Code != http.StatusOK ||
 		!strings.Contains(w.Body.String(), "This trip has no checklist.") {
 		t.Errorf("/checklist for a ride with none: status %d", w.Code)
 	}
-	if w := send(t, app, "GET", "/checklist.json", "", "", nil); w.Code != http.StatusNotFound {
+	if w := send(t, app, "GET", "/checklist.json", testToken, "", nil); w.Code != http.StatusNotFound {
 		t.Errorf("/checklist.json for a ride with none: status %d, want 404", w.Code)
 	}
 
 	if w := pushChecklist(t, app, fixtureChecklist(t), ""); w.Code != http.StatusOK {
 		t.Fatalf("push: %d", w.Code)
 	}
-	home = send(t, app, "GET", "/", "", "", nil).Body.String()
+	home = send(t, app, "GET", "/", testToken, "", nil).Body.String()
 	if !strings.Contains(home, `<a href="/checklist">Checklist</a>: 0 of 5 done &middot; 0 of 3 questions answered`) {
 		t.Error("/ does not summarise the checklist as 0 of 5 done")
 	}
-	if strings.Count(home, `href="/checklist"`) != 2 {
-		t.Errorf("/ has %d links to the checklist; want the masthead's and the summary's", strings.Count(home, `href="/checklist"`))
+	if strings.Count(home, `href="/checklist"`) != 3 {
+		t.Errorf("/ has %d links to the checklist; want the masthead's, the driver bar's and the summary's", strings.Count(home, `href="/checklist"`))
 	}
 	markOK(t, app, clStep, "call-ahead", url.Values{})
 	markOK(t, app, clStep, "inspect", url.Values{})
 	markOK(t, app, clQuestion, "q-late", url.Values{})
-	home = send(t, app, "GET", "/", "", "", nil).Body.String()
+	home = send(t, app, "GET", "/", testToken, "", nil).Body.String()
 	if !strings.Contains(home, `Checklist</a>: 2 of 5 done &middot; 1 of 3 questions answered`) {
 		t.Error("/ does not summarise the checklist as 2 of 5 done")
 	}
 	// Every page's masthead reaches it.
 	for _, p := range []string{"/plan", "/photos", "/legs/day-1-ridge"} {
-		if body := send(t, app, "GET", p, "", "", nil).Body.String(); !strings.Contains(body, `<a href="/checklist">Checklist</a>`) {
+		if body := send(t, app, "GET", p, testToken, "", nil).Body.String(); !strings.Contains(body, `<a href="/checklist">Checklist</a>`) {
 			t.Errorf("%s has no masthead link to the checklist", p)
 		}
 	}
 	// The stage progress on the page itself.
-	page := send(t, app, "GET", "/checklist", "", "", nil).Body.String()
+	page := send(t, app, "GET", "/checklist", testToken, "", nil).Body.String()
 	for _, want := range []string{"2 of 5 done", ">1 of 3 done<", ">1 of 2 done<", "The evening before, at Alder"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/checklist lacks %q", want)
