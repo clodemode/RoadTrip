@@ -15,9 +15,9 @@ entries:
   status: design
   description: 'Found 2026-11-06 while building spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06.
     Every page reads the ACTIVE ride (App.activeSlug in plan_handlers.go, used by loadRide in handlers.go):
-    /, /legs/<slug>, /photos, /plan, /route.geojson and the signed-in census /admin/posts.json. When the
-    trip-keeper activates a new trip (POST /admin/ride/active), the earlier ride''s legs, checkpoints,
-    arrival stamps, posts and photos all stay in the database untouched, and GET /admin/rides.json proves
+    /, /legs/<slug>, /photos, /plan, /route.geojson and the signed-in census /driver/posts.json. When the
+    trip-keeper activates a new trip (POST /driver/ride/active), the earlier ride''s legs, checkpoints,
+    arrival stamps, posts and photos all stay in the database untouched, and GET /driver/rides.json proves
     it with row counts, but nothing renders them. The photo files are still served under /media/ by path,
     so old links to an image keep working; the pages that gave them context do not exist for that ride
     any more. The only way back is to re-activate the earlier ride, which takes the current one off the

@@ -56,7 +56,7 @@ func send(t *testing.T, app *App, method, target, token, ctype string, body []by
 
 func pushTrip(t *testing.T, app *App, body []byte, query string) *httptest.ResponseRecorder {
 	t.Helper()
-	return send(t, app, "POST", "/admin/trip"+query, testToken, "application/geo+json", body)
+	return send(t, app, "POST", "/driver/trip"+query, testToken, "application/geo+json", body)
 }
 
 func postForm(t *testing.T, app *App, target string, form url.Values) *httptest.ResponseRecorder {
@@ -174,7 +174,7 @@ func TestVolumeTripBadFileIsSkippedNotFatal(t *testing.T) {
 func TestTripPushRequiresACredential(t *testing.T) {
 	app := tokenApp(t, testToken)
 	for name, token := range map[string]string{"no credential": "", "wrong token": "ffffffffffffffffffffffff"} {
-		w := send(t, app, "POST", "/admin/trip?activate=1", token, "application/geo+json", fixtureTrip(t))
+		w := send(t, app, "POST", "/driver/trip?activate=1", token, "application/geo+json", fixtureTrip(t))
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("%s: status %d, want 401", name, w.Code)
 		}
@@ -294,7 +294,7 @@ func TestTripPushStoresAppliesAndActivates(t *testing.T) {
 	if strings.Contains(home.Body.String(), "Alder to Elm") {
 		t.Error("the pushed trip is on / before it was activated")
 	}
-	if w := postForm(t, app, "/admin/ride/active", url.Values{"slug": {fixtureSlug}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/ride/active", url.Values{"slug": {fixtureSlug}}); w.Code != http.StatusOK {
 		t.Fatalf("activate: status %d: %s", w.Code, w.Body.String())
 	}
 	home = send(t, app, "GET", "/", "", "", nil)
@@ -344,21 +344,21 @@ func TestActiveRideResolution(t *testing.T) {
 		t.Fatalf("with nothing set the active ride is %s, want RIDE_SLUG %s", got, seedSlug)
 	}
 	// Setting it is an authenticated act.
-	w := send(t, app, "POST", "/admin/ride/active", "", "application/x-www-form-urlencoded", []byte("slug="+fixtureSlug))
+	w := send(t, app, "POST", "/driver/ride/active", "", "application/x-www-form-urlencoded", []byte("slug="+fixtureSlug))
 	if w.Code != http.StatusUnauthorized || app.activeSlug() != seedSlug {
 		t.Fatalf("an anonymous activate: status %d, active %s", w.Code, app.activeSlug())
 	}
 	// A ride that is not in the database cannot be made active.
-	if w := postForm(t, app, "/admin/ride/active", url.Values{"slug": {"no-such-ride"}}); w.Code != http.StatusNotFound {
+	if w := postForm(t, app, "/driver/ride/active", url.Values{"slug": {"no-such-ride"}}); w.Code != http.StatusNotFound {
 		t.Errorf("unknown ride: status %d, want 404", w.Code)
 	}
-	if w := postForm(t, app, "/admin/ride/active", url.Values{"slug": {"../x"}}); w.Code != http.StatusBadRequest {
+	if w := postForm(t, app, "/driver/ride/active", url.Values{"slug": {"../x"}}); w.Code != http.StatusBadRequest {
 		t.Errorf("a slug that is a path: status %d, want 400", w.Code)
 	}
 	if app.activeSlug() != seedSlug {
 		t.Fatalf("a refused activate moved the active ride to %s", app.activeSlug())
 	}
-	if w := postForm(t, app, "/admin/ride/active", url.Values{"slug": {fixtureSlug}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/ride/active", url.Values{"slug": {fixtureSlug}}); w.Code != http.StatusOK {
 		t.Fatalf("activate: status %d: %s", w.Code, w.Body.String())
 	}
 	if got := app.activeSlug(); got != fixtureSlug {
@@ -370,7 +370,7 @@ func TestActiveRideResolution(t *testing.T) {
 		t.Error("/route.geojson does not name the active ride")
 	}
 	// The census of rides says which is active and that both are whole.
-	rides := send(t, app, "GET", "/admin/rides.json", testToken, "", nil)
+	rides := send(t, app, "GET", "/driver/rides.json", testToken, "", nil)
 	var census struct {
 		Active string `json:"active"`
 		Rides  []struct {
@@ -391,8 +391,8 @@ func TestActiveRideResolution(t *testing.T) {
 			t.Errorf("rides.json row %+v", r)
 		}
 	}
-	if w := send(t, app, "GET", "/admin/rides.json", "", "", nil); w.Code == http.StatusOK {
-		t.Error("/admin/rides.json answered without a credential")
+	if w := send(t, app, "GET", "/driver/rides.json", "", "", nil); w.Code == http.StatusOK {
+		t.Error("/driver/rides.json answered without a credential")
 	}
 	// A key that names a ride which is gone falls back rather than 404ing the site.
 	if err := app.store.SetMeta(metaActiveRide, "vanished"); err != nil {
@@ -402,7 +402,7 @@ func TestActiveRideResolution(t *testing.T) {
 		t.Errorf("a stale key resolved to %s, want the fallback", got)
 	}
 	_ = app.store.SetMeta(metaActiveRide, fixtureSlug)
-	if w := postForm(t, app, "/admin/ride/active", url.Values{"clear": {"1"}}); w.Code != http.StatusOK || app.activeSlug() != seedSlug {
+	if w := postForm(t, app, "/driver/ride/active", url.Values{"clear": {"1"}}); w.Code != http.StatusOK || app.activeSlug() != seedSlug {
 		t.Errorf("clear: status %d, active %s", w.Code, app.activeSlug())
 	}
 }
@@ -687,10 +687,10 @@ func TestPlanPageRenders(t *testing.T) {
 		}
 	}
 	// A visitor gets no save control; the trip-keeper does.
-	if strings.Contains(body, `formaction="/admin/plan"`) {
+	if strings.Contains(body, `formaction="/driver/plan"`) {
 		t.Error("an anonymous visitor was offered Save")
 	}
-	if w := send(t, app, "GET", "/plan", testToken, "", nil); !strings.Contains(w.Body.String(), `formaction="/admin/plan"`) {
+	if w := send(t, app, "GET", "/plan", testToken, "", nil); !strings.Contains(w.Body.String(), `formaction="/driver/plan"`) {
 		t.Error("the signed-in trip-keeper was not offered Save")
 	}
 	// The same page, asked for another selection, is rendered for it.
@@ -718,10 +718,10 @@ func TestPlanPageForARideWithNoTripFile(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d", w.Code)
 	}
-	if !strings.Contains(body, "4 days") || strings.Contains(body, `type="radio"`) || strings.Contains(body, `formaction="/admin/plan"`) {
+	if !strings.Contains(body, "4 days") || strings.Contains(body, `type="radio"`) || strings.Contains(body, `formaction="/driver/plan"`) {
 		t.Error("the seed ride's plan page should list 4 days and offer nothing to choose or save")
 	}
-	if w := postForm(t, app, "/admin/plan", url.Values{"start": {"2030-01-01"}}); w.Code != http.StatusConflict {
+	if w := postForm(t, app, "/driver/plan", url.Values{"start": {"2030-01-01"}}); w.Code != http.StatusConflict {
 		t.Errorf("saving a selection for a ride with no trip file: status %d, want 409", w.Code)
 	}
 }
@@ -836,7 +836,7 @@ func TestNoSurfaceCarriesTheRawPrivateNumbers(t *testing.T) {
 		}
 	}
 	// The signed-in screens that list checkpoints get the same published points.
-	for _, p := range []string{"/admin/post", "/admin/lodging"} {
+	for _, p := range []string{"/driver/post", "/driver/lodging"} {
 		w := send(t, app, "GET", p, testToken, "", nil)
 		if w.Code != http.StatusOK {
 			t.Fatalf("%s: status %d", p, w.Code)
@@ -848,7 +848,7 @@ func TestNoSurfaceCarriesTheRawPrivateNumbers(t *testing.T) {
 		}
 	}
 	// And after the plan is re-saved under the other finish.
-	if w := postForm(t, app, "/admin/plan", url.Values{"opt-finish": {"stopover"}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/plan", url.Values{"opt-finish": {"stopover"}}); w.Code != http.StatusOK {
 		t.Fatalf("save: %d %s", w.Code, w.Body.String())
 	}
 	for _, p := range []string{"/", "/route.geojson", "/legs/day-4-stopover", "/plan"} {
@@ -962,7 +962,7 @@ func cpByOrd(t *testing.T, app *App, ord int) Checkpoint {
 
 func TestSelectionSaveNeedsACredential(t *testing.T) {
 	app := activeTripApp(t)
-	w := send(t, app, "POST", "/admin/plan", "", "application/x-www-form-urlencoded", []byte("opt-finish=stopover"))
+	w := send(t, app, "POST", "/driver/plan", "", "application/x-www-form-urlencoded", []byte("opt-finish=stopover"))
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status %d, want 401", w.Code)
 	}
@@ -975,7 +975,7 @@ func TestSelectionSaveNeedsACredential(t *testing.T) {
 // choice adds appear, and going back takes them away again.
 func TestSelectionSaveAddsAndRemovesTheExtraDay(t *testing.T) {
 	app := activeTripApp(t)
-	if w := postForm(t, app, "/admin/plan", url.Values{"opt-finish": {"stopover"}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/plan", url.Values{"opt-finish": {"stopover"}}); w.Code != http.StatusOK {
 		t.Fatalf("save: %d %s", w.Code, w.Body.String())
 	}
 	if c := rideCensus(t, app, fixtureSlug); c.Legs != 4 || c.Checkpoints != 6 || c.EndDate != "2030-05-04" {
@@ -999,7 +999,7 @@ func TestSelectionSaveAddsAndRemovesTheExtraDay(t *testing.T) {
 		t.Fatalf("a boot dropped the saved selection: %+v", c)
 	}
 	// And back.
-	if w := postForm(t, app, "/admin/plan", url.Values{"opt-finish": {"direct"}, "opt-day1": {"valley"}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/plan", url.Values{"opt-finish": {"direct"}, "opt-day1": {"valley"}}); w.Code != http.StatusOK {
 		t.Fatalf("save back: %d %s", w.Code, w.Body.String())
 	}
 	if c := rideCensus(t, app, fixtureSlug); c.Legs != 3 || c.Checkpoints != 5 || c.EndDate != "2030-05-03" {
@@ -1013,7 +1013,7 @@ func TestSelectionSaveAddsAndRemovesTheExtraDay(t *testing.T) {
 		t.Errorf("checkpoint 5 is %+v", c)
 	}
 	// A choice the document does not have is refused, not defaulted.
-	if w := postForm(t, app, "/admin/plan", url.Values{"opt-day1": {"tunnel"}}); w.Code != http.StatusBadRequest {
+	if w := postForm(t, app, "/driver/plan", url.Values{"opt-day1": {"tunnel"}}); w.Code != http.StatusBadRequest {
 		t.Errorf("an unknown choice: status %d, want 400", w.Code)
 	}
 }
@@ -1026,7 +1026,7 @@ func TestSelectionGuardRefusesOnceTheCheckpointIsArrived(t *testing.T) {
 	if err := app.store.SetArrived(finish.ID, at, nil); err != nil {
 		t.Fatal(err)
 	}
-	w := postForm(t, app, "/admin/plan", url.Values{"opt-finish": {"stopover"}})
+	w := postForm(t, app, "/driver/plan", url.Values{"opt-finish": {"stopover"}})
 	if w.Code != http.StatusConflict {
 		t.Fatalf("status %d, want 409: %s", w.Code, w.Body.String())
 	}
@@ -1045,7 +1045,7 @@ func TestSelectionGuardRefusesOnceTheCheckpointIsArrived(t *testing.T) {
 		t.Errorf("a refused change was stored: %+v", sel)
 	}
 	// A browser gets the same refusal as a message on the page, not a status.
-	req := httptest.NewRequest("POST", "/admin/plan", strings.NewReader("opt-finish=stopover"))
+	req := httptest.NewRequest("POST", "/driver/plan", strings.NewReader("opt-finish=stopover"))
 	req.Header.Set("Authorization", "Bearer "+testToken)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
@@ -1056,7 +1056,7 @@ func TestSelectionGuardRefusesOnceTheCheckpointIsArrived(t *testing.T) {
 		t.Errorf("browser refusal: status %d, Location %q", rec.Code, loc)
 	}
 	// A choice that does not reach the arrived checkpoint is still open.
-	if w := postForm(t, app, "/admin/plan", url.Values{"opt-day1": {"valley"}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/plan", url.Values{"opt-day1": {"valley"}}); w.Code != http.StatusOK {
 		t.Errorf("an unrelated choice was refused: %d %s", w.Code, w.Body.String())
 	}
 	if got := cpByOrd(t, app, 5); got.ArrivedAt != utcString(at) {
@@ -1071,7 +1071,7 @@ func TestSelectionGuardRefusesOnceTheLegHoldsAPost(t *testing.T) {
 	legs := mustLegs(t, app, fixtureSlug)
 	post := mustCreate(t, app, &Post{LegID: legs[0].ID, Kind: "note", TZ: "America/Chicago", Title: "on the ridge"})
 
-	w := postForm(t, app, "/admin/plan", url.Values{"opt-day1": {"valley"}})
+	w := postForm(t, app, "/driver/plan", url.Values{"opt-day1": {"valley"}})
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "leg 1 holds 1 post") {
 		t.Fatalf("status %d, want 409 naming leg 1: %s", w.Code, w.Body.String())
 	}
@@ -1083,7 +1083,7 @@ func TestSelectionGuardRefusesOnceTheLegHoldsAPost(t *testing.T) {
 	}
 	// The other option does not reach leg 1 and is still open — and the post
 	// rides through that change untouched.
-	if w := postForm(t, app, "/admin/plan", url.Values{"opt-finish": {"stopover"}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/plan", url.Values{"opt-finish": {"stopover"}}); w.Code != http.StatusOK {
 		t.Fatalf("an unrelated choice was refused: %d %s", w.Code, w.Body.String())
 	}
 	if c := rideCensus(t, app, fixtureSlug); c.Legs != 4 || c.Posts != 1 {
@@ -1093,7 +1093,7 @@ func TestSelectionGuardRefusesOnceTheLegHoldsAPost(t *testing.T) {
 	// because undoing it would drop that leg and the post with it.
 	legs = mustLegs(t, app, fixtureSlug)
 	last := mustCreate(t, app, &Post{LegID: legs[3].ID, Kind: "note", TZ: "America/Denver", Title: "the last stretch"})
-	w = postForm(t, app, "/admin/plan", url.Values{"opt-finish": {"direct"}})
+	w = postForm(t, app, "/driver/plan", url.Values{"opt-finish": {"direct"}})
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "leg 4 holds 1 post") {
 		t.Fatalf("status %d, want 409 naming leg 4: %s", w.Code, w.Body.String())
 	}
@@ -1112,7 +1112,7 @@ func TestSelectionGuardRefusesOnceTheCheckpointHoldsAPost(t *testing.T) {
 	// Filed on leg 2 so that only the checkpoint, not the leg, is in the way.
 	legs := mustLegs(t, app, fixtureSlug)
 	post := mustCreate(t, app, &Post{LegID: legs[1].ID, CheckpointID: finish.ID, Kind: "note", TZ: "America/Denver", Title: "nearly there"})
-	w := postForm(t, app, "/admin/plan", url.Values{"opt-finish": {"stopover"}})
+	w := postForm(t, app, "/driver/plan", url.Values{"opt-finish": {"stopover"}})
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "checkpoint 5 holds 1 post") {
 		t.Fatalf("status %d, want 409 naming checkpoint 5: %s", w.Code, w.Body.String())
 	}
@@ -1132,7 +1132,7 @@ func TestStartDateMovesWithPostsAndArrivalsInPlace(t *testing.T) {
 	if err := app.store.SetArrived(start.ID, at, nil); err != nil {
 		t.Fatal(err)
 	}
-	if w := postForm(t, app, "/admin/plan", url.Values{"start": {"2030-05-02"}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/plan", url.Values{"start": {"2030-05-02"}}); w.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", w.Code, w.Body.String())
 	}
 	legs = mustLegs(t, app, fixtureSlug)
@@ -1154,7 +1154,7 @@ func TestStartDateMovesWithPostsAndArrivalsInPlace(t *testing.T) {
 	if sel := savedSelection(t, app); sel.StartDate != "2030-05-02" {
 		t.Errorf("stored start date %q", sel.StartDate)
 	}
-	if w := postForm(t, app, "/admin/plan", url.Values{"start": {"the 2nd"}}); w.Code != http.StatusBadRequest {
+	if w := postForm(t, app, "/driver/plan", url.Values{"start": {"the 2nd"}}); w.Code != http.StatusBadRequest {
 		t.Errorf("a start that is not a date: status %d, want 400", w.Code)
 	}
 }
@@ -1195,7 +1195,7 @@ func TestVolumeTripPinnedPostDrawsTheTrack(t *testing.T) {
 	night1 := cpByOrd(t, app, 3)
 
 	// Arrive at the origin through the real route, with the token.
-	target := "/admin/checkpoint/" + strconv.FormatInt(origin.ID, 10) + "/arrive"
+	target := "/driver/checkpoint/" + strconv.FormatInt(origin.ID, 10) + "/arrive"
 	if w := postForm(t, app, target, url.Values{}); w.Code != http.StatusSeeOther {
 		t.Fatalf("arrive at the origin: status %d: %s", w.Code, w.Body.String())
 	}
@@ -1236,7 +1236,7 @@ func TestVolumeTripPinnedPostDrawsTheTrack(t *testing.T) {
 	mlat, mlng := 42.0312, -102.0177
 	lodging := mustCreate(t, app, &Post{LegID: legs[0].ID, CheckpointID: night1.ID, Kind: "lodging", TZ: "America/Chicago",
 		Title: "the room", OccurredAt: "2030-05-02T01:00:00Z", Lat: &mlat, Lng: &mlng, PinSource: pinEXIF})
-	target = "/admin/checkpoint/" + strconv.FormatInt(night1.ID, 10) + "/arrive"
+	target = "/driver/checkpoint/" + strconv.FormatInt(night1.ID, 10) + "/arrive"
 	if w := postForm(t, app, target, url.Values{"post_id": {strconv.FormatInt(lodging.ID, 10)}}); w.Code != http.StatusSeeOther {
 		t.Fatalf("made it to: status %d: %s", w.Code, w.Body.String())
 	}
@@ -1330,7 +1330,7 @@ func TestVolumeTripFirstPinDrawsATrackFromThePlannedStart(t *testing.T) {
 	}
 	// Once the origin IS stamped, the same line is evidence end to end.
 	origin := cpByOrd(t, app, 1)
-	if w := postForm(t, app, "/admin/checkpoint/"+strconv.FormatInt(origin.ID, 10)+"/arrive", url.Values{}); w.Code != http.StatusSeeOther {
+	if w := postForm(t, app, "/driver/checkpoint/"+strconv.FormatInt(origin.ID, 10)+"/arrive", url.Values{}); w.Code != http.StatusSeeOther {
 		t.Fatalf("arrive: %d", w.Code)
 	}
 	rv, _ = app.loadRide()
@@ -1376,7 +1376,7 @@ func TestPlannerIsClosedWhileTheSiteIsPrivate(t *testing.T) {
 	app.sitePrivate = true
 	for _, p := range []string{"/plan", "/plan.json", "/plan.json?opt-finish=stopover"} {
 		w := send(t, app, "GET", p, "", "", nil)
-		if w.Code != http.StatusFound || !strings.HasPrefix(w.Header().Get("Location"), "/admin/login") {
+		if w.Code != http.StatusFound || !strings.HasPrefix(w.Header().Get("Location"), "/driver/login") {
 			t.Errorf("%s while private: status %d, Location %q; want a 302 to the login", p, w.Code, w.Header().Get("Location"))
 		}
 		if strings.Contains(w.Body.String(), "Alder") {

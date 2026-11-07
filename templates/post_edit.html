@@ -18,7 +18,7 @@
   </a>
   {{end}}
 
-  <form method="post" action="/admin/post/{{.Post.ID}}/edit" class="d-flex flex-column gap-3 mt-2">
+  <form method="post" action="/driver/post/{{.Post.ID}}/edit" class="d-flex flex-column gap-3 mt-2">
     <input type="hidden" name="back" value="{{.Back}}">
     <div class="row g-2">
       <label class="form-label col-6">Kind<select class="form-select" name="kind" id="f-kind">

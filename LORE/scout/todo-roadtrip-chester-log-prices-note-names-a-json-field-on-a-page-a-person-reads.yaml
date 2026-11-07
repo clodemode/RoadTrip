@@ -14,7 +14,7 @@ entries:
   - plain-words
   - 2026-11
   status: design
-  description: Seen 2026-11-06 during the design-system restyle, on /admin/chester/log at 390px. The prices
+  description: Seen 2026-11-06 during the design-system restyle, on /driver/chester/log at 390px. The prices
     note under the summary is built in Go (chester_handlers.go, the PricesNote string) and says each row
     keeps the token counts "as the API sent them (usage_json in log.json)". The page copy should be plain
     words on every surface; a field name in parentheses is for the export, not for a reader. The restyle

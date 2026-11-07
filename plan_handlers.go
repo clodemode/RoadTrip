@@ -365,7 +365,7 @@ func (a *App) planSave(w http.ResponseWriter, r *http.Request) {
 // request — a suspended machine never re-runs boot, so "it loads next boot"
 // would mean "it loads next deploy".
 //
-// It is behind requireAuth like /admin/private: the session or the push
+// It is behind requireAuth like /driver/private: the session or the push
 // token. ?activate=1 also makes the pushed trip the ride the site shows.
 //
 // A re-push of a trip already under way is held to the same guard a saved

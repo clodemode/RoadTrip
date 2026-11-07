@@ -30,7 +30,7 @@ entries:
     is asked by the operator on a running instance. DONT read a green suite as evidence about the real
     API: the suite proves the code against a stand-in.'
   do_this: 'With the key set as a secret on a running instance: ask one quick preset and one plan question,
-    read both rows in /admin/chester/log (stop reason, error, first word against total, tokens, cache
+    read both rows in /driver/chester/log (stop reason, error, first word against total, tokens, cache
     read on the second, searches, dollars), watch whether the words arrive progressively in the browser,
     and compare the day''s logged dollars with the account''s usage report. Record what was found on the
     spec row.'

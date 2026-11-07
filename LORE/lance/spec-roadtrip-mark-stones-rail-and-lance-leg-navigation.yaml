@@ -21,7 +21,7 @@ entries:
     "all pages have the mark_stones listed"; "mark_stones on the roadtrip are the locations we plan to,
     then the ones we do visit and we keep a mark". MARK_STONE = a planned place on a leg: a checkpoint
     or a sight. It is PLANNED (hollow) until the trip-keeper marks it — checkpoint: arrived_at (exists,
-    one tap); sight: new visited_at (one tap POST /admin/sight/{id}/mark, clear=1 undoes). A marked stone
+    one tap); sight: new visited_at (one tap POST /driver/sight/{id}/mark, clear=1 undoes). A marked stone
     keeps its mark (local time in the stone''s leg tz) forever; a passed-but-unmarked stone stays hollow
     — never auto-marked. RAIL on every public page (base.html, server-rendered, no new JS): per leg in
     order, the leg''s checkpoints with its sights interleaved after the leg''s start checkpoint; hollow

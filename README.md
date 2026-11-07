@@ -20,9 +20,9 @@ ride: **Austin → San Jose**, 2026-09-04 to 09-07, one way.
   trip totals, and — for a trip that carries route options — each option as a
   control, with the roads not taken drawn dashed on the map. `/plan.json` is
   the same arithmetic as data. See "Trips on the volume".
-- `/admin/post` — the driver's one screen: photo, kind, title, body, leg,
+- `/driver/post` — the driver's one screen: photo, kind, title, body, leg,
   checkpoint, zone, hide-location. One tap stamps a checkpoint as arrived.
-- `/admin/posts.json` — the census: **every** post with its photo's identity,
+- `/driver/posts.json` — the census: **every** post with its photo's identity,
   signed-in only. See "Taking a census".
 
 The masthead creature is **Odo**, a nine-banded armadillo — the slow land
@@ -86,14 +86,14 @@ session cookie will never come back.
 
 | variable | purpose |
 |---|---|
-| `ADMIN_PASSWORD_HASH` | bcrypt hash; unset ⇒ read-only site |
+| `ADMIN_PASSWORD_HASH` | bcrypt hash; used once, to seed user `kris` (admin) when `$DATA_DIR/users.json` does not exist. After that the users file is the source of truth. No users ⇒ read-only site |
 | `SESSION_KEY` | HMAC key for session cookies; unset ⇒ random per boot (sessions drop on restart) |
 | `PUSH_TOKEN` | fixed bearer token accepted wherever the session is; unset ⇒ the header path does not exist. See "Pushing with the token" |
-| `RIDE_SLUG` | the ride `/` shows **when no active ride has been set**; default `atx-sjc-2026-09`. The active ride is data, set by `POST /admin/ride/active` — see "Trips on the volume" |
+| `RIDE_SLUG` | the ride `/` shows **when no active ride has been set**; default `atx-sjc-2026-09`. The active ride is data, set by `POST /driver/ride/active` — see "Trips on the volume" |
 | `DATA_DIR` | default `/data`; holds `roadtrip.sqlite3`, `media/`, `tmp/` (upload spill, swept on boot), the optional `private.json` and the trip files in `trips/` |
-| `$DATA_DIR/trips/<slug>.geojson` | a trip that is not in the image: pushed with `POST /admin/trip`, read at boot after the embedded seeds; never in the repo. Absent = only the embedded rides |
+| `$DATA_DIR/trips/<slug>.geojson` | a trip that is not in the image: pushed with `POST /driver/trip`, read at boot after the embedded seeds; never in the repo. Absent = only the embedded rides |
 | `GOMEMLIMIT` | optional; unset ⇒ the GC's soft limit is 75 % of the cgroup limit or MemTotal (logged at boot as `memory limit: …`) |
-| `$DATA_DIR/trips/<slug>.checklist.json` | a trip's checklist: pushed with `POST /admin/checklist`, read at boot after the trips; never in the repo. Holds private text. See "A trip's checklist" |
+| `$DATA_DIR/trips/<slug>.checklist.json` | a trip's checklist: pushed with `POST /driver/checklist`, read at boot after the trips; never in the repo. Holds private text. See "A trip's checklist" |
 | `$DATA_DIR/private.json` | private overlay, keyed by ride and then by checkpoint ord: the top-level `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` is the first ride's (`RIDE_SLUG`), every other ride has its own block under `"rides":{"<slug>":{"checkpoints":{…}}}`; rendered on admin pages only, never in the repo or the seed; absent = no private data |
 | `SITE_URL` | the canonical origin, e.g. `https://roadtrip.opeongo.net`; unset (the local default) ⇒ no redirect and no canonical/og tags |
 | `SITE_VISIBILITY` | `public` (default in code) or `private`; **private puts the whole site behind the one admin password** — see below |
@@ -117,14 +117,14 @@ only `/healthz` answers on any host, because Fly's health check needs it to.
 `SITE_VISIBILITY=private` (set in `fly.toml [env]` as of 2026-09-02, ruled by
 Kris — *"we will open it later"*) makes every page require the existing admin
 session. There is no second credential and no Basic auth: an unauthenticated
-request is redirected to `/admin/login?next=…`. Exactly five paths stay open,
+request is redirected to `/driver/login?next=…`. Exactly five paths stay open,
 and the list is load-bearing:
 
 - `/healthz` — Fly's health check arrives with an arbitrary `Host`; redirect
   it and the machine is marked unhealthy and stops serving.
 - `/robots.txt` — so a crawler that arrives while the site is closed reads the
   exclusions instead of a redirect to a login form.
-- `/admin/login` (GET and POST) — or there is no way in.
+- `/driver/login` (GET and POST) — or there is no way in.
 - `/static/css/app.css` and `/static/img/creature.svg` — the only two files
   the login page renders with (the creature is also the favicon). Not
   `/static` wholesale.
@@ -146,7 +146,7 @@ Authorization: Bearer $PUSH_TOKEN
 
 `Auth.IsAuthed` answers yes to it, and `IsAuthed` is the single question both
 `requireAuth` and the whole-site `visibility` gate ask. So the token opens
-exactly what a signed-in browser opens — every `/admin` route, and
+exactly what a signed-in browser opens — every `/driver` route, and
 `/route.geojson` while the site is private — and it is not a second auth path
 to get wrong, because it is not a second gate. The comparison is
 `subtle.ConstantTimeCompare`; an unset `PUSH_TOKEN` disables the header
@@ -170,20 +170,20 @@ that header by itself.
 H="Authorization: Bearer $PUSH_TOKEN"; S=https://roadtrip.opeongo.net
 
 # the private overlay, whole document, replaces what is on the volume
-curl -s -H "$H" -H 'Content-Type: application/json' --data-binary @private.json $S/admin/private
+curl -s -H "$H" -H 'Content-Type: application/json' --data-binary @private.json $S/driver/private
 
 # the census, and a post deleted by id (303 = gone)
-curl -s -H "$H" $S/admin/posts.json > posts.json
-curl -s -o /dev/null -w '%{http_code}\n' -H "$H" -X POST $S/admin/post/<id>/delete
+curl -s -H "$H" $S/driver/posts.json > posts.json
+curl -s -o /dev/null -w '%{http_code}\n' -H "$H" -X POST $S/driver/post/<id>/delete
 
 # made it to: adopt a lodging post's published pin, or give a point
-curl -s -H "$H" -X POST -d post_id=<post id> $S/admin/checkpoint/<checkpoint id>/arrive
-curl -s -H "$H" -X POST -d lat=<lat> -d lng=<lng> $S/admin/checkpoint/<checkpoint id>/arrive
+curl -s -H "$H" -X POST -d post_id=<post id> $S/driver/checkpoint/<checkpoint id>/arrive
+curl -s -H "$H" -X POST -d lat=<lat> -d lng=<lng> $S/driver/checkpoint/<checkpoint id>/arrive
 
 # repairing a checkpoint the seed stopped owning: clear, deploy, stamp it back
-curl -s -H "$H" -X POST -d clear=1 $S/admin/checkpoint/<checkpoint id>/arrive
+curl -s -H "$H" -X POST -d clear=1 $S/driver/checkpoint/<checkpoint id>/arrive
 # … deploy, so the seed retakes the now-unstamped checkpoint …
-curl -s -H "$H" -X POST -d 'at=2026-09-06T20:06:47-07:00' $S/admin/checkpoint/<checkpoint id>/arrive
+curl -s -H "$H" -X POST -d 'at=2026-09-06T20:06:47-07:00' $S/driver/checkpoint/<checkpoint id>/arrive
 
 # what the ride now says about itself
 curl -s -H "$H" $S/route.geojson | jq '.features[] | select(.properties.kind=="checkpoint")
@@ -192,7 +192,7 @@ curl -s -H "$H" $S/route.geojson | jq '.features[] | select(.properties.kind=="c
 
 ### Taking a census
 
-`GET /admin/posts.json` is every post the ride holds — pinned or not, hidden or
+`GET /driver/posts.json` is every post the ride holds — pinned or not, hidden or
 not — with the leg, the checkpoint, the times, the pin decision, the published
 point, and the photo's `id`, `path`, `thumb`, `sha256`, `taken_at` and
 dimensions.
@@ -203,7 +203,7 @@ SQLite off the volume — the app itself is the only census there is.
 
 What it is for is duplicates, which a phone on a bad hotspot makes: the same
 `photo.id` or `photo.sha256` twice, or two rows whose `taken_at` are seconds
-apart. Delete the loser with `POST /admin/post/<id>/delete`. The photo bytes
+apart. Delete the loser with `POST /driver/post/<id>/delete`. The photo bytes
 stay on the volume by design — media is content-addressed and another post may
 reference the same file.
 
@@ -217,14 +217,14 @@ volume, `$DATA_DIR/trips/<slug>.geojson`, and it gets there by push:
 H="Authorization: Bearer $PUSH_TOKEN"; S=https://roadtrip.opeongo.net
 
 # the whole trip document; parsed completely before a byte is written
-curl -s -H "$H" -H 'Content-Type: application/geo+json' --data-binary @trip.geojson $S/admin/trip
+curl -s -H "$H" -H 'Content-Type: application/geo+json' --data-binary @trip.geojson $S/driver/trip
 
 # make it the ride the site shows (or add ?activate=1 to the push)
-curl -s -H "$H" -X POST -d slug=<slug> $S/admin/ride/active
-curl -s -H "$H" -X POST -d clear=1 $S/admin/ride/active     # back to RIDE_SLUG
+curl -s -H "$H" -X POST -d slug=<slug> $S/driver/ride/active
+curl -s -H "$H" -X POST -d clear=1 $S/driver/ride/active     # back to RIDE_SLUG
 
 # every ride in the database, its row counts, and which one is showing
-curl -s -H "$H" $S/admin/rides.json
+curl -s -H "$H" $S/driver/rides.json
 ```
 
 A push is applied in the same request — the file is written atomically and the
@@ -261,19 +261,19 @@ page says *n of m done*. `GET /checklist.json` is the same page as data.
 
 ```bash
 # the whole checklist document, for a ride that is already in the database
-curl -s -H "$H" -H 'Content-Type: application/json' --data-binary @trip.checklist.json "$S/admin/checklist?ride=<slug>"
+curl -s -H "$H" -H 'Content-Type: application/json' --data-binary @trip.checklist.json "$S/driver/checklist?ride=<slug>"
 
 # check a step off now, or after the fact; the public note is "outcome"
-curl -s -H "$H" -X POST $S/admin/checklist/step/<step-id>
+curl -s -H "$H" -X POST $S/driver/checklist/step/<step-id>
 curl -s -H "$H" -X POST -d at=2030-05-01T14:30 --data-urlencode 'outcome=What actually happened.' \
-     --data-urlencode 'private_note=For the trip-keeper only.' $S/admin/checklist/step/<step-id>
-curl -s -H "$H" -X POST -d clear=1 $S/admin/checklist/step/<step-id>        # undo: the time goes, the notes stay
+     --data-urlencode 'private_note=For the trip-keeper only.' $S/driver/checklist/step/<step-id>
+curl -s -H "$H" -X POST -d clear=1 $S/driver/checklist/step/<step-id>        # undo: the time goes, the notes stay
 
 # answer a question the same way
-curl -s -H "$H" -X POST --data-urlencode 'outcome=The answer.' $S/admin/checklist/question/<question-id>
+curl -s -H "$H" -X POST --data-urlencode 'outcome=The answer.' $S/driver/checklist/question/<question-id>
 
 # everything, private text included: signed in or with the token only
-curl -s -H "$H" $S/admin/checklist.json
+curl -s -H "$H" $S/driver/checklist.json
 ```
 
 The document is `title`, `intro`, `disclaimer`, `stages` (each `id`, `title`,
@@ -437,7 +437,7 @@ masthead has no link, `/chester` says Chester is not set up, and boot logs
 `chester: disabled`. With one, boot logs `chester: enabled` and the two models.
 `guard_test.go` fails the build on anything shaped like a key in the tree.
 
-**The log.** `GET /admin/chester/log` lists every question: when and in which
+**The log.** `GET /driver/chester/log` lists every question: when and in which
 zone, the mode, the question, the model and effort, milliseconds to the first
 word and in all, tokens in, out, read from the cache and written to it,
 searches, dollars (marked when they are an estimate), the answer or, for a
@@ -449,7 +449,7 @@ verdict is one tap in place: **Right**, **Partly**, **Wrong** or
 of figures (Chester's and the reference, in minutes, dollars or miles). The
 summary groups by mode and verdict and gives the count, the median time, the
 dollars, and the mean absolute percent error where pairs exist.
-`GET /admin/chester/log.json` is the whole log as data. Neither is reachable
+`GET /driver/chester/log.json` is the whole log as data. Neither is reachable
 without signing in, and nothing of the log is on any open page.
 
 ```bash
@@ -459,8 +459,8 @@ curl -sN -H "$H" -d mode=plan --data-urlencode 'q=Where should we stay tomorrow 
 
 # rule on question 12, and read the whole log
 curl -s -H "$H" -d verdict=partly -d against=navigation -d chester_value=50 -d reference_value=40 -d unit=minutes \
-     $S/admin/chester/log/12
-curl -s -H "$H" $S/admin/chester/log.json
+     $S/driver/chester/log/12
+curl -s -H "$H" $S/driver/chester/log.json
 ```
 
 Chester only suggests. Nothing it says is written into the plan.
@@ -491,7 +491,7 @@ departure that slips a day is one saved field, not an edit to every leg. With
 first push of a trip takes `ride.start_date` from the document. After that the
 start date in force is the saved selection's, exactly like the saved choices,
 and a document pushed again with a different `ride.start_date` does **not**
-move it: the start moves through `POST /admin/plan` (`start=YYYY-MM-DD`) and
+move it: the start moves through `POST /driver/plan` (`start=YYYY-MM-DD`) and
 nowhere else. The push still succeeds, and says so. Its answer always carries
 `start_date`, the date in force, and when the document's differs it also
 carries `document_start_date` and `start_date_not_applied`, a sentence saying
@@ -501,7 +501,7 @@ pass logs the same fact, without the dates.
 The database holds one plan: the document under the stored selection. The
 alternatives stay in the file. `/plan` shows them all; switching there is local
 to the visitor's browser, and only the signed-in trip-keeper's **Save this
-plan** (`POST /admin/plan`, fields `opt-<option>=<choice>` and `start=`) changes
+plan** (`POST /driver/plan`, fields `opt-<option>=<choice>` and `start=`) changes
 the plan for everyone. `GET /plan.json?opt-<option>=<choice>` answers "what
 would that cost" without saving anything.
 
@@ -550,7 +550,7 @@ planning-handoff line.
 
 ## Made it to
 
-An arrival is not only a time. `POST /admin/checkpoint/<id>/arrive` takes an
+An arrival is not only a time. `POST /driver/checkpoint/<id>/arrive` takes an
 optional location — `post_id`, meaning "adopt that post's published pin"
 (the lodging photo *is* the fix), or an explicit `lat`+`lng` — and when one is
 given the checkpoint stops being a plan:
@@ -684,7 +684,7 @@ private**, so a crawler that arrives early reads the exclusions instead of a
 
 ```
 User-agent: *
-Disallow: /admin/
+Disallow: /driver/
 Disallow: /media/
 Allow: /
 ```
@@ -764,12 +764,12 @@ the photo carried and what the site published — *pin: photo GPS 34.2100,
 published exact 34.2100, -118.5000*. It is gated on `.Authed` in
 `templates/base.html` and an anonymous render never contains a raw
 coordinate. Beside it is a small **re-pin** control (`POST
-/admin/post/<id>/pin`): choose the source again from what that post still has
+/driver/post/<id>/pin`): choose the source again from what that post still has
 — its photo's GPS, its checkpoint, or no pin — with the same fuzz toggle. A
 browser fix is not re-derivable after the fact, so it is not offered; leaving
 the source alone keeps it.
 
-Beside it is **Edit** (`/admin/post/<id>/edit`), for the metadata a post can
+Beside it is **Edit** (`/driver/post/<id>/edit`), for the metadata a post can
 still be wrong about once it is up: its **kind**, its **leg**, its
 **checkpoint**, the **zone** and **time** it claims, and its words. Filed the
 lunch stop under the wrong leg, or posted a Meal as a Note — that is this
@@ -885,10 +885,10 @@ job.
 Two repository secrets: **`PUSH_TOKEN`** (the same value as the Fly secret of
 that name) and **`PRIVATE_JSON`** (the whole overlay document, keys are
 checkpoint ords). The carriage carries the token in one header and posts to
-`/admin/private` behind the same `requireAuth` as every other admin route — the
+`/driver/private` behind the same `requireAuth` as every other admin route — the
 same gate a person goes through, entered by machine, so there is no second auth
 path to get wrong. Every mode proves the credential first with a
-`GET /admin/posts.json`, which writes nothing. It does not check the repository
+`GET /driver/posts.json`, which writes nothing. It does not check the repository
 out: it talks to a running instance and has no use for the code.
 
 The workflow logs **counts, never content**. The addresses are the whole point
@@ -896,7 +896,7 @@ of the overlay and never reach a run log.
 
 ### Editing lodging from the road
 
-`/admin/lodging` is the same overlay as a form — every checkpoint's address and
+`/driver/lodging` is the same overlay as a form — every checkpoint's address and
 notes for **the ride the site is showing**, editable from the phone. It
 rewrites that ride's block and no other: an ord means nothing without its
 ride, so one ride's entries are never shown against, or overwritten by,
@@ -912,10 +912,10 @@ the directory is the one write a concurrent reader cannot catch mid-way.
 
 The carriage follows the same rule. The shape it has always sent,
 `{"checkpoints":{…}}`, replaces the first ride's block and leaves every other
-ride's alone; `POST /admin/private?ride=<slug>` replaces that ride's block;
+ride's alone; `POST /driver/private?ride=<slug>` replaces that ride's block;
 only a document that carries `"rides"` replaces the whole overlay.
 
-⚠️ The two copies can drift. A `/admin/lodging` edit does not update
+⚠️ The two copies can drift. A `/driver/lodging` edit does not update
 `PRIVATE_JSON`, and an `apply` replaces the first ride's block wholesale rather
 than merging. After editing on the road, paste the result back into the secret.
 
@@ -942,3 +942,14 @@ The Leaflet frontend is plain, dependency-free JavaScript.
 ## Licence
 
 MIT.
+
+## People and sign-in
+
+Each person signs in with a username and password. Users live in `$DATA_DIR/users.json` (bcrypt hashes, role `admin` or `editor`, created, disabled); the session cookie is signed and carries the username, and a disabled user's cookie stops working at once. There is **no self sign-up**: only an admin creates a user, at `/driver/users` (add with a password or generate one, shown once; reset; disable). Editors can post, edit, check off and plan; only admins manage users. `PUSH_TOKEN` still opens every `/driver` route except `/driver/users`.
+
+Reset a password from the machine (the old one cannot be recovered):
+
+```bash
+fly ssh console -a roadtrip-clodemode
+/app/roadtrip -set-password kris        # type the new password (10+ characters), one line, press Enter
+```

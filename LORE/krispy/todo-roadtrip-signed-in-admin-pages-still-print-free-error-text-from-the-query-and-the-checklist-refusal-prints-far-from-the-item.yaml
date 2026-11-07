@@ -17,8 +17,8 @@ entries:
   description: 'Two leftovers found while fixing the public pages in roadtrip commit d91dbf3 (the trip
     planner branch, 2026-11-06). (1) /plan and /checklist now take a short code in ?error= and print a
     fixed sentence (planRefusals, checklistRefusals). Three signed-in pages still redirect with the reason
-    in words and print whatever the query holds: the post form (/admin/post?error=), the lodging form
-    (/admin/lodging?error=) and the post edit page. They are behind requireAuth, so no anonymous visitor
+    in words and print whatever the query holds: the post form (/driver/post?error=), the lodging form
+    (/driver/lodging?error=) and the post edit page. They are behind requireAuth, so no anonymous visitor
     sees them, which is why they were out of scope; the remaining exposure is a crafted link that shows
     the signed-in trip-keeper a sentence the app never wrote, on a page that looks like the app speaking.
     Some of those messages carry request detail (a file name, a size), so a plain code table loses information

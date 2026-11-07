@@ -26,7 +26,7 @@
 #   PRIVATE_JSON     the whole overlay document, e.g.
 #                    {"checkpoints":{"3":{"address":"…","notes":"…"}}}
 #                    Keys are checkpoint ORDS. This is the canonical copy;
-#                    edit it here, or edit it at /admin/lodging and paste the
+#                    edit it here, or edit it at /driver/lodging and paste the
 #                    result back so the two do not drift. Needed for plan and
 #                    apply; census never reads it.
 #
@@ -82,13 +82,13 @@ jobs:
             echo "::error title=data::PUSH_TOKEN is not set"
             exit 1
           fi
-          # /admin/posts.json is a GET behind the same requireAuth the push
+          # /driver/posts.json is a GET behind the same requireAuth the push
           # lands behind, so a 200 here proves the credential without writing
           # anything. A 302 is the visibility gate turning away an unauthed
           # request: the token was refused, or this build predates it.
           code=$(curl -sS -o /tmp/posts.json -w '%{http_code}' \
             -H "Authorization: Bearer $PUSH_TOKEN" \
-            --max-time 30 "$SITE/admin/posts.json")
+            --max-time 30 "$SITE/driver/posts.json")
           if [ "$code" != "200" ]; then
             echo "::error title=data::the token was refused (HTTP $code) — check PUSH_TOKEN against the Fly secret"
             exit 1
@@ -208,7 +208,7 @@ jobs:
             -H "Authorization: Bearer $PUSH_TOKEN" \
             -H 'Content-Type: application/json' \
             --data-binary @/tmp/private.json \
-            --max-time 30 "$SITE/admin/private")
+            --max-time 30 "$SITE/driver/private")
           if [ "$code" != "200" ]; then
             echo "::error title=data::push returned HTTP $code"
             cat /tmp/out.json || true

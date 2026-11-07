@@ -334,9 +334,9 @@ func TestChesterRefusesAnonymous(t *testing.T) {
 	}{
 		{"GET", "/chester", http.StatusFound},
 		{"POST", "/chester/ask", http.StatusUnauthorized},
-		{"GET", "/admin/chester/log", http.StatusFound},
-		{"GET", "/admin/chester/log.json", http.StatusFound},
-		{"POST", "/admin/chester/log/1", http.StatusUnauthorized},
+		{"GET", "/driver/chester/log", http.StatusFound},
+		{"GET", "/driver/chester/log.json", http.StatusFound},
+		{"POST", "/driver/chester/log/1", http.StatusUnauthorized},
 	} {
 		for _, token := range []string{"", "0123456789abcdef0123456X"} {
 			w := send(t, app, c.method, c.target, token, "application/x-www-form-urlencoded",
@@ -344,7 +344,7 @@ func TestChesterRefusesAnonymous(t *testing.T) {
 			if w.Code != c.want {
 				t.Errorf("%s %s with token %q: status %d, want %d", c.method, c.target, token, w.Code, c.want)
 			}
-			if c.want == http.StatusFound && !strings.HasPrefix(w.Header().Get("Location"), "/admin/login") {
+			if c.want == http.StatusFound && !strings.HasPrefix(w.Header().Get("Location"), "/driver/login") {
 				t.Errorf("%s %s: sent to %q, want the sign-in page", c.method, c.target, w.Header().Get("Location"))
 			}
 			if strings.Contains(w.Body.String(), "LOG-MARKER") {
@@ -359,7 +359,7 @@ func TestChesterRefusesAnonymous(t *testing.T) {
 		t.Errorf("an anonymous request changed the log: %d row(s), verdict %q", len(rows), rows[0].Verdict)
 	}
 	// Positive control: the same requests with the token are let in.
-	if w := send(t, app, "GET", "/admin/chester/log.json", testToken, "", nil); w.Code != http.StatusOK ||
+	if w := send(t, app, "GET", "/driver/chester/log.json", testToken, "", nil); w.Code != http.StatusOK ||
 		!strings.Contains(w.Body.String(), "LOG-MARKER") {
 		t.Fatalf("the token does not open the log: status %d", w.Code)
 	}
@@ -639,7 +639,7 @@ func TestChesterQuickQuestionEndToEnd(t *testing.T) {
 	// The key is in the request header and nowhere else.
 	for name, text := range map[string]string{"the answer": w.Body.String(), "the app's log": logs.String(), "the row": js(r),
 		"the page": send(t, app, "GET", "/chester", testToken, "", nil).Body.String(),
-		"the log":  send(t, app, "GET", "/admin/chester/log.json", testToken, "", nil).Body.String()} {
+		"the log":  send(t, app, "GET", "/driver/chester/log.json", testToken, "", nil).Body.String()} {
 		if strings.Contains(text, stubKey) {
 			t.Errorf("%s carries the key", name)
 		}
@@ -660,14 +660,14 @@ func TestChesterLogPageRendersCardsAsText(t *testing.T) {
 	stub := newAPIStub(t, quickScript())
 	app := chesterApp(t, stub)
 	askEvents(t, askForm(t, app, url.Values{"preset": {"fuel"}}))
-	page := send(t, app, "GET", "/admin/chester/log", testToken, "", nil)
+	page := send(t, app, "GET", "/driver/chester/log", testToken, "", nil)
 	body := page.Body.String()
 	if page.Code != http.StatusOK {
 		t.Fatalf("log page: status %d", page.Code)
 	}
 	for _, want := range []string{"Juniper Motel", "Pump &lt;b&gt;&amp; Go&lt;/b&gt;", "Booking search", "Navigate",
 		`href="https://waze.com/ul?navigate=yes&amp;q=Juniper&#43;Motel%2C&#43;Cedar&#43;Camp%2C&#43;ZZ"`,
-		"claude-opus-5-5", "tool_use", "Not ruled", `id="q-1"`, `action="/admin/chester/log/1"`,
+		"claude-opus-5-5", "tool_use", "Not ruled", `id="q-1"`, `action="/driver/chester/log/1"`,
 		"Right", "Partly", "Wrong", "Unverified", "plus web searches at $10 per 1,000"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the log page lacks %q", want)
@@ -999,7 +999,7 @@ func TestChesterFailuresAreSaidPlainly(t *testing.T) {
 			if len(stub.requests()) != 1 {
 				t.Errorf("the API was asked %d time(s); these failures are not retried", len(stub.requests()))
 			}
-			page := send(t, app, "GET", "/admin/chester/log", testToken, "", nil).Body.String()
+			page := send(t, app, "GET", "/driver/chester/log", testToken, "", nil).Body.String()
 			if !strings.Contains(page, question) {
 				t.Error("the log page does not show the failed question")
 			}
@@ -1078,7 +1078,7 @@ func TestChesterIsToldNothingPrivate(t *testing.T) {
 	app.chester = newChester(chesterEnv(t, stub, nil))
 
 	// The private things, all really present.
-	if w := postForm(t, app, "/admin/lodging", url.Values{"address-1": {overlayMark + " 1 Invented Lane"},
+	if w := postForm(t, app, "/driver/lodging", url.Values{"address-1": {overlayMark + " 1 Invented Lane"},
 		"notes-1": {overlayMark + " gate code"}}); w.Code != http.StatusSeeOther {
 		t.Fatalf("save the overlay: status %d", w.Code)
 	}
@@ -1164,7 +1164,7 @@ func TestChesterIsToldNothingPrivate(t *testing.T) {
 			t.Errorf("%s: the row's position is %q", ask.name, r.Position())
 		}
 	}
-	export := send(t, app, "GET", "/admin/chester/log.json", testToken, "", nil).Body.String()
+	export := send(t, app, "GET", "/driver/chester/log.json", testToken, "", nil).Body.String()
 	for _, raw := range fixtureRaw {
 		if strings.Contains(export, raw) {
 			t.Errorf("the log export carries the raw private number %s", raw)
@@ -1319,12 +1319,12 @@ func logRow(t *testing.T, app *App, mode string, ms int64, usd float64) int64 {
 func TestChesterVerdictIsSavedInPlace(t *testing.T) {
 	app := chesterApp(t, newAPIStub(t))
 	id := logRow(t, app, chesterQuick, 1200, 0.01)
-	target := "/admin/chester/log/" + strconv.FormatInt(id, 10)
+	target := "/driver/chester/log/" + strconv.FormatInt(id, 10)
 
 	// From the page: one tap on a verdict, answered by a redirect to the row.
 	w := browserPost(t, app, target, url.Values{"verdict": {"partly"}, "against": {"navigation"},
 		"note": {"ten minutes out"}, "chester_value": {"50"}, "reference_value": {"40"}, "unit": {"minutes"}})
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/admin/chester/log?ok=saved#q-"+strconv.FormatInt(id, 10) {
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/driver/chester/log?ok=saved#q-"+strconv.FormatInt(id, 10) {
 		t.Fatalf("a verdict from the page: status %d, to %q", w.Code, w.Header().Get("Location"))
 	}
 	r, _ := app.store.ChesterQuery(id)
@@ -1335,7 +1335,7 @@ func TestChesterVerdictIsSavedInPlace(t *testing.T) {
 	if pct, ok := r.PctError(); !ok || !near(pct, 25) {
 		t.Errorf("50 against 40 is %v%% out, want 25", pct)
 	}
-	page := send(t, app, "GET", "/admin/chester/log?ok=saved", testToken, "", nil).Body.String()
+	page := send(t, app, "GET", "/driver/chester/log?ok=saved", testToken, "", nil).Body.String()
 	for _, want := range []string{"Verdict saved.", "Partly", "Navigation app", "ten minutes out", "50 / 40 minutes", `class="ch-tap ch-vb on"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the log page after a verdict lacks %q", want)
@@ -1359,24 +1359,24 @@ func TestChesterVerdictIsSavedInPlace(t *testing.T) {
 		chErrUnit:    {"verdict": {"right"}, "chester_value": {"5"}, "reference_value": {"4"}, "unit": {"furlongs"}},
 	} {
 		w := browserPost(t, app, target, form)
-		if want := "/admin/chester/log?error=" + code + "#q-" + strconv.FormatInt(id, 10); w.Code != http.StatusSeeOther || w.Header().Get("Location") != want {
+		if want := "/driver/chester/log?error=" + code + "#q-" + strconv.FormatInt(id, 10); w.Code != http.StatusSeeOther || w.Header().Get("Location") != want {
 			t.Errorf("%s from the page: status %d, to %q", code, w.Code, w.Header().Get("Location"))
 		}
 		if w := postForm(t, app, target, form); w.Code != http.StatusBadRequest || refusal(t, w) != chesterRefusals[code] {
 			t.Errorf("%s from curl: status %d: %s", code, w.Code, w.Body.String())
 		}
-		if page := send(t, app, "GET", "/admin/chester/log?error="+code, testToken, "", nil).Body.String(); !strings.Contains(page, "Not saved: "+html.EscapeString(chesterRefusals[code])) {
+		if page := send(t, app, "GET", "/driver/chester/log?error="+code, testToken, "", nil).Body.String(); !strings.Contains(page, "Not saved: "+html.EscapeString(chesterRefusals[code])) {
 			t.Errorf("the log page does not print the sentence for %s", code)
 		}
 	}
 	if r, _ := app.store.ChesterQuery(id); r.Verdict != "right" {
 		t.Errorf("a refused verdict changed the row to %q", r.Verdict)
 	}
-	if w := postForm(t, app, "/admin/chester/log/9999", url.Values{"verdict": {"right"}}); w.Code != http.StatusNotFound {
+	if w := postForm(t, app, "/driver/chester/log/9999", url.Values{"verdict": {"right"}}); w.Code != http.StatusNotFound {
 		t.Errorf("a verdict on a row that is not there: status %d", w.Code)
 	}
 	// A code the page does not know prints nothing of a stranger's choosing.
-	if page := send(t, app, "GET", "/admin/chester/log?error=%3Cb%3Ehello&ok=%3Ci%3E", testToken, "", nil).Body.String(); strings.Contains(page, "hello") || strings.Contains(page, "Not saved") {
+	if page := send(t, app, "GET", "/driver/chester/log?error=%3Cb%3Ehello&ok=%3Ci%3E", testToken, "", nil).Body.String(); strings.Contains(page, "hello") || strings.Contains(page, "Not saved") {
 		t.Error("the log page printed an unknown code")
 	}
 }
@@ -1385,7 +1385,7 @@ func TestChesterSummaryArithmetic(t *testing.T) {
 	app := chesterApp(t, newAPIStub(t))
 	rule := func(id int64, form url.Values) {
 		t.Helper()
-		if w := postForm(t, app, "/admin/chester/log/"+strconv.FormatInt(id, 10), form); w.Code != http.StatusOK {
+		if w := postForm(t, app, "/driver/chester/log/"+strconv.FormatInt(id, 10), form); w.Code != http.StatusOK {
 			t.Fatalf("verdict: %d %s", w.Code, w.Body.String())
 		}
 	}
@@ -1424,7 +1424,7 @@ func TestChesterSummaryArithmetic(t *testing.T) {
 	if medianMS(nil) != 0 || medianMS([]int64{7}) != 7 || medianMS([]int64{9, 1, 5, 3}) != 4 {
 		t.Error("the median is wrong")
 	}
-	page := send(t, app, "GET", "/admin/chester/log", testToken, "", nil).Body.String()
+	page := send(t, app, "GET", "/driver/chester/log", testToken, "", nil).Body.String()
 	for _, want := range []string{"6 question(s), 5 ruled, $1.61 in all", "Quick &middot; Right", "median 2.0 s",
 		"mean error 10.0% over 2 pair(s)", "Quick &middot; Wrong", "mean error 100.0% over 1 pair(s)",
 		"Plan &middot; Not ruled", "median 90.0 s", "no number pairs"} {
@@ -1440,10 +1440,10 @@ func TestChesterLogExport(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		logRow(t, app, chesterQuick, int64(1000*(i+1)), 0.01)
 	}
-	if w := send(t, app, "GET", "/admin/chester/log.json", "", "", nil); w.Code != http.StatusFound || strings.Contains(w.Body.String(), "an answer") {
+	if w := send(t, app, "GET", "/driver/chester/log.json", "", "", nil); w.Code != http.StatusFound || strings.Contains(w.Body.String(), "an answer") {
 		t.Fatalf("the export without a credential: status %d", w.Code)
 	}
-	w := send(t, app, "GET", "/admin/chester/log.json", testToken, "", nil)
+	w := send(t, app, "GET", "/driver/chester/log.json", testToken, "", nil)
 	var export struct {
 		PromptVersion string         `json:"prompt_version"`
 		Summary       chesterSummary `json:"summary"`
@@ -1462,7 +1462,7 @@ func TestChesterLogExport(t *testing.T) {
 	// While the whole site is private the same routes are still closed to a
 	// visitor, by the site's own gate.
 	app.sitePrivate = true
-	for _, p := range []string{"/chester", "/admin/chester/log", "/admin/chester/log.json"} {
+	for _, p := range []string{"/chester", "/driver/chester/log", "/driver/chester/log.json"} {
 		if w := send(t, app, "GET", p, "", "", nil); w.Code != http.StatusFound {
 			t.Errorf("%s on a private site: status %d", p, w.Code)
 		}
@@ -1489,7 +1489,7 @@ func TestChesterPageRenders(t *testing.T) {
 	for _, want := range []string{"For the passenger, or when parked.", "no live traffic", `name="mode" value="quick" checked`,
 		`name="mode" value="plan"`, ">Ask</button>", "Send my position", "Read the answer aloud", `aria-live="polite"`,
 		"/static/js/chester.js", "$0.00 of $5.00 used", "claude-opus-5-5 at low effort", "claude-opus-5-5 at medium effort",
-		`href="/admin/chester/log"`} {
+		`href="/driver/chester/log"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the page lacks %q", want)
 		}

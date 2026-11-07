@@ -411,7 +411,7 @@ func TestRobotsTxtIsOpenWhileTheSiteIsPrivate(t *testing.T) {
 		t.Errorf("Content-Type = %q, want text/plain; charset=utf-8", ct)
 	}
 	body := w.Body.String()
-	for _, want := range []string{"User-agent: *", "Disallow: /admin/", "Disallow: /media/", "Allow: /"} {
+	for _, want := range []string{"User-agent: *", "Disallow: /driver/", "Disallow: /media/", "Allow: /"} {
 		if !bytes.Contains([]byte(body), []byte(want)) {
 			t.Errorf("robots.txt is missing %q; got:\n%s", want, body)
 		}

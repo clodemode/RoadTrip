@@ -20,7 +20,7 @@ entries:
     overwritten by another''s. What is left is the second wrinkle that row named. Inside a ride''s block
     the key is still the checkpoint order. A trip file may carry options (spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06),
     and a choice that adds an overnight stop inserts a checkpoint and renumbers every checkpoint after
-    it. Saving such a selection (POST /admin/plan) leaves the overlay untouched, so an address written
+    it. Saving such a selection (POST /driver/plan) leaves the overlay untouched, so an address written
     for order 4 before the change is shown beside whatever checkpoint is order 4 after it, on the signed-in
     post form and lodging screen. Nothing reaches an anonymous page; the trip-keeper is shown a wrong
     address, and the next lodging save files it under the wrong stop for good.'
@@ -33,7 +33,7 @@ entries:
     pushes and must keep reading). Either re-key on a saved selection inside Store.ApplyPlan''s caller,
     or resolve at read time in privateData.forRide. Tests on the synthetic trip fixture: write an address
     for the stop after the optional overnight, save the choice that adds the overnight, and the address
-    is still beside the same named stop on /admin/lodging and /admin/post; saving the lodging form after
+    is still beside the same named stop on /driver/lodging and /driver/post; saving the lodging form after
     the change does not move it.'
   do_also: Until this lands, after saving a route choice that adds or removes a stop, open the lodging
     screen and check each address is beside the right stop before saving it.

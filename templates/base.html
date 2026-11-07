@@ -43,12 +43,12 @@
         <a href="/photos">Photos</a>
         <a href="/route.geojson">GeoJSON</a>
         {{if .Authed}}
-          <a href="/admin/post" class="post-link">Post</a>
+          <a href="/driver/post" class="post-link">Post</a>
           {{if .ChesterOn}}<a href="/chester">Chester</a>{{end}}
-          <a href="/admin/lodging">Lodging</a>
-          <form method="post" action="/admin/logout"><button class="linkish">Sign out</button></form>
+          <a href="/driver/lodging">Lodging</a>
+          <form method="post" action="/driver/logout"><button class="linkish">Sign out</button></form>
         {{else}}
-          <a href="/admin/login">Sign in</a>
+          <a href="/driver/login">Sign in</a>
         {{end}}
       </span>
     </nav>
@@ -59,6 +59,15 @@
     </a>
   </div>
 </header>
+{{if .Authed}}
+<nav class="driver-bar" aria-label="Driver tools">
+  <a href="/driver/post">Post photo</a>
+  {{if .ChesterOn}}<a href="/chester">Ask Chester</a>{{end}}
+  <a href="/plan">Plan</a>
+  <a href="/checklist">Checklist</a>
+  {{if .IsAdmin}}<a href="/driver/users">Users</a>{{end}}
+</nav>
+{{end}}
 
 <main>
 {{end}}
@@ -96,8 +105,8 @@
     {{/* Signed-in only. This line carries raw coordinates and never renders
          to an anonymous visitor — the {{if .Authed}} is the whole gate. */}}
     <p class="post-pin muted small">{{.PinLine}}</p>
-    <p class="post-edit"><a href="/admin/post/{{.ID}}/edit">Edit kind, leg, checkpoint, time&hellip;</a></p>
-    <form method="post" action="/admin/post/{{.ID}}/pin" class="post-repin">
+    <p class="post-edit"><a href="/driver/post/{{.ID}}/edit">Edit kind, leg, checkpoint, time&hellip;</a></p>
+    <form method="post" action="/driver/post/{{.ID}}/pin" class="post-repin">
       <input type="hidden" name="fuzz_choice" value="1">
       <label class="d-flex align-items-center gap-2 m-0">Re-pin
         <select name="pin_source" class="form-select form-select-sm">
@@ -117,7 +126,7 @@
 {{/* delete_post: the in-place confirm under a post card. No browser dialog:
      the summary opens a sentence and the form's real submit button. */}}
 {{define "delete_post"}}
-<form method="post" action="/admin/post/{{.ID}}/delete" class="post-admin">
+<form method="post" action="/driver/post/{{.ID}}/delete" class="post-admin">
   <details>
     <summary>Delete</summary>
     <div class="confirm-body">

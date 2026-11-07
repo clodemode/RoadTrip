@@ -17,7 +17,7 @@ entries:
   description: 'Found 2026-11-06 while building spec-roadtrip-trip-files-live-on-the-data-volume-with-day-level-route-options-a-planner-page-and-code-under-app-2026-11-06.
     $DATA_DIR/private.json is {"checkpoints": {"<order>": {"address", "notes"}}} (private.go). The key
     is a checkpoint order and nothing says which ride it belongs to: it was written when the site had
-    one ride. Now the active ride can change (POST /admin/ride/active). The post form (handlers.go postForm,
+    one ride. Now the active ride can change (POST /driver/ride/active). The post form (handlers.go postForm,
     addressByOrd) and the lodging form (lodgingForm, byOrd) read the overlay for whichever ride is active,
     so an entry written for order 3 of the first ride is shown beside order 3 of the next. lodgingSave
     rebuilds the whole document from the ACTIVE ride''s checkpoints, so one save on the new ride drops
@@ -37,7 +37,7 @@ entries:
     on the checkpoint feature) rather than by order. Tests: an entry for ride A is not shown on ride B''s
     forms; saving ride B''s lodging form leaves ride A''s block byte-identical; the old shape still loads.'
   do_also: Until this lands, the safe practice after activating a new ride is to push a fresh overlay
-    for it (POST /admin/private) and keep the earlier ride's overlay document somewhere off the volume.
+    for it (POST /driver/private) and keep the earlier ride's overlay document somewhere off the volume.
   effort: M
   impact: high
   triaged_at: '2026-11-06T19:54:05.833415+00:00'

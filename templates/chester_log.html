@@ -26,7 +26,7 @@
   {{else}}
   <p class="muted">No questions yet.</p>
   {{end}}
-  <p class="muted small">{{.PricesNote}} The whole log as data: <a href="/admin/chester/log.json">log.json</a> (signed in only).</p>
+  <p class="muted small">{{.PricesNote}} The whole log as data: <a href="/driver/chester/log.json">log.json</a> (signed in only).</p>
 </section>
 
 <section class="ch-log">
@@ -80,7 +80,7 @@
       {{with .VerdictNote}}<div><dt>Your note</dt><dd>{{.}}</dd></div>{{end}}
       {{end}}
     </dl>
-    <form method="post" action="/admin/chester/log/{{.ID}}" class="ch-rule">
+    <form method="post" action="/driver/chester/log/{{.ID}}" class="ch-rule">
       <details class="cl-edit">
         <summary>Add what you checked</summary>
         <div class="d-flex flex-column gap-3">

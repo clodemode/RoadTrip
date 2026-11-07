@@ -86,6 +86,9 @@ func usd4(v float64) string { return "$" + strconv.FormatFloat(v, 'f', 4, 64) }
 // answer and its cards. With no key it says so and offers nothing to press.
 func (a *App) chesterPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{"Title": "Chester", "On": a.chester != nil, "Presets": chesterPresets}
+	if q := r.URL.Query().Get("q"); len(q) <= 1000 {
+		data["Prefill"] = q // the template sets it as text
+	}
 	if a.chester != nil {
 		cfg := a.chester.cfg
 		spent, _ := a.store.ChesterSpent(time.Now())
@@ -361,7 +364,7 @@ func formNumber(r *http.Request, name string) (v *float64, ok bool) {
 	return &f, true
 }
 
-// chesterVerdict rules on one answer. POST /admin/chester/log/{id}.
+// chesterVerdict rules on one answer. POST /driver/chester/log/{id}.
 //
 //	verdict=right|partly|wrong|unverified
 //	against=navigation|booking|map|ground     what it was checked against, optional
@@ -380,7 +383,7 @@ func (a *App) chesterVerdict(w http.ResponseWriter, r *http.Request) {
 	html := wantsHTML(r)
 	refuse := func(status int, code string) {
 		if html {
-			http.Redirect(w, r, "/admin/chester/log?error="+url.QueryEscape(code)+anchor, http.StatusSeeOther)
+			http.Redirect(w, r, "/driver/chester/log?error="+url.QueryEscape(code)+anchor, http.StatusSeeOther)
 			return
 		}
 		writeJSON(w, status, map[string]any{"status": "refused", "error": chesterRefusals[code]})
@@ -439,7 +442,7 @@ func (a *App) chesterVerdict(w http.ResponseWriter, r *http.Request) {
 	// The verdict and nothing of the note.
 	log.Printf("chester: a question was ruled %s", verdict)
 	if html {
-		http.Redirect(w, r, "/admin/chester/log?ok="+chOKSaved+anchor, http.StatusSeeOther)
+		http.Redirect(w, r, "/driver/chester/log?ok="+chOKSaved+anchor, http.StatusSeeOther)
 		return
 	}
 	row, _ := a.store.ChesterQuery(id)

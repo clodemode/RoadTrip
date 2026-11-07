@@ -21,7 +21,7 @@ import (
 // The repository is public and a trip is not: where it starts, where it ends
 // and when. So a trip is not baked into the image the way seed/ is. It is one
 // GeoJSON document at $DATA_DIR/trips/<slug>.geojson, pushed by the
-// trip-keeper (POST /admin/trip), read at boot after the embedded seeds and
+// trip-keeper (POST /driver/trip), read at boot after the embedded seeds and
 // applied the moment it is pushed — a suspended machine never re-runs boot.
 //
 // The document is the seed shape plus options (see seedFile). The database
@@ -252,7 +252,7 @@ func embeddedRideSlugs() map[string]bool {
 // date lost to the saved selection's. The rule is deliberate; staying silent
 // about it was the defect.
 const startNotApplied = "the document's start date was not applied: this ride has a saved selection and its " +
-	"start date stays in force. Move the start with POST /admin/plan (start=YYYY-MM-DD)"
+	"start date stays in force. Move the start with POST /driver/plan (start=YYYY-MM-DD)"
 
 // startOverridden reports whether the plan was dated from a saved selection
 // instead of from the document that was just read.

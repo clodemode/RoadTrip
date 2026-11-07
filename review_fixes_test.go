@@ -144,7 +144,7 @@ func TestRePushReportsTheStartDateInForce(t *testing.T) {
 	if re.DocStartDate != "2030-06-10" {
 		t.Errorf("re-push: document_start_date %q, want the document's own", re.DocStartDate)
 	}
-	for _, want := range []string{"not applied", "POST /admin/plan"} {
+	for _, want := range []string{"not applied", "POST /driver/plan"} {
 		if !strings.Contains(re.StartNotApplied, want) {
 			t.Errorf("re-push: start_date_not_applied %q lacks %q", re.StartNotApplied, want)
 		}
@@ -168,9 +168,9 @@ func TestRePushReportsTheStartDateInForce(t *testing.T) {
 		t.Errorf("a log line carries a date: %s", logged.String())
 	}
 
-	// The start moves through /admin/plan. Once it has, the same document
+	// The start moves through /driver/plan. Once it has, the same document
 	// agrees with what is saved and the push has nothing to report.
-	if w := postForm(t, app, "/admin/plan", url.Values{"start": {"2030-06-10"}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/plan", url.Values{"start": {"2030-06-10"}}); w.Code != http.StatusOK {
 		t.Fatalf("moving the start: %d %s", w.Code, w.Body.String())
 	}
 	agreed := pushBodyOf(t, pushTrip(t, app, later, ""))
@@ -337,7 +337,7 @@ func TestSwappedLegLineIsRefused(t *testing.T) {
 		t.Fatalf("the shifted fixture, unswapped: status %d: %s", w.Code, w.Body.String())
 	}
 	// And a saved selection is held to it as well: it re-reads the same file.
-	if w := postForm(t, app, "/admin/plan", url.Values{"opt-day1": {"valley"}}); w.Code != http.StatusOK {
+	if w := postForm(t, app, "/driver/plan", url.Values{"opt-day1": {"valley"}}); w.Code != http.StatusOK {
 		t.Errorf("a selection on a good trip: %d %s", w.Code, w.Body.String())
 	}
 }
@@ -460,11 +460,11 @@ func TestErrorQueryPrintsOnlyFixedSentences(t *testing.T) {
 		t.Fatal(err)
 	}
 	redirects := map[string]*httptest.ResponseRecorder{
-		"/plan": browserPost(t, app, "/admin/plan", url.Values{"opt-finish": {"stopover"}}),
-		"/plan (a choice the trip does not have)":   browserPost(t, app, "/admin/plan", url.Values{"opt-day1": {"tunnel"}}),
-		"/plan (a start that is not a date)":        browserPost(t, app, "/admin/plan", url.Values{"start": {"the 2nd"}}),
-		"/checklist (a public note that is a VIN)":  browserPost(t, app, "/admin/checklist/step/inspect", url.Values{"outcome": {fixtureVIN}}),
-		"/checklist (a time that has not happened)": browserPost(t, app, "/admin/checklist/step/inspect", url.Values{"at": {"2999-01-01T00:00"}}),
+		"/plan": browserPost(t, app, "/driver/plan", url.Values{"opt-finish": {"stopover"}}),
+		"/plan (a choice the trip does not have)":   browserPost(t, app, "/driver/plan", url.Values{"opt-day1": {"tunnel"}}),
+		"/plan (a start that is not a date)":        browserPost(t, app, "/driver/plan", url.Values{"start": {"the 2nd"}}),
+		"/checklist (a public note that is a VIN)":  browserPost(t, app, "/driver/checklist/step/inspect", url.Values{"outcome": {fixtureVIN}}),
+		"/checklist (a time that has not happened)": browserPost(t, app, "/driver/checklist/step/inspect", url.Values{"at": {"2999-01-01T00:00"}}),
 	}
 	wantCode := map[string]string{
 		"/plan": planErrConflict,
@@ -502,7 +502,7 @@ func parseUTCMust(t *testing.T, s string) time.Time {
 func TestSignedInPagesAreNeverCached(t *testing.T) {
 	app := privateTextApp(t)
 	rec := httptest.NewRecorder()
-	app.auth.Issue(rec, false)
+	app.auth.Issue(rec, false, testAdminUser(t, app))
 	cookie := rec.Result().Cookies()[0]
 
 	for _, p := range []string{"/checklist", "/", "/plan", "/photos"} {
@@ -547,13 +547,13 @@ func TestSignedInPagesAreNeverCached(t *testing.T) {
 		}
 	}
 	// A signed-in admin page takes the same headers from the same place.
-	if w := send(t, app, "GET", "/admin/lodging", testToken, "", nil); w.Code != http.StatusOK ||
+	if w := send(t, app, "GET", "/driver/lodging", testToken, "", nil); w.Code != http.StatusOK ||
 		w.Header().Get("Cache-Control") != "private, no-store" {
-		t.Errorf("/admin/lodging: status %d, Cache-Control %q", w.Code, w.Header().Get("Cache-Control"))
+		t.Errorf("/driver/lodging: status %d, Cache-Control %q", w.Code, w.Header().Get("Cache-Control"))
 	}
 	// The sign-in form is an anonymous page and stays one.
-	if w := send(t, app, "GET", "/admin/login", "", "", nil); w.Header().Get("Cache-Control") != "" {
-		t.Errorf("/admin/login: Cache-Control %q on an anonymous page", w.Header().Get("Cache-Control"))
+	if w := send(t, app, "GET", "/driver/login", "", "", nil); w.Header().Get("Cache-Control") != "" {
+		t.Errorf("/driver/login: Cache-Control %q on an anonymous page", w.Header().Get("Cache-Control"))
 	}
 }
 
@@ -563,7 +563,7 @@ func TestPlanSaveAnswersInPlace(t *testing.T) {
 	app := activeTripApp(t)
 
 	// A good save: back to the line under the button, with a code.
-	rec := browserPost(t, app, "/admin/plan", url.Values{"opt-day1": {"valley"}})
+	rec := browserPost(t, app, "/driver/plan", url.Values{"opt-day1": {"valley"}})
 	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || loc != "/plan?ok=saved#plan-result" {
 		t.Fatalf("a saved plan: status %d, Location %q", rec.Code, loc)
 	}
@@ -610,7 +610,7 @@ func TestPlanSaveAnswersInPlace(t *testing.T) {
 	if err := app.store.SetArrived(finish.ID, parseUTCMust(t, "2030-05-03T22:00:00Z"), nil); err != nil {
 		t.Fatal(err)
 	}
-	rec = browserPost(t, app, "/admin/plan", url.Values{"opt-finish": {"stopover"}})
+	rec = browserPost(t, app, "/driver/plan", url.Values{"opt-finish": {"stopover"}})
 	loc := rec.Header().Get("Location")
 	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, "/plan?") || !strings.HasSuffix(loc, "#plan-result") {
 		t.Fatalf("a refused save: status %d, Location %q", rec.Code, loc)
@@ -631,7 +631,7 @@ func TestPlanSaveAnswersInPlace(t *testing.T) {
 		t.Errorf("a refused save was stored: %+v", sel)
 	}
 	// curl is not given a code: it gets the reason, in full.
-	if w := postForm(t, app, "/admin/plan", url.Values{"opt-finish": {"stopover"}}); w.Code != http.StatusConflict ||
+	if w := postForm(t, app, "/driver/plan", url.Values{"opt-finish": {"stopover"}}); w.Code != http.StatusConflict ||
 		!strings.Contains(w.Body.String(), "checkpoint 5 is arrived") {
 		t.Errorf("curl's refusal: status %d: %s", w.Code, w.Body.String())
 	}

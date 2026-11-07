@@ -17,16 +17,16 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Session auth, carried over from EagleLakeRocks: one bcrypt password from
-// the environment, an HMAC-signed expiry cookie, no user table. There is one
-// author on this ride.
+// Session auth: a small users file on the volume (users.go), an HMAC-signed
+// cookie that carries the username and an expiry, and the fixed PUSH_TOKEN for
+// machines. There is no self sign-up: only an admin creates a user.
 
 const sessionCookie = "rt_session"
 const sessionTTL = 30 * 24 * time.Hour
 
 type Auth struct {
-	passwordHash []byte // bcrypt, from ADMIN_PASSWORD_HASH
-	signingKey   []byte // from SESSION_KEY, or random per-boot
+	users      *userStore
+	signingKey []byte // from SESSION_KEY, or random per-boot
 	// pushToken is PUSH_TOKEN: one fixed credential a machine can carry in a
 	// header instead of holding a session. It exists because the cookie is a
 	// person's credential — it needs a sign-in round trip and the plaintext
@@ -34,15 +34,14 @@ type Auth struct {
 	// arrival) are run from curl and from a workflow that has no browser.
 	// Unset is the default and means the header path does not exist at all.
 	pushToken []byte
-	enabled   bool
+	// seedHash is ADMIN_PASSWORD_HASH: only used once, to seed user "kris"
+	// when there is no users file yet.
+	seedHash string
 }
 
 func NewAuth() *Auth {
-	a := &Auth{}
-	if h := os.Getenv("ADMIN_PASSWORD_HASH"); h != "" {
-		a.passwordHash = []byte(h)
-		a.enabled = true
-	}
+	a := &Auth{users: newUserStore("")}
+	a.seedHash = os.Getenv("ADMIN_PASSWORD_HASH")
 	if t := os.Getenv("PUSH_TOKEN"); t != "" {
 		a.pushToken = []byte(t)
 	}
@@ -58,11 +57,16 @@ func NewAuth() *Auth {
 	return a
 }
 
-func (a *Auth) Check(password string) bool {
-	if !a.enabled {
+// enabled reports whether anyone can sign in at all.
+func (a *Auth) enabled() bool { return a.users.anyActive() }
+
+// Check verifies a username and password against an active user.
+func (a *Auth) Check(username, password string) bool {
+	u, ok := a.users.get(username)
+	if !ok || u.Disabled {
 		return false
 	}
-	return bcrypt.CompareHashAndPassword(a.passwordHash, []byte(password)) == nil
+	return bcrypt.CompareHashAndPassword([]byte(u.Hash), []byte(password)) == nil
 }
 
 func (a *Auth) sign(payload string) string {
@@ -71,9 +75,11 @@ func (a *Auth) sign(payload string) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-func (a *Auth) Issue(w http.ResponseWriter, secure bool) {
+// Issue sets the session cookie for username. The payload is "<exp>.<user>";
+// usernames never contain a dot (validUsername).
+func (a *Auth) Issue(w http.ResponseWriter, secure bool, username string) {
 	exp := time.Now().Add(sessionTTL).Unix()
-	payload := strconv.FormatInt(exp, 10)
+	payload := strconv.FormatInt(exp, 10) + "." + username
 	val := base64.RawURLEncoding.EncodeToString([]byte(payload + "." + a.sign(payload)))
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: val, Path: "/", HttpOnly: true,
@@ -83,6 +89,42 @@ func (a *Auth) Issue(w http.ResponseWriter, secure bool) {
 
 func (a *Auth) Clear(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1})
+}
+
+// sessionUser returns the active user a valid cookie names.
+func (a *Auth) sessionUser(r *http.Request) (User, bool) {
+	c, err := r.Cookie(sessionCookie)
+	if err != nil {
+		return User{}, false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(c.Value)
+	if err != nil {
+		return User{}, false
+	}
+	parts := strings.SplitN(string(raw), ".", 3)
+	if len(parts) != 3 {
+		return User{}, false
+	}
+	payload := parts[0] + "." + parts[1]
+	if subtle.ConstantTimeCompare([]byte(a.sign(payload)), []byte(parts[2])) != 1 {
+		return User{}, false
+	}
+	exp, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || time.Now().Unix() >= exp {
+		return User{}, false
+	}
+	u, ok := a.users.get(parts[1])
+	if !ok || u.Disabled {
+		return User{}, false
+	}
+	return u, true
+}
+
+// IsAdmin reports whether the request carries an admin's session. The push
+// token is a machine credential, not a person, and is never an admin here.
+func (a *Auth) IsAdmin(r *http.Request) bool {
+	u, ok := a.sessionUser(r)
+	return ok && u.Role == roleAdmin
 }
 
 // pushAuthed reports whether the request carries the fixed push token as
@@ -110,23 +152,8 @@ func (a *Auth) IsAuthed(r *http.Request) bool {
 	if a.pushAuthed(r) {
 		return true
 	}
-	c, err := r.Cookie(sessionCookie)
-	if err != nil {
-		return false
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(c.Value)
-	if err != nil {
-		return false
-	}
-	parts := strings.SplitN(string(raw), ".", 2)
-	if len(parts) != 2 {
-		return false
-	}
-	if subtle.ConstantTimeCompare([]byte(a.sign(parts[0])), []byte(parts[1])) != 1 {
-		return false
-	}
-	exp, err := strconv.ParseInt(parts[0], 10, 64)
-	return err == nil && time.Now().Unix() < exp
+	_, ok := a.sessionUser(r)
+	return ok
 }
 
 // HashPassword is the helper behind `roadtrip -hash <password>`, so an

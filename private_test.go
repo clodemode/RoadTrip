@@ -29,7 +29,7 @@ func TestLodgingSaveWritesOverlay(t *testing.T) {
 		"address-" + itoa(cp.Ord): {"1 Example Ridge Loop"},
 		"notes-" + itoa(cp.Ord):   {"cabin behind the store"},
 	}
-	req := httptest.NewRequest("POST", "/admin/lodging", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest("POST", "/driver/lodging", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	app.lodgingSave(w, req)
@@ -68,7 +68,7 @@ func TestLodgingSaveBlankRemovesEntry(t *testing.T) {
 		t.Fatalf("seed overlay: %v", err)
 	}
 
-	req := httptest.NewRequest("POST", "/admin/lodging",
+	req := httptest.NewRequest("POST", "/driver/lodging",
 		strings.NewReader(url.Values{"address-" + itoa(cp.Ord): {"  "}}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	app.lodgingSave(httptest.NewRecorder(), req)
@@ -90,7 +90,7 @@ func TestLodgingFormRenders(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	app.lodgingForm(w, httptest.NewRequest("GET", "/admin/lodging", nil))
+	app.lodgingForm(w, httptest.NewRequest("GET", "/driver/lodging", nil))
 	if w.Code != 200 {
 		t.Fatalf("status %d, want 200", w.Code)
 	}
@@ -107,7 +107,7 @@ func TestLodgingFormRenders(t *testing.T) {
 
 func pushOverlay(t *testing.T, app *App, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest("POST", "/admin/private", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/driver/private", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	app.privatePush(w, req)
@@ -257,7 +257,7 @@ func TestOverlayOldShapeBelongsToTheFirstRideOnly(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(app.dataDir, privateFile), []byte(old), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	screens := []string{"/admin/post", "/admin/lodging"}
+	screens := []string{"/driver/post", "/driver/lodging"}
 
 	// The second ride is showing: its checkpoints 1 and 2 are not the first
 	// ride's, and the first ride's text is on neither screen.
@@ -271,14 +271,14 @@ func TestOverlayOldShapeBelongsToTheFirstRideOnly(t *testing.T) {
 		}
 	}
 	// The first ride is showing again: the old shape is its overlay, as before.
-	if w := postForm(t, app, "/admin/ride/active", url.Values{"clear": {"1"}}); w.Code != 200 {
+	if w := postForm(t, app, "/driver/ride/active", url.Values{"clear": {"1"}}); w.Code != 200 {
 		t.Fatalf("clear the active ride: %d", w.Code)
 	}
-	lodging := send(t, app, "GET", "/admin/lodging", testToken, "", nil).Body.String()
+	lodging := send(t, app, "GET", "/driver/lodging", testToken, "", nil).Body.String()
 	if !strings.Contains(lodging, first1) || !strings.Contains(lodging, first2) {
 		t.Error("the old overlay shape no longer reads as the first ride's")
 	}
-	if post := send(t, app, "GET", "/admin/post", testToken, "", nil).Body.String(); !strings.Contains(post, first1) {
+	if post := send(t, app, "GET", "/driver/post", testToken, "", nil).Body.String(); !strings.Contains(post, first1) {
 		t.Error("the post form lost the first ride's address")
 	}
 }
@@ -296,7 +296,7 @@ func TestOverlayOneRidesTextNeverRendersOnAnother(t *testing.T) {
 	firstBlock := string(overlayOnDisk(t, app)["checkpoints"])
 
 	// Save the lodging form while the SECOND ride is showing.
-	if w := postForm(t, app, "/admin/lodging", url.Values{"address-1": {secondText}, "notes-2": {"OVERLAY-SECOND-RIDE side door"}}); w.Code != 303 ||
+	if w := postForm(t, app, "/driver/lodging", url.Values{"address-1": {secondText}, "notes-2": {"OVERLAY-SECOND-RIDE side door"}}); w.Code != 303 ||
 		strings.Contains(w.Header().Get("Location"), "error=") {
 		t.Fatalf("save lodging on the second ride: status %d, Location %q", w.Code, w.Header().Get("Location"))
 	}
@@ -319,7 +319,7 @@ func TestOverlayOneRidesTextNeverRendersOnAnother(t *testing.T) {
 		t.Errorf("a ride with no block was handed %+v", other)
 	}
 
-	screens := []string{"/admin/post", "/admin/lodging"}
+	screens := []string{"/driver/post", "/driver/lodging"}
 	for _, p := range screens {
 		body := send(t, app, "GET", p, testToken, "", nil).Body.String()
 		if !strings.Contains(body, secondText) {
@@ -329,7 +329,7 @@ func TestOverlayOneRidesTextNeverRendersOnAnother(t *testing.T) {
 			t.Errorf("%s on the second ride shows the first ride's private text", p)
 		}
 	}
-	if w := postForm(t, app, "/admin/ride/active", url.Values{"clear": {"1"}}); w.Code != 200 {
+	if w := postForm(t, app, "/driver/ride/active", url.Values{"clear": {"1"}}); w.Code != 200 {
 		t.Fatalf("clear the active ride: %d", w.Code)
 	}
 	for _, p := range screens {
@@ -344,7 +344,7 @@ func TestOverlayOneRidesTextNeverRendersOnAnother(t *testing.T) {
 	// Saving the FIRST ride's form leaves the second ride's block alone, and
 	// keeps the first ride's block where the carriage has always put it.
 	secondBlock := string(disk["rides"])
-	if w := postForm(t, app, "/admin/lodging", url.Values{"address-1": {"OVERLAY-FIRST-RIDE moved"}}); w.Code != 303 {
+	if w := postForm(t, app, "/driver/lodging", url.Values{"address-1": {"OVERLAY-FIRST-RIDE moved"}}); w.Code != 303 {
 		t.Fatalf("save lodging on the first ride: %d", w.Code)
 	}
 	disk = overlayOnDisk(t, app)
@@ -368,7 +368,7 @@ func TestOverlayOneRidesTextNeverRendersOnAnother(t *testing.T) {
 func TestPrivatePushIsPerRide(t *testing.T) {
 	app := activeTripApp(t)
 	push := func(query, body string) *httptest.ResponseRecorder {
-		return send(t, app, "POST", "/admin/private"+query, testToken, "application/json", []byte(body))
+		return send(t, app, "POST", "/driver/private"+query, testToken, "application/json", []byte(body))
 	}
 	if w := push("?ride="+fixtureSlug, `{"checkpoints":{"2":{"address":"OVERLAY-SECOND-RIDE dock"}}}`); w.Code != 200 ||
 		!strings.Contains(w.Body.String(), `"checkpoints":1`) {

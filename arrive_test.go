@@ -42,7 +42,7 @@ func stageSeed(t *testing.T, app *App) string {
 // arrive posts to the arrive route the way the form and curl both do.
 func arrive(t *testing.T, app *App, id int64, form url.Values) *httptest.ResponseRecorder {
 	t.Helper()
-	target := "/admin/checkpoint/" + strconv.FormatInt(id, 10) + "/arrive"
+	target := "/driver/checkpoint/" + strconv.FormatInt(id, 10) + "/arrive"
 	req := httptest.NewRequest("POST", target, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetPathValue("id", strconv.FormatInt(id, 10))

@@ -67,6 +67,8 @@ func localFmt(utc, tz, layout string) string {
 
 func (a *App) funcs() template.FuncMap {
 	return template.FuncMap{
+		"waze":       func(name string, lat, lng float64) string { return wazeLink(name, lat, lng) },
+		"askChester": askChesterLink,
 		"json": func(v any) template.JS {
 			b, err := json.Marshal(v)
 			if err != nil {
@@ -128,7 +130,7 @@ func (a *App) routes() http.Handler {
 	// been indexed cannot be un-indexed on the day someone changes their mind.
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = io.WriteString(w, "User-agent: *\nDisallow: /admin/\nDisallow: /media/\nAllow: /\n")
+		_, _ = io.WriteString(w, "User-agent: *\nDisallow: /driver/\nDisallow: /media/\nAllow: /\n")
 	})
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -149,41 +151,47 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /checklist", a.checklistPage)
 	mux.HandleFunc("GET /checklist.json", a.checklistJSON)
 
-	mux.HandleFunc("GET /admin/login", a.loginForm)
-	mux.HandleFunc("POST /admin/login", a.loginSubmit)
-	mux.HandleFunc("POST /admin/logout", a.logout)
-	mux.Handle("GET /admin/post", a.requireAuth(a.postForm))
-	mux.Handle("POST /admin/post", a.requireAuth(a.postCreate))
-	mux.Handle("POST /admin/checkpoint/{id}/arrive", a.requireAuth(a.checkpointArrive))
-	mux.Handle("POST /admin/post/{id}/delete", a.requireAuth(a.postDelete))
+	mux.HandleFunc("GET /driver/login", a.loginForm)
+	mux.HandleFunc("POST /driver/login", a.loginSubmit)
+	mux.HandleFunc("POST /driver/logout", a.logout)
+	mux.Handle("GET /driver", a.requireAuth(a.driverHome))
+	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
+	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
+	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))
+	mux.Handle("POST /driver/users/{name}/disable", a.requireAdmin(a.usersDisable))
+	mux.Handle("POST /driver/users/{name}/enable", a.requireAdmin(a.usersEnable))
+	mux.Handle("GET /driver/post", a.requireAuth(a.postForm))
+	mux.Handle("POST /driver/post", a.requireAuth(a.postCreate))
+	mux.Handle("POST /driver/checkpoint/{id}/arrive", a.requireAuth(a.checkpointArrive))
+	mux.Handle("POST /driver/post/{id}/delete", a.requireAuth(a.postDelete))
 	// The census: every post, for finding duplicates the road left behind.
-	mux.Handle("GET /admin/posts.json", a.requireAuth(a.postsJSON))
-	mux.Handle("POST /admin/post/{id}/pin", a.requireAuth(a.postRepin))
-	mux.Handle("GET /admin/post/{id}/edit", a.requireAuth(a.postEditForm))
-	mux.Handle("POST /admin/post/{id}/edit", a.requireAuth(a.postEditSave))
-	mux.Handle("GET /admin/lodging", a.requireAuth(a.lodgingForm))
-	mux.Handle("POST /admin/lodging", a.requireAuth(a.lodgingSave))
+	mux.Handle("GET /driver/posts.json", a.requireAuth(a.postsJSON))
+	mux.Handle("POST /driver/post/{id}/pin", a.requireAuth(a.postRepin))
+	mux.Handle("GET /driver/post/{id}/edit", a.requireAuth(a.postEditForm))
+	mux.Handle("POST /driver/post/{id}/edit", a.requireAuth(a.postEditSave))
+	mux.Handle("GET /driver/lodging", a.requireAuth(a.lodgingForm))
+	mux.Handle("POST /driver/lodging", a.requireAuth(a.lodgingSave))
 	// The data carriage's landing point. Same admin session as every other
-	// /admin route — the carriage signs in the way a person does, so there is
+	// /driver route — the carriage signs in the way a person does, so there is
 	// no second credential and no second auth path to get wrong.
-	mux.Handle("POST /admin/private", a.requireAuth(a.privatePush))
+	mux.Handle("POST /driver/private", a.requireAuth(a.privatePush))
 	// The trip carriage and its switches: a trip document onto the volume,
 	// which ride the site shows, and the saved selection. Same gate as above.
-	mux.Handle("POST /admin/trip", a.requireAuth(a.tripPush))
-	mux.Handle("POST /admin/ride/active", a.requireAuth(a.rideActivate))
-	mux.Handle("GET /admin/rides.json", a.requireAuth(a.ridesJSON))
-	mux.Handle("POST /admin/plan", a.requireAuth(a.planSave))
+	mux.Handle("POST /driver/trip", a.requireAuth(a.tripPush))
+	mux.Handle("POST /driver/ride/active", a.requireAuth(a.rideActivate))
+	mux.Handle("GET /driver/rides.json", a.requireAuth(a.ridesJSON))
+	mux.Handle("POST /driver/plan", a.requireAuth(a.planSave))
 	// The checklist carriage, its signed-in census, and the check-off.
-	mux.Handle("POST /admin/checklist", a.requireAuth(a.checklistPush))
-	mux.Handle("GET /admin/checklist.json", a.requireAuth(a.checklistCensus))
-	mux.Handle("POST /admin/checklist/{kind}/{id}", a.requireAuth(a.checklistMark))
+	mux.Handle("POST /driver/checklist", a.requireAuth(a.checklistPush))
+	mux.Handle("GET /driver/checklist.json", a.requireAuth(a.checklistCensus))
+	mux.Handle("POST /driver/checklist/{kind}/{id}", a.requireAuth(a.checklistMark))
 	// Chester, the en-route helper, and its log. Signed in only, every one:
 	// a question spends money and the log is the trip-keeper's own.
 	mux.Handle("GET /chester", a.requireAuth(a.chesterPage))
 	mux.Handle("POST /chester/ask", a.requireAuth(a.chesterAsk))
-	mux.Handle("GET /admin/chester/log", a.requireAuth(a.chesterLog))
-	mux.Handle("GET /admin/chester/log.json", a.requireAuth(a.chesterLogJSON))
-	mux.Handle("POST /admin/chester/log/{id}", a.requireAuth(a.chesterVerdict))
+	mux.Handle("GET /driver/chester/log", a.requireAuth(a.chesterLog))
+	mux.Handle("GET /driver/chester/log.json", a.requireAuth(a.chesterLogJSON))
+	mux.Handle("POST /driver/chester/log/{id}", a.requireAuth(a.chesterVerdict))
 
 	return logRequests(a.canonicalHost(a.visibility(mux)))
 }
@@ -202,7 +210,7 @@ func (a *App) routes() http.Handler {
 var visibilityOpen = map[string]bool{
 	"/healthz":                 true,
 	"/robots.txt":              true,
-	"/admin/login":             true,
+	"/driver/login":            true,
 	"/static/css/app.css":      true,
 	"/static/img/creature.svg": true,
 }
@@ -221,7 +229,7 @@ func (a *App) visibility(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
-		http.Redirect(w, r, "/admin/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
+		http.Redirect(w, r, "/driver/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
 	})
 }
 
@@ -279,11 +287,23 @@ func logRequests(h http.Handler) http.Handler {
 	})
 }
 
+// requireAdmin is requireAuth plus a role check: a signed-in editor, and the
+// push token (a machine, not a person), get a 403.
+func (a *App) requireAdmin(next http.HandlerFunc) http.Handler {
+	return a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if !a.auth.IsAdmin(r) {
+			http.Error(w, "admins only", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	})
+}
+
 func (a *App) requireAuth(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.auth.IsAuthed(r) {
 			if r.Method == http.MethodGet {
-				http.Redirect(w, r, "/admin/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
+				http.Redirect(w, r, "/driver/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
 				return
 			}
 			http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -335,6 +355,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	data["V"] = a.assetV
 	authed := a.auth.IsAuthed(r)
 	data["Authed"] = authed
+	data["IsAdmin"] = a.auth.IsAdmin(r)
 	if authed {
 		// Every page goes through here, and this is where the session is known.
 		// A signed-in page is served on the SAME address a visitor uses and can
@@ -406,6 +427,7 @@ func (a *App) loadRide() (*rideView, error) {
 		return nil, err
 	}
 	followArrivals(legs)
+	markCheckpoints(legs)
 	return &rideView{Ride: ride, Legs: legs}, nil
 }
 
@@ -673,6 +695,7 @@ type legJS struct {
 type cpJS struct {
 	ID        int64   `json:"id"`
 	Ord       int     `json:"ord"`
+	Mark      string  `json:"mark"`
 	Name      string  `json:"name"`
 	Label     string  `json:"label"`
 	Lat       float64 `json:"lat"`
@@ -750,7 +773,7 @@ func buildMap(legs []Leg, posts []Post, tracks map[int64][][]float64, planned ma
 			} else if c.PlannedDepart != "" {
 				planned = "depart " + localFmt(c.PlannedDepart, c.TZ, fmtClock)
 			}
-			m.Checkpoints = append(m.Checkpoints, cpJS{ID: c.ID, Ord: c.Ord, Name: c.Name, Label: c.Label,
+			m.Checkpoints = append(m.Checkpoints, cpJS{ID: c.ID, Ord: c.Ord, Mark: c.Mark, Name: c.Name, Label: c.Label,
 				Lat: c.Lat, Lng: c.Lng, TZ: c.TZ, Precision: c.Precision, LegSlug: l.Slug,
 				Planned: planned, Arrived: localFmt(c.ArrivedAt, c.TZ, fmtLocal)})
 		}
@@ -1003,7 +1026,7 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 			// arrive route is keyed by id, and ord is not it.
 			p := map[string]any{"kind": "checkpoint", "id": c.ID, "order": c.Ord, "name": c.Name,
 				"label": c.Label, "leg": l.Ord, "tz": c.TZ, "precision": c.Precision,
-				"is_terminal": c.IsTerminal}
+				"is_terminal": c.IsTerminal, "mark": c.Mark}
 			if c.PlannedArrive != "" {
 				p["planned_arrive"] = c.PlannedArrive
 			}
@@ -1071,8 +1094,8 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) loginForm(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{"Title": "Sign in", "Next": r.URL.Query().Get("next")}
-	if !a.auth.enabled {
-		data["Error"] = "Posting is disabled: ADMIN_PASSWORD_HASH is not set on the server."
+	if !a.auth.enabled() {
+		data["Error"] = "Posting is disabled: no users exist on the server."
 	}
 	a.render(w, r, "login.html", data)
 }
@@ -1082,16 +1105,17 @@ func (a *App) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", 400)
 		return
 	}
-	if !a.auth.Check(r.PostFormValue("password")) {
+	username := strings.ToLower(strings.TrimSpace(r.PostFormValue("username")))
+	if !a.auth.Check(username, r.PostFormValue("password")) {
 		w.WriteHeader(http.StatusUnauthorized)
-		a.render(w, r, "login.html", map[string]any{"Title": "Sign in", "Error": "Incorrect password.",
+		a.render(w, r, "login.html", map[string]any{"Title": "Sign in", "Error": "Incorrect username or password.",
 			"Next": r.PostFormValue("next")})
 		return
 	}
-	a.auth.Issue(w, a.secure)
+	a.auth.Issue(w, a.secure, username)
 	next := r.PostFormValue("next")
 	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
-		next = "/admin/post"
+		next = "/driver"
 	}
 	http.Redirect(w, r, next, http.StatusFound)
 }
@@ -1364,7 +1388,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fail := func(msg string) {
-		http.Redirect(w, r, "/admin/post?error="+url.QueryEscape(msg), http.StatusSeeOther)
+		http.Redirect(w, r, "/driver/post?error="+url.QueryEscape(msg), http.StatusSeeOther)
 	}
 	// Slack above the photo cap for the text fields and multipart framing.
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+(1<<20))
@@ -1644,7 +1668,7 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 	default:
 		log.Printf("checkpoint %d (%s): arrived%s, location adopted → precision exact", cp.Ord, cp.Name, when)
 	}
-	http.Redirect(w, r, backTo(r, "/admin/post"), http.StatusSeeOther)
+	http.Redirect(w, r, backTo(r, "/driver/post"), http.StatusSeeOther)
 }
 
 // --- the census ------------------------------------------------------------------
@@ -1657,7 +1681,7 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 // finds a duplicate: the same photo.id or sha256 twice, or two rows whose
 // taken_at is seconds apart.
 //
-// It is behind requireAuth like every other /admin route, so with the push
+// It is behind requireAuth like every other /driver route, so with the push
 // token it is one curl away and with neither credential it does not exist.
 
 type censusPhoto struct {
@@ -1843,7 +1867,7 @@ func (a *App) lodgingSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fail := func(msg string) {
-		http.Redirect(w, r, "/admin/lodging?error="+url.QueryEscape(msg), http.StatusSeeOther)
+		http.Redirect(w, r, "/driver/lodging?error="+url.QueryEscape(msg), http.StatusSeeOther)
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxPrivateBytes)
 	if err := r.ParseForm(); err != nil {
@@ -1881,7 +1905,7 @@ func (a *App) lodgingSave(w http.ResponseWriter, r *http.Request) {
 	// whole point of the overlay is that the addresses stay out of surfaces
 	// like it.
 	log.Printf("lodging: overlay saved for the active ride, %d checkpoint(s) carry detail", len(block))
-	http.Redirect(w, r, "/admin/lodging?saved=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/driver/lodging?saved=1", http.StatusSeeOther)
 }
 
 // privatePush is the data carriage's landing point: the overlay as one JSON
@@ -2085,7 +2109,7 @@ func (a *App) postEditSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "database error", 500)
 		return
 	}
-	self := "/admin/post/" + strconv.FormatInt(id, 10) + "/edit"
+	self := "/driver/post/" + strconv.FormatInt(id, 10) + "/edit"
 	fail := func(msg string) {
 		http.Redirect(w, r, self+"?error="+url.QueryEscape(msg), http.StatusSeeOther)
 	}

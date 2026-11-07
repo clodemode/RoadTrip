@@ -70,6 +70,10 @@ type Checkpoint struct {
 	PlannedArrive string  `json:"planned_arrive,omitempty"` // RFC3339 UTC or ""
 	PlannedDepart string  `json:"planned_depart,omitempty"`
 	ArrivedAt     string  `json:"arrived_at,omitempty"`
+	// Mark is the label a map pin and a list row carry: the leg number for a
+	// day-leg end, a letter (A, B, C…) for a landmark or milestone. Numbers are
+	// reserved for driving days. Set by markCheckpoints, never stored.
+	Mark string `json:"-"`
 }
 
 // Checkpoint precision. "fuzzed" is the privacy seam: the store snaps such a
@@ -1360,7 +1364,7 @@ func parseSeed(path, defaultSlug string) (*seedData, error) {
 // re-pushed document that dropped one of its choices.
 //
 // A selection's start date WINS over the document's, the same way its choices
-// do: the trip-keeper moved the departure with POST /admin/plan, and a
+// do: the trip-keeper moved the departure with POST /driver/plan, and a
 // document pushed again afterwards must not quietly move it back. The
 // document's own start is kept in DocStartDate so the push can report that it
 // was not applied.
@@ -2061,4 +2065,31 @@ func (s *Store) Rides() ([]RideCensus, error) {
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// markCheckpoints sets every checkpoint's Mark, walking the ride in order:
+// a terminal checkpoint carries its leg's number; any other takes the next
+// letter. Call it wherever legs are loaded for a page.
+func markCheckpoints(legs []Leg) {
+	n := 0
+	for i := range legs {
+		for j := range legs[i].Checkpoints {
+			c := &legs[i].Checkpoints[j]
+			if c.IsTerminal {
+				c.Mark = strconv.Itoa(legs[i].Ord)
+			} else {
+				c.Mark = letterMark(n)
+				n++
+			}
+		}
+	}
+}
+
+// letterMark is A..Z, then AA, AB, … like a spreadsheet column.
+func letterMark(n int) string {
+	s := ""
+	for n++; n > 0; n = (n - 1) / 26 {
+		s = string(rune('A'+(n-1)%26)) + s
+	}
+	return s
 }

@@ -32,12 +32,12 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 5. **Timezones are per-event, never per-ride.** Store UTC plus the IANA zone. A ride-wide zone misprints every stamp after the first state line.
 6. **`Deploy` is `workflow_dispatch` only, and `plan` is the default.** Never add a push trigger — the site is live under someone's thumb from a car.
 7. **The repo is PUBLIC** (`clodemode/RoadTrip`, CamelCaps = public under `naming-clodemode-repo-case-signals-visibility`). Do not treat it as publishable without an explicit ruling.
-8. **A new trip is never added to `seed/`.** It is a file on the volume, `$DATA_DIR/trips/<slug>.geojson`, pushed with `POST /admin/trip` and shown once `POST /admin/ride/active` names it. Fixtures are synthetic and live in `testdata/`; `guard_test.go` fails on a trip document anywhere else, and on a missing `data/` or planning-handoff line in `.gitignore` / `.dockerignore`.
+8. **A new trip is never added to `seed/`.** It is a file on the volume, `$DATA_DIR/trips/<slug>.geojson`, pushed with `POST /driver/trip` and shown once `POST /driver/ride/active` names it. Fixtures are synthetic and live in `testdata/`; `guard_test.go` fails on a trip document anywhere else, and on a missing `data/` or planning-handoff line in `.gitignore` / `.dockerignore`.
 9. **`RIDE_SLUG` is only the fallback.** The ride the site shows is `App.activeSlug()`, read from the `meta` table per request. Never read `a.rideSlug` to decide what to render.
 10. **A plan change never reaches an arrived checkpoint, a post or a photo.** `Store.planConflicts` refuses it whole. Do not add a path that re-plans a trip with options around `Store.ApplyPlan`.
 
 11. **A checklist's private text is read in one place.** `Store.Checklist(slug, withPrivate)` does not select the private columns unless asked, and the page asks only for a signed-in request. `/checklist.json` never asks. Do not add a read of `checklist_items.private` or `private_note` beside it, and do not log a note or a refused value: a refusal names the field.
-12. **A checklist document is never in the repo.** It is `$DATA_DIR/trips/<slug>.checklist.json`, pushed with `POST /admin/checklist`. `guard_test.go` fails on a `*.checklist.json`, or anything shaped like one, outside a synthetic fixture in `testdata/`. A re-push never writes a done step or an answered question (`Store.ApplyChecklist`).
+12. **A checklist document is never in the repo.** It is `$DATA_DIR/trips/<slug>.checklist.json`, pushed with `POST /driver/checklist`. `guard_test.go` fails on a `*.checklist.json`, or anything shaped like one, outside a synthetic fixture in `testdata/`. A re-push never writes a done step or an answered question (`Store.ApplyChecklist`).
 
 13. **Chester spends money and talks to a third party.** Every Chester route is behind `requireAuth`; keep it that way. The key is `ANTHROPIC_API_KEY`, a Fly secret the operator sets: it is read once into `chesterConfig`, never logged, rendered or committed, and `guard_test.go` fails on anything shaped like a key in the tree. What the API is told is built in one place, `App.chesterContext`, and its one coordinate comes out of `publishPosition`; do not add the private overlay, a checklist's private text or a raw point to it. The model is a setting per mode (`CHESTER_MODEL_QUICK`, `CHESTER_MODEL_PLAN`), never a constant in a request. Change the prompt, the context block or the tool and `chesterPromptVersion` changes with it.
 14. **No test, and no agent, calls the real API.** Chester's tests stub the Messages API at the SDK's HTTP boundary (`apiStub` in `chester_test.go`). A live question is asked only with the operator's key on a running instance, and it costs money.
@@ -47,9 +47,9 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 | Path | What |
 |---|---|
 | `main.go`, `store.go`, `handlers.go`, `auth.go`, `photo.go`, `private.go` | the whole app — Go sources at the repo root, no code subdirectory |
-| `trip.go`, `plan_handlers.go`, `convert.go` | trips on the volume and the planner: the trip file and its options, `/plan`, `/admin/trip`, `/admin/plan`, `/admin/ride/active`, and the `-convert` flag |
-| `checklist.go`, `checklist_handlers.go` | a trip's checklist: the document and its checks, the store seam for private text, `/checklist`, `/checklist.json`, `/admin/checklist`, `/admin/checklist.json`, and the check-off at `/admin/checklist/{step\|question}/{id}` |
-| `chester.go`, `chester_handlers.go` | Chester, the en-route helper: settings, the price table, what the API is told, the place cards, the one request, the log and its summary; `/chester`, `/chester/ask`, `/admin/chester/log`, `/admin/chester/log.json`, `/admin/chester/log/{id}` |
+| `trip.go`, `plan_handlers.go`, `convert.go` | trips on the volume and the planner: the trip file and its options, `/plan`, `/driver/trip`, `/driver/plan`, `/driver/ride/active`, and the `-convert` flag |
+| `checklist.go`, `checklist_handlers.go` | a trip's checklist: the document and its checks, the store seam for private text, `/checklist`, `/checklist.json`, `/driver/checklist`, `/driver/checklist.json`, and the check-off at `/driver/checklist/{step\|question}/{id}` |
+| `chester.go`, `chester_handlers.go` | Chester, the en-route helper: settings, the price table, what the API is told, the place cards, the one request, the log and its summary; `/chester`, `/chester/ask`, `/driver/chester/log`, `/driver/chester/log.json`, `/driver/chester/log/{id}` |
 | `seed/*.geojson` | RWGPS-import shape: one `LineString` per leg; `Point` features `kind=checkpoint` (each with its own `tz`) and `kind=candidate`. The embedded history; nothing is added here |
 | `testdata/` | synthetic fixtures (invented places), each marked `"synthetic": true` |
 | `APP_PROFILE.yaml` | the venue paths: binary `/app/roadtrip`, data `/data`. The CLODE harness reads it |
@@ -65,7 +65,7 @@ docker build -t roadtrip .
 docker run -p 8080:8080 --env-file .env -v "$PWD/data:/data" roadtrip   # .env from .env.example; gitignored
 ```
 
-First boot seeds from `seed/*.geojson`; after that the volume is the source of truth and a redeploy never clobbers rows edited through the UI. With no `ADMIN_PASSWORD_HASH` the site is read-only. Generate one with `docker run --rm roadtrip -hash 'your-password'`.
+First boot seeds from `seed/*.geojson`; after that the volume is the source of truth and a redeploy never clobbers rows edited through the UI. With no users file and no `ADMIN_PASSWORD_HASH` (which only seeds user `kris` once) the site is read-only; users live in `$DATA_DIR/users.json` (`users.go`) and are managed at `/driver/users`. Generate one with `docker run --rm roadtrip -hash 'your-password'`.
 
 The full environment table (`SITE_URL`, `SITE_VISIBILITY`, `PIN_PRECISION`, `RIDE_SLUG`, `PUSH_TOKEN`, `DATA_DIR`, `GOMEMLIMIT`, …) is in [README.md](README.md#configuration) — read it there rather than restating it.
 
@@ -78,7 +78,7 @@ Deterministic first, browser second:
    docker run --rm -v "$PWD":/src -v roadtrip-gomod:/go/pkg/mod -w /src golang:1.25 \
      sh -c 'test -z "$(gofmt -l .)" && go vet ./... && go build ./... && go test -race -count=1 ./...'
    ```
-2. Against a live instance, `GET /admin/posts.json` is the census — **every** post with its photo identity, signed-in only. `/route.geojson` is open data and drops unpinned posts, so it cannot stand in for it. `GET /admin/rides.json` lists every ride with its row counts and which one is active; `GET /plan.json` is the active plan's days and totals. `GET /admin/checklist.json` is the checklist with its private text; `/checklist.json` is the public copy. `GET /admin/chester/log.json` is every question Chester was asked, with its cost and its verdict.
+2. Against a live instance, `GET /driver/posts.json` is the census — **every** post with its photo identity, signed-in only. `/route.geojson` is open data and drops unpinned posts, so it cannot stand in for it. `GET /driver/rides.json` lists every ride with its row counts and which one is active; `GET /plan.json` is the active plan's days and totals. `GET /driver/checklist.json` is the checklist with its private text; `/checklist.json` is the public copy. `GET /driver/chester/log.json` is every question Chester was asked, with its cost and its verdict.
 3. `/healthz` answers on any host, even while `SITE_VISIBILITY=private` closes the rest of the site.
 
 ## SessionStart hook
