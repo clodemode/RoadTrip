@@ -1,0 +1,22 @@
+entries:
+- slug: todo-roadtrip-along-route-picks-send-route-points-near-fuzzed-private-places-to-tomtom
+  title: 'roadtrip: the along-route picks search sends the Destined route points to TomTom without masking
+    points near fuzzed private places'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: clode
+  tags:
+  - driver
+  - freelance
+  - privacy
+  status: design
+  description: Found while closing the hazard-sampling privacy gap (PR 9). freelance.go alongQuery posts
+    the route ahead (corridor points) to TomTom; unlike hazard sampling, those points are not filtered
+    with dropNearFuzzed against the ride's fuzzed checkpoints. Also the geocode/route calls take the raw
+    position. Decide whether picks near a private place should be masked or are the traveller's own typed
+    route.
+  effort: S
+  triaged_at: '2026-11-07T13:58:18.275399+00:00'
+  triaged_by: clode

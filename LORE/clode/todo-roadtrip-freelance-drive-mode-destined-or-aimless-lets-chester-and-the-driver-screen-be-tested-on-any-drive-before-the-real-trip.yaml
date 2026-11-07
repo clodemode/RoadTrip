@@ -1,0 +1,34 @@
+entries:
+- slug: todo-roadtrip-freelance-drive-mode-destined-or-aimless-lets-chester-and-the-driver-screen-be-tested-on-any-drive-before-the-real-trip
+  title: 'roadtrip: FreeLance Drive mode (Destined = a destination typed in, AIMLESS = just driving) alongside
+    a planned RoadTrip like Kingston-to-Hudson-Bend, so Chester, Waze and the /driver screen can be tested
+    on any local drive before departure'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: clode
+  tags:
+  - driver
+  - chester
+  - freelance
+  - kris-idea-2026-11-07
+  status: building
+  description: 'Kris 2026-11-07. Signed-in /driver mode switch: Trip (planned ride) / FreeLance Destined
+    / FreeLance AIMLESS. DESTINED is built in clodemode/RoadTrip PR 8 (freelance.go: TomTom fuzzy search
+    + calculateRoute traffic=true + searchAlongRoute picks, ranked by Chester with web search capped at
+    3; live-smoked 2026-11-07). PR 9 (krispy/chester-reask-memory, open, not merged) CLOSES gaps (2) and
+    (3) below, and adds a Re-ask Chester control (notes cached 30 min, TomTom candidates 24h), drive context
+    on every Chester call, and a per-user self-leaning memory (SQLite chester_turns and chester_leanings;
+    view and clear at /driver/chester/memory). REMAINING: (1) AIMLESS mode: no destination, HUD shows
+    position (TomTom reverse geocode), hazards and picks around the current location. (Closed by PR 9
+    once merged: Chester not given the Destined destination as context; hazard sampling along a Destined
+    route not dropping points near fuzzed private places.) Estimate for AIMLESS: one short CODI.'
+  dont: 'DONT start before the leg-2 /driver screen PR is merged: same files. DONT write freelance drives
+    into the planned ride''s data or checklist.'
+  do_this: Build on the merged /driver HUD; one mode switch; test-first with httptest stubs for hazards;
+    ephemeral freelance state per user.
+  effort: M
+  impact: high
+  triaged_at: '2026-11-07T12:30:18.772483+00:00'
+  triaged_by: clode
