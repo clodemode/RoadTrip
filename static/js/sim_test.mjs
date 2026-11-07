@@ -78,3 +78,77 @@ test('mayFetch: the first request that carries a position always goes through', 
   assert.equal(sim.mayFetch(1000, 2000, true, true), false);
   assert.equal(sim.mayFetch(1000, 2000, false, false), false);
 });
+
+// ---- corridor=kgn-yyz: a randomized, seeded drive along Highway 401 ----------------
+test('corridorPoints: kgn-yyz runs Kingston to Toronto, unknown names are null', () => {
+  var p = sim.corridorPoints('kgn-yyz');
+  assert.equal(p.length, 18);
+  assert.deepEqual(p[0], [44.2290, -76.4810]);
+  assert.deepEqual(p[p.length - 1], [43.6532, -79.3832]);
+  assert.equal(sim.corridorPoints('nope'), null);
+});
+test('parse: reads corridor and seed, and the rung all only with a corridor', () => {
+  var o = sim.parse('?sim=100&corridor=kgn-yyz&seed=42');
+  assert.equal(o.corridor, 'kgn-yyz'); assert.equal(o.seed, 42);
+  assert.equal(sim.parse('?sim=10').corridor, null);
+  assert.equal(sim.parse('?sim=10').seed, null);
+  var all = sim.parse('?sim=all&corridor=kgn-yyz&seed=1');
+  assert.ok(all.miles > 150 && all.miles < 180);
+  assert.equal(sim.parse('?sim=all'), null);
+});
+test('walkPath: d=0 is the first point, d past the end is the last', () => {
+  var pts = sim.corridorPoints('kgn-yyz');
+  var a = sim.walkPath(pts, 0), z = sim.walkPath(pts, 99999);
+  assert.deepEqual(a.pos, pts[0]);
+  assert.deepEqual(z.pos, pts[pts.length - 1]);
+  assert.ok(a.heading > 270 && a.heading < 360, 'Kingston to the 401 runs north-west: ' + a.heading);
+});
+test('corridorWalk: distance along is monotonic over 300 ticks', () => {
+  var o = sim.parse('?sim=100&corridor=kgn-yyz&seed=7'), last = -1;
+  for (var t = 0; t < 300; t++) {
+    var w = sim.corridorWalk(o, t);
+    assert.ok(w.d >= last, 'tick ' + t); last = w.d;
+  }
+  assert.ok(last > 0);
+});
+test('same seed, same drive; another seed, another drive', () => {
+  var run = function (s) {
+    var o = sim.parse('?sim=100&corridor=kgn-yyz&seed=' + s);
+    return JSON.stringify([5, 77, 190].map(function (t) { return sim.corridorWalk(o, t); }));
+  };
+  assert.equal(run(11), run(11));
+  assert.notEqual(run(11), run(12));
+});
+test('start offset is 0 to 5 miles along the corridor', () => {
+  for (var s = 1; s <= 50; s++) {
+    var d = sim.corridorWalk(sim.parse('?sim=100&corridor=kgn-yyz&seed=' + s), 0).start;
+    assert.ok(d >= 0 && d <= 5, 'seed ' + s + ': ' + d);
+  }
+});
+test('jitter: never more than 30 m from the un-jittered point; accuracy 5 to 25 m', () => {
+  var pts = sim.corridorPoints('kgn-yyz');
+  for (var k = 0; k < 300; k++) {
+    var base = sim.walkPath(pts, k * 0.3);
+    var j = sim.jitterFix(base.pos, base.heading, 99, k);
+    var m = sim.haversine(base.pos[0], base.pos[1], j.pos[0], j.pos[1]) * 1609.344;
+    assert.ok(m <= 30, 'k=' + k + ' ' + m);
+    assert.ok(j.accuracy >= 5 && j.accuracy <= 25);
+  }
+});
+test('speedAt: 55 to 75 mph, steady within a minute, capped by mph=', () => {
+  for (var t = 0; t < 3600 * 3; t += 30) {
+    var v = sim.speedAt(5, t);
+    assert.ok(v >= 55 && v <= 75, 't=' + t + ' ' + v);
+    assert.ok(sim.speedAt(5, t, 58) <= 58);
+  }
+  assert.equal(sim.speedAt(5, 0), sim.speedAt(5, 59));
+  assert.ok(sim.prng(3)() === sim.prng(3)() && sim.prng(3)() !== sim.prng(4)());
+});
+test('rung caps the distance driven; all drives the whole corridor', () => {
+  var o = sim.parse('?sim=1&corridor=kgn-yyz&seed=3&x=60');
+  var w = sim.corridorWalk(o, 99999);
+  assert.equal(w.done, true); assert.ok(Math.abs(w.d - 1) < 1e-9);
+  var all = sim.corridorWalk(sim.parse('?sim=all&corridor=kgn-yyz&seed=3&x=60'), 999999);
+  assert.equal(all.done, true);
+  assert.deepEqual(all.pos, [43.6532, -79.3832]);
+});
