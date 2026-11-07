@@ -20,8 +20,12 @@ ride: **Austin → San Jose**, 2026-09-04 to 09-07, one way.
   trip totals, and — for a trip that carries route options — each option as a
   control, with the roads not taken drawn dashed on the map. `/plan.json` is
   the same arithmetic as data. See "Trips on the volume".
-- `/driver/post` — the driver's one screen: photo, kind, title, body, leg,
-  checkpoint, zone, hide-location. One tap stamps a checkpoint as arrived.
+- `/driver/post` — **Post a Photo**, the driver's one screen: photo, kind,
+  title, body, leg, checkpoint, zone, hide-location. By default it posts just
+  a photo; an optional "Milestone" list of the stops not yet reached marks one
+  reached at the photo's own time (else now), through the same path that scores
+  the ETA ledger. The one-tap arrival lives on the plan page and at
+  `POST /driver/checkpoint/{id}/arrive`, not on this form.
 - `/driver/posts.json` — the census: **every** post with its photo's identity,
   signed-in only. See "Taking a census".
 

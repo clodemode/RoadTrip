@@ -127,8 +127,29 @@
 
   // --- the form -------------------------------------------------------------
 
+  // suggestMilestone returns the id of the nearest offered milestone within
+  // 2 km of the point, else null. choices: [{id, lat, lng}]. A suggestion only:
+  // the page marks it, the driver still taps it.
+  var MS_NEAR_KM = 2.0;
+  function haversineKm(aLat, aLng, bLat, bLng) {
+    var R = 6371, rad = Math.PI / 180;
+    var dLat = (bLat - aLat) * rad, dLng = (bLng - aLng) * rad;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function suggestMilestone(point, choices) {
+    if (!point || !choices) return null;
+    var best = null, bestKm = Infinity;
+    for (var i = 0; i < choices.length; i++) {
+      var c = choices[i], d = haversineKm(point.lat, point.lng, c.lat, c.lng);
+      if (d <= MS_NEAR_KM && d < bestKm) { best = c.id; bestKm = d; }
+    }
+    return best;
+  }
+
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone };
     return;
   }
 
@@ -195,6 +216,23 @@
     else rNone.checked = true;
   }
 
+  // The milestone radios carry their published position. The one nearest the
+  // pin point is flagged, never selected: marking a stop reached is deliberate.
+  var msLabels = [].slice.call(document.querySelectorAll('label[data-lat][data-lng]'));
+  function suggest(p) {
+    var choices = msLabels.map(function (l) {
+      var r = l.querySelector('input');
+      return { id: r.value, lat: +l.getAttribute('data-lat'), lng: +l.getAttribute('data-lng') };
+    });
+    var id = p ? suggestMilestone(p, choices) : null;
+    msLabels.forEach(function (l) {
+      var on = id !== null && l.querySelector('input').value === id;
+      l.classList.toggle('ms-suggested', on);
+      var n = l.querySelector('.ms-near');
+      if (n) n.hidden = !on;
+    });
+  }
+
   function refresh(fromToggle) {
     rExif.disabled = !exif;
     rBrow.disabled = !fix;
@@ -215,6 +253,7 @@
     if (pla) { pla.value = exif ? exif.lat.toFixed(4) : ''; pln.value = exif ? exif.lng.toFixed(4) : ''; }
 
     var p = point(), near = p && p.raw ? nearPrivate(p.lat, p.lng) : null;
+    suggest(p && p.raw ? p : null);
     fuzz.disabled = !(p && p.raw);
     if (!fromToggle) fuzz.checked = !!near && precision !== 'exact';
     fuzzSet.value = '1';              // from here on the toggle's state is deliberate
