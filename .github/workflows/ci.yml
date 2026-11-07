@@ -1,22 +1,22 @@
-# CI — every push and every pull request.
+# CI — once per merge to trunk, as the record.
 #
-# This runs the checks a deploy would run, so a red branch is known BEFORE
+# This runs the checks a deploy would run, so a red trunk is known BEFORE
 # anyone reaches for the deploy workflow. It never touches Fly and never needs
 # a secret: nothing here can reach the live ride.
 name: CI
 
+# Ruled 2026-11-05: the suite runs on local hosts before a push and in
+# deploy.yml's gates before a deploy; GitHub runs it once per merge as the record.
 on:
   push:
-    branches: ["**"]
-  pull_request:
+    branches: [trunk]
 
 permissions:
   contents: read
 
 concurrency:
-  # A newer push to the same ref supersedes an in-flight run — CI on a branch
-  # nobody is looking at any more is just queue.
-  group: ci-${{ github.ref }}
+  # A newer merge supersedes an in-flight run, so stacked merges do not queue.
+  group: ci-trunk
   cancel-in-progress: true
 
 jobs:
