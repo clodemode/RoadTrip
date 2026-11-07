@@ -116,8 +116,8 @@ func TestOldAdminPathsAre404(t *testing.T) {
 	if w := doAs(t, app, c, "GET", "/driver/posts.json", nil); w.Code != http.StatusOK {
 		t.Errorf("/driver/posts.json = %d", w.Code)
 	}
-	if w := doAs(t, app, c, "GET", "/driver", nil); w.Code != http.StatusFound {
-		t.Errorf("/driver = %d, want a redirect to the post screen", w.Code)
+	if w := doAs(t, app, c, "GET", "/driver", nil); w.Code != http.StatusOK {
+		t.Errorf("/driver = %d, want the driver screen", w.Code)
 	}
 }
 

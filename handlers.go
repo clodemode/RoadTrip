@@ -155,6 +155,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("POST /driver/login", a.loginSubmit)
 	mux.HandleFunc("POST /driver/logout", a.logout)
 	mux.Handle("GET /driver", a.requireAuth(a.driverHome))
+	mux.Handle("GET /driver/hud.json", a.requireAuth(a.hudJSON))
 	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
 	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))

@@ -93,6 +93,9 @@ type App struct {
 	// chesterBusy is held for the length of one question. A second question
 	// is refused while it is held (TryLock), never queued.
 	chesterBusy sync.Mutex
+	// hazards asks the weather and traffic sources for the driver screen. nil
+	// (tests, mostly) behaves as a service with no TomTom key.
+	hazards *hazardSvc
 }
 
 // PIN_PRECISION values. See App.pinPrecision.
@@ -286,6 +289,14 @@ func main() {
 	// Chester: on only with a key and settings that parse. The log line names
 	// the models and the day's limit and never the key; a credential that
 	// reaches a log is spent.
+	// The driver screen's hazard sources. No TOMTOM_API_KEY is a supported
+	// state: the traffic chip then says so instead of staying quiet.
+	app.hazards = newHazardSvc(os.Getenv("TOMTOM_API_KEY"))
+	if os.Getenv("TOMTOM_API_KEY") == "" {
+		log.Print("traffic: TOMTOM_API_KEY unset, the driver screen will say traffic is unknown")
+	} else {
+		log.Print("traffic: TOMTOM_API_KEY set")
+	}
 	if cfg, why := chesterConfigFrom(os.Getenv); cfg == nil {
 		log.Printf("chester: disabled (%s)", why)
 	} else {
