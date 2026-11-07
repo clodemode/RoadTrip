@@ -1,0 +1,14 @@
+entries:
+- slug: todo-roadtrip-melt-on-fly-needs-a-file-sink-like-fintracks-melt-sink-py-since-the-machine-has-no-redis
+  title: 'roadtrip: MELT on Fly needs a file sink like fintrack''s melt_sink.py since the machine has
+    no Redis'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: tools
+  character_slug: krispy
+  tags: []
+  status: design
+  description: PR 23 adds a MELT sink to the fleet Redis (MELT_REDIS_ADDR), which is off on Fly because
+    the machine has no Redis. Prod observability needs a file sink on the volume, as fintrack's melt_sink.py
+    does, so the records survive and can be pulled.

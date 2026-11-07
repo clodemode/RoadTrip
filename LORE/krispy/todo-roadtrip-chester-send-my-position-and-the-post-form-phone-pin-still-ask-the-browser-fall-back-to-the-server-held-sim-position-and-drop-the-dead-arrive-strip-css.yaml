@@ -1,0 +1,33 @@
+entries:
+- slug: todo-roadtrip-chester-send-my-position-and-the-post-form-phone-pin-still-ask-the-browser-fall-back-to-the-server-held-sim-position-and-drop-the-dead-arrive-strip-css
+  title: 'roadtrip: Chester''s "Send my position" button (chester.js) and the post form''s "My phone location"
+    pin still ask navigator.geolocation when tapped, so on the KATE (plain HTTP) they report denied even
+    while a server-held sim drive runs; make both fall back to the sim position the way the HUD and Chester''s
+    ask do, and delete the dead .arrive-strip rule in app.css'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: surface
+  character_slug: krispy
+  tags:
+  - driver
+  - sim
+  - chester
+  - post
+  - css
+  status: design
+  description: Left over from PR 25 (server-held sim) and PR 27 (Post a Photo), both 2026-11-07; the CODIs
+    reported these as not done. Kris's phone on the KATE is over plain HTTP, where the browser never grants
+    geolocation, so both buttons read as broken during a sim test.
+  dont: DONT send the sim position to the browser as coordinates to be posted back; the server fills it
+    in where the form arrives with none while a sim runs (the pattern PR 25 used for Chester's ask). DONT
+    touch sim.go's math.
+  do_this: 'Server side: in the Chester ask and the post create handlers, when pin_source is browser (or
+    the locate flag is set) and no lat/lng arrived and the user''s sim is running, use simSvc.PositionAt
+    through the same coarsening path; client side: when #hud or the page carries data-sim="1", the two
+    buttons say "Simulated position" instead of asking the phone. Gherkin: add two scenarios to features/sim_position.feature.
+    Remove .arrive-strip from static/css/app.css.'
+  effort: S
+  impact: low
+  triaged_at: '2026-11-07T20:49:47.074186+00:00'
+  triaged_by: krispy

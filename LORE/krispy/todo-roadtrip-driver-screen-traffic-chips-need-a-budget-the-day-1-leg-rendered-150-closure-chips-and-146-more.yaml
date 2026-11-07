@@ -1,0 +1,29 @@
+entries:
+- slug: todo-roadtrip-driver-screen-traffic-chips-need-a-budget-the-day-1-leg-rendered-150-closure-chips-and-146-more
+  title: 'roadtrip /driver: the traffic chips have no budget; the real Day 1 leg rendered four "Traffic:
+    Closed …" chips plus "and 146 more", which tells a driver nothing; rank by distance ahead along the
+    leg, show the nearest two or three, and summarise the rest by count and nearest mile'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: surface
+  character_slug: krispy
+  tags:
+  - driver
+  - hazards
+  - traffic
+  - chips
+  status: design
+  description: 'Seen 2026-11-07 on roadtrip-kate (trunk f24950d and later) with ride ygk-atx-2026-11:
+    hazards for the 493-mile Day 1 leg returned about 150 closures (state routes in Pennsylvania and New
+    York), rendered as four chips repeating the same two closures plus ''and 146 more''. The chip list
+    is the one place a driver reads at a glance; it needs a budget keyed to what is ahead.'
+  dont: DONT drop incidents silently; the count stays visible. DONT rank by severity alone, a closure
+    400 miles ahead is not news yet.
+  do_this: In hazards.go order incidents by along-leg distance from the fix (or the leg start without
+    a fix), keep the three nearest ahead as chips with "in N mi", fold the rest into one chip "and N more,
+    nearest in M mi"; Go test first with a leg fixture carrying ten incidents.
+  effort: S
+  impact: medium
+  triaged_at: '2026-11-07T20:49:36.557502+00:00'
+  triaged_by: krispy

@@ -1,0 +1,32 @@
+entries:
+- slug: todo-roadtrip-hazard-chips-read-unknown-error-on-a-canadian-route-the-weather-source-is-us-only-and-traffic-failed-on-the-401-leg
+  title: 'roadtrip /driver: on the Kingston→Toronto test ride both chips read "Weather: unknown (error)"
+    and "Traffic: unknown (error)"; the weather source is US-only and the TomTom traffic call failed for
+    the 401 leg, so a Canadian leg (the real trip''s Day 1 starts in Kingston) gets no hazards'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: krispy
+  tags:
+  - driver
+  - hazards
+  - weather
+  - traffic
+  - canada
+  status: design
+  description: 'Seen 2026-11-07 15:45 EST on roadtrip-kate (trunk 3f4f054) with the kgn-yyz-test ride
+    active: both chips ''unknown (error)'' on first HUD serve, while the same KATE showed weather and
+    150 traffic chips on the real ygk-atx-2026-11 Day 1 leg (Kingston→Pittsburgh, mostly US). hazards.go
+    fails closed as designed. Matters before departure 2026-11-10: the first hours of the real trip are
+    in Ontario.'
+  dont: DONT invent a chip when a source fails; the fail-closed 'unknown' is right. DONT add a third API
+    key before checking what the TomTom error actually was on the KATE.
+  do_this: Read the hazard error off the KATE (docker logs roadtrip-kate, or the MELT errors stream once
+    hazards.go publishes to it); for weather add Environment Canada alerts (or a world source) behind
+    the same cache and chip shape for a leg whose bbox is in Canada; for traffic find why the 401 bbox
+    failed (region, bbox size, or key); Go test first with a Canadian leg fixture.
+  effort: M
+  impact: medium
+  triaged_at: '2026-11-07T20:49:27.098613+00:00'
+  triaged_by: krispy
