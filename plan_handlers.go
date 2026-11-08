@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -286,9 +287,21 @@ func (a *App) planSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read the form", http.StatusBadRequest)
 		return
 	}
+	// The proposal card's Save also names the question it answers. The
+	// outcome is a record, never a gate: nothing here changes the save.
+	chesterID, _ := strconv.ParseInt(r.PostForm.Get("chester_id"), 10, 64)
+	record := func(outcome, reason string) {
+		if chesterID <= 0 {
+			return
+		}
+		if err := a.store.SetChesterProposalOutcome(chesterID, outcome, reason); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			log.Printf("chester: proposal outcome not recorded for row %d", chesterID)
+		}
+	}
 	// A browser goes back to the page, to the line beside the button it
 	// pressed, with a code; curl gets the status and the reason in full.
 	refuse := func(status int, code, msg string) {
+		record("refused", msg)
 		if html {
 			q := url.Values{"error": {code}}
 			for k, v := range r.PostForm {
@@ -344,6 +357,7 @@ func (a *App) planSave(w http.ResponseWriter, r *http.Request) {
 	}
 	// Counts, never a place or a date.
 	log.Printf("plan: selection saved for the active ride: %s", n)
+	record("saved", "")
 	if html {
 		http.Redirect(w, r, "/plan?ok="+planOKSaved+planResultAnchor, http.StatusSeeOther)
 		return

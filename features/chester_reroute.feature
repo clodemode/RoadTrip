@@ -87,3 +87,35 @@ Feature: Chester proposes a switch among the trip's planned route choices
     And the trip-keeper taps Save on the proposal
     Then the plan save answers "refused" with a reason
     And the saved plan takes "ridge" for "day1"
+
+  Scenario: A saved proposal is recorded as saved on its log row
+    Given the trip has route choices
+    And Chester will propose switching "day1" to "valley" because "It is the shorter road."
+    And Chester will then say "Tap Save to switch."
+    When the trip-keeper asks Chester about the road "Which road should I take on day one?"
+    And the trip-keeper taps Save on the proposal
+    Then the plan save answers "ok"
+    And the log row's proposal outcome is "saved"
+    And the page's Save sends the card's query id
+
+  Scenario: A refused save is recorded as refused with why, and the plan is unchanged
+    Given the trip has route choices
+    And Chester will propose switching "day1" to "valley" because "It is the shorter road."
+    And Chester will then say "Tap Save to switch."
+    When the trip-keeper asks Chester about the road "Which road should I take on day one?"
+    And a post is made on leg 1 before the trip-keeper taps Save
+    And the trip-keeper taps Save on the proposal
+    Then the plan save answers "refused" with a reason
+    And the log row's proposal outcome is "refused" with a reason
+    And the saved plan takes "ridge" for "day1"
+
+  Scenario: A save with an unknown Chester id still saves and answers as before
+    Given the trip has route choices
+    And Chester will propose switching "day1" to "valley" because "It is the shorter road."
+    And Chester will then say "Tap Save to switch."
+    When the trip-keeper asks Chester about the road "Which road should I take on day one?"
+    And the trip-keeper taps Save on the proposal with the Chester id "999999"
+    Then the plan save answers "ok"
+    And the plan save response carries only status, selection and plan
+    And the saved plan takes "valley" for "day1"
+    And the log row's proposal outcome is "proposed"

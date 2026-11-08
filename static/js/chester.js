@@ -190,6 +190,7 @@
       var body = new URLSearchParams();
       Object.keys(p.selection || {}).forEach(function (k) { body.set('opt-' + k, p.selection[k]); });
       body.set('start', p.start || '');
+      if (p.query_id) body.set('chester_id', String(p.query_id));
       fetch('/driver/plan', {
         method: 'POST', body: body, credentials: 'same-origin',
         headers: { 'Accept': 'application/json' }
