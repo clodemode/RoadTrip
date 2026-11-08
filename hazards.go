@@ -52,6 +52,7 @@ type hazardChip struct {
 
 type hazardSvc struct {
 	nwsBase string
+	gcBase  string // Environment Canada GeoMet, asked only where the US source says a point is out of bounds
 	ttBase  string
 	key     string
 	client  *http.Client
@@ -71,6 +72,7 @@ type hazardEntry struct {
 func newHazardSvc(tomtomKey string) *hazardSvc {
 	return &hazardSvc{
 		nwsBase: "https://api.weather.gov",
+		gcBase:  "https://api.weather.gc.ca",
 		ttBase:  "https://api.tomtom.com",
 		key:     tomtomKey,
 		client:  &http.Client{},
@@ -121,6 +123,24 @@ func reason(err error) string {
 	return "error"
 }
 
+// errOutOfCoverage is the one 400 that means something other than "failed":
+// the US National Weather Service says the point is outside its coverage. It
+// carries no URL and no body.
+var errOutOfCoverage = errors.New("out of coverage")
+
+// outOfBounds reads a problem-details body and reports whether its detail
+// says the point is out of bounds. Any other 400, or a body that does not
+// parse, is an ordinary failure.
+func outOfBounds(body io.Reader) bool {
+	var pd struct {
+		Detail string `json:"detail"`
+	}
+	if json.NewDecoder(io.LimitReader(body, 16<<10)).Decode(&pd) != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(pd.Detail), "out of bounds")
+}
+
 // getJSON fetches one URL under the per-source timeout and decodes it. Every
 // error it returns is already scrubbed: no URL, no key.
 func (s *hazardSvc) getJSON(ctx context.Context, u string, hdr map[string]string, out any) error {
@@ -139,6 +159,9 @@ func (s *hazardSvc) getJSON(ctx context.Context, u string, hdr map[string]string
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusBadRequest && outOfBounds(resp.Body) {
+			return errOutOfCoverage
+		}
 		return fmt.Errorf("status %d", resp.StatusCode)
 	}
 	dec := json.NewDecoder(io.LimitReader(resp.Body, 4<<20))
@@ -194,6 +217,10 @@ func shortWhy(err error) string {
 
 type nwsAlert struct{ id, event, severity, area string }
 
+// gcPad is how far, in degrees, the box around a Canadian point reaches on
+// each side. The alerts are polygons, so a small box finds the ones it is in.
+const gcPad = 0.02
+
 func (s *hazardSvc) Weather(ctx context.Context, pts []ll) []hazardChip {
 	if len(pts) == 0 {
 		return unknownChip("Weather", "no route")
@@ -213,6 +240,9 @@ func (s *hazardSvc) Weather(ctx context.Context, pts []ll) []hazardChip {
 		if e := s.getJSON(ctx, s.nwsBase+"/alerts/active?"+q.Encode(), map[string]string{
 			"User-Agent": nwsUserAgent, "Accept": "application/geo+json",
 		}, &body); e != nil {
+			if errors.Is(e, errOutOfCoverage) {
+				return s.canadaAlerts(ctx, pts[i])
+			}
 			return nil, e
 		}
 		var out []nwsAlert
@@ -262,6 +292,76 @@ func (s *hazardSvc) Weather(ctx context.Context, pts []ll) []hazardChip {
 		chips = append(chips, hazardChip{Source: "Weather", State: hazardItems, Text: txt})
 	}
 	return capChips("Weather", chips, failed > 0)
+}
+
+// canadaAlerts asks Environment Canada's GeoMet API for the alerts in a small
+// box around one point, for a point the US source called out of bounds. Only
+// the English text is read. An alert that has ended, was cancelled or has
+// expired is not active and gives no chip. Canada's levels map onto the NWS
+// ranks the chips are sorted by: a red warning is Extreme, a warning Severe, a
+// watch Moderate, an advisory or a statement Minor.
+func (s *hazardSvc) canadaAlerts(ctx context.Context, p ll) ([]nwsAlert, error) {
+	var body struct {
+		Features []struct {
+			ID         string `json:"id"`
+			Properties struct {
+				Type       string `json:"alert_type"`
+				Name       string `json:"alert_name_en"`
+				Area       string `json:"feature_name_en"`
+				Status     string `json:"status_en"`
+				Expiration string `json:"expiration_datetime"`
+				Colour     string `json:"risk_colour_en"`
+			} `json:"properties"`
+		} `json:"features"`
+	}
+	f := func(v float64) string { return strconv.FormatFloat(v, 'f', 4, 64) }
+	q := url.Values{
+		"f":     {"json"},
+		"limit": {"50"},
+		"bbox":  {f(p.Lng-gcPad) + "," + f(p.Lat-gcPad) + "," + f(p.Lng+gcPad) + "," + f(p.Lat+gcPad)},
+	}
+	if e := s.getJSON(ctx, s.gcBase+"/collections/weather-alerts/items?"+q.Encode(), map[string]string{
+		"User-Agent": nwsUserAgent, "Accept": "application/geo+json",
+	}, &body); e != nil {
+		return nil, e
+	}
+	var out []nwsAlert
+	for _, ft := range body.Features {
+		pr := ft.Properties
+		switch strings.ToLower(pr.Status) {
+		case "ended", "cancelled", "canceled":
+			continue
+		}
+		if t, e := time.Parse(time.RFC3339, pr.Expiration); e == nil && !t.After(s.now()) {
+			continue
+		}
+		name := strings.TrimSpace(pr.Name)
+		if name == "" {
+			name = strings.TrimSpace(pr.Type)
+		}
+		if name == "" {
+			continue
+		}
+		sev := "Minor"
+		switch strings.ToLower(pr.Type) {
+		case "warning":
+			sev = "Severe"
+			if strings.EqualFold(pr.Colour, "red") {
+				sev = "Extreme"
+			}
+		case "watch":
+			sev = "Moderate"
+		}
+		out = append(out, nwsAlert{ft.ID, upperFirst(name), sev, strings.TrimSpace(pr.Area)})
+	}
+	return out, nil
+}
+
+func upperFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func firstArea(a string) string {
