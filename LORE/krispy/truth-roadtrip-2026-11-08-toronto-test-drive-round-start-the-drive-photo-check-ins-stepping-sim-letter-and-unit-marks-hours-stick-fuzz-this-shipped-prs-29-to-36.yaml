@@ -1,0 +1,50 @@
+entries:
+- slug: truth-roadtrip-2026-11-08-toronto-test-drive-round-start-the-drive-photo-check-ins-stepping-sim-letter-and-unit-marks-hours-stick-fuzz-this-shipped-prs-29-to-36
+  title: 'roadtrip 2026-11-08: the Toronto test-drive round shipped as PRs 29, 30, 31, 33, 34, 35, 36
+    on trunk bc31628 (Start the drive, photo-only check-ins with missed or rerouted, letters and d1/h1
+    marks, the hours stick, settled stops, a one-step-per-post KATE car, local RoadTracks, Fuzz This with
+    exact location to Claude); proven on the local KATE, Fly app still v41'
+  domain: truth
+  lore_type: truth
+  app_scope: roadtrip
+  lair: all
+  character_slug: krispy
+  tags:
+  - driver
+  - kate
+  - checkin
+  - fuzz
+  - sim
+  - thread-end
+  status: design
+  description: 'As of 2026-11-08 12:35 UTC (7:35 AM EST). clodemode/RoadTrip trunk bc31628. Kris''s rulings
+    in this round, in order: the start is a departure, never a check-in; check-ins are photo-only and
+    the app works out the nearest open stop within 10 km and skips earlier open stops (he first asked
+    for Next/Missed it/Later buttons and superseded them); letters name places and a number always carries
+    its unit (d2, h2); the time bar is a faint stick beside the route with whole-hour ticks, re-measured
+    from the last check-in; only the next open stop offers navigation, the start never does, settled stops
+    keep a small Undo; a camera photo takes the phone''s position; on a KATE the car moves one step per
+    post (start, halfway, stop), never by the clock; a KATE drive-test refresh wipes that ride''s posts
+    and photos and opens on a Start the drive button; the KATE''s RoadTracks uses the local MusicOrgan;
+    Fuzz This, see the ruling row. Fly infrastructure changed during the round, outside any deploy: machine
+    784149ead70ee8 is shared-cpu-1x 1024 MB (scaled by the PHO_ME thread, fly.toml now matches via PR
+    35) and volume vol_re1wmepgynlo5n54 (roadtrip_data) was extended from 1 GB to 3 GB by Kris''s ruling
+    and the filesystem grown by a stop and start, df read 2.9G size, 145M used.'
+  dont: 'DONT read Fly v41 as carrying any of this round''s app code: the first deploy waits for Kris.
+    DONT read a green full suite on trunk: TestFreeCandidatesAreKeptWhenChesterWasOffAndRankedLater fails
+    the same way on trunk 8323c75 and later, while it passed on the PR 33 tree on 2026-11-07. DONT read
+    the browser''s manual check of Fuzz This as covering the button beside the check-in notice: it has
+    no scenario and was not tapped. DONT read a host sqlite3 query of the running KATE''s database as
+    truth (see the refresh workflow).'
+  do_this: 'VERIFY on the KATE (roadtrip-kate, :8089, image roadtrip:kate-fuzz built from 860d79f, app
+    code identical to trunk bc31628): signed in, /driver reads "Start · Kingston" with the Start the drive
+    button; post a no-GPS photo through Start the drive and the notice reads "Drive started from Kingston
+    ... by the simulated car" and that post has pin source sim; the next post reads "Posted as a photo;
+    next stop Napanee, 19 km", the one after "Reached Napanee ... by the simulated car"; a post card offers
+    Fuzz This, one tap publishes a 0.05 degree cell and offers Unfuzz, and Unfuzz restores the exact point.
+    The hours bar reads h0 Kingston, h1 Trenton, h2 Oshawa, about h2 and a half Toronto; h2 Pickering
+    is not reachable on that line at 60 mph. mcp__clode__melt_tail(source=''roadtrip'') carries drive_started,
+    checkin_verified, checkin_skipped and post_fuzzed with vouched_by and km and no coordinate.'
+  depends_on:
+  - ruling-roadtrip-a-signed-in-drivers-photo-may-tell-claude-its-exact-location-unless-fuzzed-or-near-a-private-stop-and-fuzz-this-keeps-the-exact-spot-privately-for-unfuzz
+  - spec-roadtrip-driver-aids-test-round-on-a-local-kate-with-melt-on-hey-lean-sim-corridor-eta-policy-and-photo-fed-trip-log
