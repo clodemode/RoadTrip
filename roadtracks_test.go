@@ -13,7 +13,7 @@ const rtKey = "rt-secret-token-123"
 
 // moAlbum42 is the album answer: a path-only src, an https src, two hostile
 // srcs, and a track that is not available (src null).
-const moAlbum42 = `{"album_id":42,"album":"Abbey Road","albumartist":"The Beatles","year":1969,"art":"/album/42/art","playable":true,"tracks":[` +
+const moAlbum42 = `{"album_id":42,"album":"Abbey Road","albumartist":"The Beatles","year":1969,"art":"/album/42/art","playable":4,"tracks":[` +
 	`{"id":1,"track":1,"disc":1,"title":"One","artist":"A","length":100,"available":true,"src":"/media/t1?sig=x"},` +
 	`{"id":2,"track":2,"disc":1,"title":"Two","artist":"A","length":100,"available":true,"src":"https://cdn.example.test/t2.mp3?sig=y"},` +
 	`{"id":3,"track":3,"disc":1,"title":"Three","artist":"A","length":100,"available":true,"src":"javascript:alert(1)"},` +
