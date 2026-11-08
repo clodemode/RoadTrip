@@ -636,7 +636,7 @@ checked against the megapixel cap before the one decode, the thumbnail is a
 box average plus one bilinear pass (no float working buffer), and the Go
 GC runs under a soft limit of 75 % of the machine's RAM. Measured in Docker
 at `--memory=256m`: 12 MP peaks the process at 40 MB, 48 MP 4:2:0 at 91 MB,
-48 MP 4:4:4 at 163 MB, none killed; the VM is 512 MB on Fly. Each photo
+48 MP 4:4:4 at 163 MB, none killed; the VM is 1024 MB on Fly. Each photo
 logs one line (`photo <sha>: W×H MP MB, orientation, thumb`), and each post
 logs its pin decision (`post N: pin browser ±12 m → snapped to checkpoint 1
 (Hudson Bend (home))`, `pin exif → fuzzed to checkpoint 1 (Hudson Bend

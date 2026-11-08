@@ -40,7 +40,7 @@ primary_region = "dfw"   # Dallas — the ride departs from Austin
   # before it answers; the fleet measured that at 22.6 s to first byte against
   # 0.37 s warm (fintrack, 2026-08-04). Suspend restores the running process
   # from a RAM snapshot in a few hundred ms, and Fly bills rootfs only in BOTH
-  # states — so the latency is bought for free. 512 mb is far under the 2 GB
+  # states — so the latency is bought for free. 1024 mb is far under the 2 GB
   # suspend cap. The /data volume is untouched; suspend snapshots memory only.
   #
   # STANDING CAVEAT: resume does NOT re-run the entrypoint. All boot work here
@@ -66,4 +66,6 @@ primary_region = "dfw"   # Dallas — the ride departs from Austin
   # decoded in memory) OOM-killed the process at anon-rss 158 MB and four
   # posts were lost. The decode path is bounded now (photo.go), but a road
   # trip is not the place to run at the edge of the kernel's patience.
-  memory = "512mb"
+  # 1024 since 2026-11-08: the machine was scaled for photo processing on the
+  # road trip, and this file has to say so or the next deploy shrinks it back.
+  memory = "1024mb"
