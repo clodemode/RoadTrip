@@ -1,0 +1,26 @@
+entries:
+- slug: todo-roadtrip-driver-screen-polish-found-on-the-simulated-drive-squeezed-roadtracks-box-165-vs-156-miles-arrival-dash-ahead-note-heading-and-meal-notice-wording
+  title: 'roadtrip driver screen and post form polish found on the 2026-11-08 simulated drive: RoadTracks
+    search box squeezed at phone width, 165 mi planned becoming 156 mi Left at the start, "— ahead" on
+    arrival, Post a Photo heading on a Note, "Posted as a photo" on a Meal, Post something else above
+    the Start button'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: surface
+  character_slug: krispy
+  tags:
+  - driver
+  - post-form
+  - polish
+  status: design
+  description: 'At 375 px the HUD''s middle column is about 155 px wide, so the RoadTracks input shows
+    two or three letters and chips run tall. templates/driver.html, static/css/app.css. The miles: before
+    the start Left reads 165 mi planned; after it Done plus Left stays 156 at every step, cause not investigated
+    (corridor line versus the plan''s total is a guess). On arrival the HUD shows "No stop ahead" and
+    "— ahead". post_form.html keeps the heading "Post a Photo" with Note selected; checkInFromPhoto says
+    "Posted as a photo" for a Meal; "Post something else instead" sits above the primary Start button.'
+  effort: M
+  impact: medium
+  triaged_at: '2026-11-08T20:23:11.350617+00:00'
+  triaged_by: krispy

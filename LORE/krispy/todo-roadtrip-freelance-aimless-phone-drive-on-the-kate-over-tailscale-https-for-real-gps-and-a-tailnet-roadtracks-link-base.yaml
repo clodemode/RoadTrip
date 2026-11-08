@@ -1,0 +1,36 @@
+entries:
+- slug: todo-roadtrip-freelance-aimless-phone-drive-on-the-kate-over-tailscale-https-for-real-gps-and-a-tailnet-roadtracks-link-base
+  title: 'roadtrip: Kris takes his phone on a FreeLance Aimless drive against the KATE over Tailscale
+    HTTPS, with real GPS and real photos, because the KATE is much faster to iterate on than a Fly deploy'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: krispy
+  tags:
+  - kate
+  - tailscale
+  - aimless
+  - driver
+  - freelance
+  status: design
+  description: 'Kris 2026-11-08: "soon, I want to take my phone on a freelance - aimless drive. We can
+    use real data from the photos uploaded. Using TailScale, we can keep using the KATE host." and "KATE
+    is much faster velocity, not needing public deployment if the phone can access KATE." This settles
+    the open HTTPS ruling in favour of Tailscale serve. State at 2026-11-08 15:1x UTC: Tailscale installed
+    on the Mac but stopped, no serve config; DNS name clode-mode.tail2556d2.ts.net. COOKIE_SECURE=0 works
+    over HTTPS. MusicOrgan ALLOWED_HOSTS is *. Whether Fly is still deployed for the real trip''s public
+    followers is not ruled.'
+  dont: 'DONT tap Start the drive for an Aimless drive on the KATE: with SIM_ALLOWED set it starts the
+    simulated car, whose position then replaces the real GPS on the HUD and photo pins. DONT run the KATE
+    drive-test refresh while real photos sit on the test ride: it wipes that ride''s posts and photos.
+    DONT use tailscale funnel: this stays on the tailnet.'
+  do_this: 'Kris starts Tailscale and serve on the Mac (https 443 to 8089, https 8443 to 8810) and joins
+    the phone to the tailnet. Then set ROADTRACKS_LINK_BASE in roadtrip/data/kate.env to https://clode-mode.tail2556d2.ts.net:8443
+    and restart the KATE. Verify from the phone: sign-in and a POST work through serve (the Origin check
+    in handlers.go compares Origin with r.Host), the HUD gets a real GPS fix in Aimless, a photo pins
+    from EXIF or the browser, a Chester Play link opens.'
+  effort: S
+  impact: high
+  triaged_at: '2026-11-08T15:07:44.477359+00:00'
+  triaged_by: krispy

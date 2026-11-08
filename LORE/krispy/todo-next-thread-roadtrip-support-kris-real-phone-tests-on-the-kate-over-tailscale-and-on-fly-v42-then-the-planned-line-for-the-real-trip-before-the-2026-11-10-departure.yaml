@@ -1,0 +1,30 @@
+entries:
+- slug: todo-next-thread-roadtrip-support-kris-real-phone-tests-on-the-kate-over-tailscale-and-on-fly-v42-then-the-planned-line-for-the-real-trip-before-the-2026-11-10-departure
+  title: 'TODO-NEXT, roadtrip (start on Opus, thin tokens): support Kris''s real phone tests on the KATE
+    over Tailscale and on Fly v42 and fix what he hits, then the planned line for the real trip, Chester''s
+    first real music question and the driver-screen polish, before the 2026-11-10 departure'
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: all
+  character_slug: krispy
+  tags:
+  - next-thread
+  - driver
+  - kate
+  - tailscale
+  - checkin
+  status: design
+  description: |-
+    agent_start(app_scope='roadtrip', lair='all', tag='driver'). The truth stone holds what shipped and what was not proven.
+    STATE at 2026-11-08 20:30 UTC (3:30 PM EST): clodemode/RoadTrip trunk 9691651 (PRs 38 to 48 merged by Kris), Fly v42 is that commit, deployed on Kris's word; MELT is off on Fly, accepted by deploying. roadtrip-kate runs roadtrip:kate-9691651 on :8089, test ride reset and dated 2026-11-08; if the next thread opens on a later date, POST /driver/plan start=<today> or the badge reads Arrived. Kris's phone address is https://clode-mode.tail2556d2.ts.net (tailnet only, tailscale serve 443 to 8089 and 8443 to 8810), never http://100.73.200.35:8089, where Safari gives no location. Tailscale must stay up and the Mac awake. Rebuild recipe: docker build -q -t roadtrip:kate-x . from the checkout, docker stop roadtrip-kate, docker rm, docker run -d --name roadtrip-kate --network about_default -p 8089:8080 --env-file data/kate.env -v "$PWD/data/kate:/data" roadtrip:kate-x. A restart drops the sim car and in-memory FreeLance mode: check /driver/sim.json first.
+    NEXT, in order: (1) whatever Kris hits: FreeLance Aimless over the https address, real GPS fix, a camera photo pinned by the phone, a Play link from Chester. One PR per fix, Gherkin first on godog. (2) Verify a real phone on Fly v42: Start the drive, a camera photo pinned by real GPS, Fuzz This. (3) The real trip ygk-atx-2026-11 needs a planned line for the hours bar. (4) Chester's first real music question, Kris's key and his to ask: does it search artists for a mood, does it fit in three rounds (chesterRounds), is the Play card right. (5) todo-roadtrip-kate-start-the-drive-always-starts-the-simulated-car-so-a-real-gps-trip-mode-drive-on-the-kate-needs-a-way-to-opt-out, a ruling first. (6) todo-roadtrip-driver-screen-polish-found-on-the-simulated-drive-squeezed-roadtracks-box-165-vs-156-miles-arrival-dash-ahead-note-heading-and-meal-notice-wording. (7) todo-musicorgan-deploy-pr-75-album-play-button-to-fly-so-chester-play-links-land-on-the-big-button-on-music-opeongo-net, only on Kris's word. (8) todo-roadtrip-chester-send-my-position-and-the-post-form-phone-pin-still-ask-the-browser-fall-back-to-the-server-held-sim-position-and-drop-the-dead-arrive-strip-css, todo-roadtrip-check-in-needs-a-vouching-position-test-only-seams-and-reroute-ui-follow-ups, todo-roadtrip-melt-on-fly-needs-a-file-sink-like-fintracks-melt-sink-py-since-the-machine-has-no-redis.
+    BUILDERS: Sonnet, brief names files and line ranges, one RED/GREEN cycle plus a RED control, report at most 25 lines, never git stash. Full suite runs in a plain clone with GOFLAGS=-buildvcs=false, because TestRepoHoldsNoTripDocument fails falsely in a worktree. Verify UI in the browser pane on a throwaway copy on 127.0.0.1 with its own data so the KATE's drive is untouched. Kris merges.
+  dont: DONT start a sim on Fly. DONT open the KATE's SQLite database from the Mac while the container
+    runs. DONT tap Start the drive on the KATE for a real-GPS drive. DONT delete KATE posts by a time
+    window. DONT deploy without Kris's word. DONT rebuild the KATE without checking whether a drive is
+    running.
+  depends_on:
+  - ruling-roadtrip-eta-rounds-to-5-minutes-one-day-trip-badge-reads-today-automatic-fuzz-keeps-the-exact-point-privately-and-tailscale-https-carries-real-gps-on-the-kate
+  - truth-roadtrip-2026-11-08-post-form-by-type-canadian-weather-traffic-budget-chester-music-drive-tracks-tailscale-kate-deployed-to-fly-v42-prs-38-to-48
+  - workflow-roadtrip-kate-drive-test-refresh-wipes-the-test-rides-posts-and-photos-clears-every-stamp-and-opens-on-start-the-drive
