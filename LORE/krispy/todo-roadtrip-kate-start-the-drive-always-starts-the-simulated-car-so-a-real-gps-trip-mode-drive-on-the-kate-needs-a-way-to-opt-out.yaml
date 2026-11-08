@@ -19,6 +19,12 @@ entries:
     Aimless and Destined are not affected since PR 43. Options to rule: a choice at Start, a KATE env
     setting, or a real position within 10 km of the start winning over the sim (which would break stepping
     tests started from home near Kingston).'
+  do_this: 'RULED by Kris 2026-11-08: a choice at Start. Where SIM_ALLOWED is set, the Start the drive
+    form offers Real GPS or Simulated car, field start_source, absent meaning sim. Real GPS must STOP
+    any simulated car this user already has running before the vouch: vouchFor and resolvePin both put
+    a running car ahead of every other source, so merely not starting one is not enough. Where SIM_ALLOWED
+    is unset (Fly) nothing changes and no choice shows. Gherkin first in features/start_and_checkin.feature,
+    with a RED control.'
   effort: S
   impact: medium
   triaged_at: '2026-11-08T20:23:05.458161+00:00'
