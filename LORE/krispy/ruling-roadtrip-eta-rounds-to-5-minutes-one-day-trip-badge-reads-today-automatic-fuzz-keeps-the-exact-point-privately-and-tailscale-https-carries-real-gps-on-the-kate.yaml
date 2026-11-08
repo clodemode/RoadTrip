@@ -1,0 +1,28 @@
+entries:
+- slug: ruling-roadtrip-eta-rounds-to-5-minutes-one-day-trip-badge-reads-today-automatic-fuzz-keeps-the-exact-point-privately-and-tailscale-https-carries-real-gps-on-the-kate
+  title: 'RULED by Kris 2026-11-08: RoadTrip''s ETA rounds to 5 minutes; a one-day trip''s badge reads
+    Today; an automatic fuzz at a private stop keeps the exact point privately for Unfuzz, like Fuzz This;
+    real GPS on the KATE goes over Tailscale HTTPS; music on /driver is a link-out with Chester''s Play
+    cards and a Drive Tracks button, no mini-player'
+  domain: lore
+  lore_type: guidance
+  app_scope: roadtrip
+  lair: all
+  character_slug: krispy
+  tags:
+  - ruling
+  - driver
+  - eta
+  - fuzz
+  - music
+  - kate
+  status: design
+  description: Ruled through the form on 2026-11-08 in thread RT:stepping drive departure, each with the
+    pro and con shown. The DriveTrack todo closed as superseded in the same pass; per-leg album planning
+    stays open on the Chester RoadTracks todo.
+  dont: 'DONT add a mini-player or send audio through RoadTrip. DONT discard the exact point on an automatic
+    fuzz without a new ruling. DONT render a kept exact point: it is read in one store seam, only for
+    Unfuzz.'
+  do_this: 'ETA: nearest 5 minutes. Badge: "Today" when the trip has one day; multi-day trips keep "Day
+    N of M". Fuzz: exact point kept in the private columns in both the automatic and the manual case,
+    restored only by Unfuzz.'

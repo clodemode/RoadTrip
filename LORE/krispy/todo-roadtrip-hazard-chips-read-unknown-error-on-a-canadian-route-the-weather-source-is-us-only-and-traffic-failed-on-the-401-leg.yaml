@@ -14,7 +14,7 @@ entries:
   - weather
   - traffic
   - canada
-  status: design
+  status: shipped
   description: 'Seen 2026-11-07 15:45 EST on roadtrip-kate (trunk 3f4f054) with the kgn-yyz-test ride
     active: both chips ''unknown (error)'' on first HUD serve, while the same KATE showed weather and
     150 traffic chips on the real ygk-atx-2026-11 Day 1 leg (Kingston→Pittsburgh, mostly US). hazards.go
@@ -30,3 +30,5 @@ entries:
   impact: medium
   triaged_at: '2026-11-07T20:49:27.098613+00:00'
   triaged_by: krispy
+  closed_at: '2026-11-08T15:05:39.276911+00:00'
+  closed_by_actor: 0591aee3-2136-44eb-8f49-9ed25fd94892

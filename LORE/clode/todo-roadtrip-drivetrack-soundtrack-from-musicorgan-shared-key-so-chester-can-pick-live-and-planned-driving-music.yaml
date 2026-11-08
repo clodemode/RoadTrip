@@ -13,7 +13,7 @@ entries:
   - musicorgan
   - drivetrack
   - kris-idea-2026-11-07
-  status: building
+  status: superseded
   description: |-
     Kris 2026-11-07. RoadTrip and MusicOrgan are both CLODE apps; share one service key (Fly secret on both) so RoadTrip can search MusicOrgan (albums, playlists) and open or embed the music.opeongo.net player. Chester gets a tool to suggest DriveTrack picks for the current leg (live) and a planned per-leg soundtrack. Unknown before building: whether MusicOrgan exposes a search/playlist API usable by a bearer key today (verify first). First cut: a token-guarded read-only MO endpoint + RoadTrip "DriveTrack" card on /driver linking into the player; Chester suggestions second. Estimate: two CODIs across two repos, about 300k-450k subagent tokens; less if MO already has the API.
 
@@ -26,3 +26,5 @@ entries:
   impact: high
   triaged_at: '2026-11-07T12:30:25.584659+00:00'
   triaged_by: clode
+  closed_at: '2026-11-08T18:28:21.622768+00:00'
+  closed_by_actor: 0591aee3-2136-44eb-8f49-9ed25fd94892

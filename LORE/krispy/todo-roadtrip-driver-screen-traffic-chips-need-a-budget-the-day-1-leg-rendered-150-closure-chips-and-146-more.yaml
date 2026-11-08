@@ -13,7 +13,7 @@ entries:
   - hazards
   - traffic
   - chips
-  status: design
+  status: shipped
   description: 'Seen 2026-11-07 on roadtrip-kate (trunk f24950d and later) with ride ygk-atx-2026-11:
     hazards for the 493-mile Day 1 leg returned about 150 closures (state routes in Pennsylvania and New
     York), rendered as four chips repeating the same two closures plus ''and 146 more''. The chip list
@@ -27,3 +27,5 @@ entries:
   impact: medium
   triaged_at: '2026-11-07T20:49:36.557502+00:00'
   triaged_by: krispy
+  closed_at: '2026-11-08T16:50:31.198233+00:00'
+  closed_by_actor: 0591aee3-2136-44eb-8f49-9ed25fd94892
