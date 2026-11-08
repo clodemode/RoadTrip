@@ -80,6 +80,10 @@ type Checkpoint struct {
 	// day 2 on a ride of several days. Numbers are reserved for days and carry
 	// their unit. Set by markCheckpoints, never stored.
 	Mark string `json:"-"`
+	// IsStart is true for the trip's first checkpoint, where the car leaves
+	// from. Set by markCheckpoints, never stored: Ord is per leg, so it cannot
+	// say which stop is the start.
+	IsStart bool `json:"-"`
 }
 
 // Checkpoint precision. "fuzzed" is the privacy seam: the store snaps such a
@@ -992,6 +996,11 @@ func (s *Store) SetArrived(id int64, at time.Time, loc *LatLng) error {
 		v = utcString(at)
 	}
 	if loc == nil {
+		if at.IsZero() {
+			// Undo: a stop taken back is neither arrived at nor skipped.
+			_, err := s.db.Exec(`UPDATE checkpoints SET arrived_at='', skipped_at='', skip_reason='' WHERE id=?`, id)
+			return err
+		}
 		_, err := s.db.Exec(`UPDATE checkpoints SET arrived_at=? WHERE id=?`, v, id)
 		return err
 	}
@@ -2197,6 +2206,7 @@ func markCheckpoints(legs []Leg) {
 	for i := range legs {
 		for j := range legs[i].Checkpoints {
 			c := &legs[i].Checkpoints[j]
+			c.IsStart = i == 0 && j == 0
 			if c.IsTerminal && len(legs) > 1 {
 				c.Mark = "d" + strconv.Itoa(legs[i].Ord)
 			} else {

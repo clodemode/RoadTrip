@@ -56,7 +56,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-7"
+	chesterPromptVersion = "chester-rt-8"
 
 	maxChesterQuestion = 1000
 )
@@ -775,7 +775,17 @@ func (a *App) chesterContext(now time.Time, lat, lng *float64) (*chesterContext,
 				fmt.Fprintf(&st, ", planned arrival %s", at)
 			}
 			if at := localFmt(c.ArrivedAt, c.TZ, fmtLocal); at != "" {
-				fmt.Fprintf(&st, ", arrived %s", at)
+				if c.IsStart {
+					fmt.Fprintf(&st, ", left %s", at)
+				} else {
+					fmt.Fprintf(&st, ", arrived %s", at)
+				}
+			} else if c.SkippedAt != "" {
+				if c.SkipReason == "rerouted" {
+					st.WriteString(", passed without stopping (rerouted around)")
+				} else {
+					st.WriteString(", passed without stopping (missed)")
+				}
 			}
 		}
 		for _, s := range l.Sights {
@@ -807,6 +817,18 @@ func (a *App) chesterContext(now time.Time, lat, lng *float64) (*chesterContext,
 		fmt.Fprintf(&v, "MILES LEFT TODAY: %s\n", left)
 	default:
 		fmt.Fprintf(&v, "TODAY: not a driving day (%s).\n", di.Badge)
+	}
+	switch start, next := tripStart(rv.Legs), nextOpenID(rv.Legs); {
+	case start != nil && start.ArrivedAt == "":
+		fmt.Fprintf(&v, "NEXT STOP: not started, leaving from %s.\n", start.Name)
+	case next != 0:
+		for _, c := range rideCheckpoints(rv.Legs) {
+			if c.ID == next {
+				fmt.Fprintf(&v, "NEXT STOP: %s.\n", c.Name)
+			}
+		}
+	default:
+		v.WriteString("NEXT STOP: none.\n")
 	}
 	fmt.Fprintf(&v, "POSITION: %s\n", posNote)
 	if cx.Town != "" {

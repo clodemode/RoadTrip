@@ -46,6 +46,12 @@ type hudView struct {
 	TZ            string `json:"tz"`
 	Crossing      string `json:"crossing"`
 
+	// DriveStarted is true once the trip's start has been left. StartName is
+	// the start's name, given only until then: the screen shows it as the
+	// start, with no navigation to it.
+	DriveStarted bool   `json:"drive_started"`
+	StartName    string `json:"start_name,omitempty"`
+
 	HasNext   bool   `json:"has_next"`
 	NextName  string `json:"next_name"`
 	NextMiles string `json:"next_miles"`
@@ -177,9 +183,19 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving b
 	}
 
 	// The next stop: the first checkpoint ahead that nobody has arrived at.
+	if st := tripStart(legs); st != nil {
+		h.DriveStarted = st.ArrivedAt != ""
+		if !h.DriveStarted {
+			h.StartName = st.Name
+		}
+	}
+	startID := int64(-1)
+	if st := tripStart(legs); st != nil {
+		startID = st.ID
+	}
 	nextIdx := -1
 	for i, c := range cps {
-		if c.ArrivedAt != "" || c.SkippedAt != "" || (haveLine && alongs[i] <= posAlong+0.5) {
+		if c.ID == startID || c.ArrivedAt != "" || c.SkippedAt != "" || (haveLine && alongs[i] <= posAlong+0.5) {
 			continue
 		}
 		nextIdx = i
