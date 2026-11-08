@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -54,6 +56,50 @@ func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) *scWorld
 	sc.Step(`^the note was saved$`, func() error {
 		if p.last.Code != http.StatusSeeOther || strings.Contains(p.last.Header().Get("Location"), "error=") {
 			return fmt.Errorf("the note was not saved: %d %s", p.last.Code, p.last.Header().Get("Location"))
+		}
+		return nil
+	})
+	redirect := func() (*url.URL, error) {
+		if p.last.Code != http.StatusSeeOther {
+			return nil, fmt.Errorf("answer %d", p.last.Code)
+		}
+		return url.Parse(p.last.Header().Get("Location"))
+	}
+	sc.Step(`^the answer goes to the driver screen$`, func() error {
+		u, err := redirect()
+		if err != nil {
+			return err
+		}
+		if u.Path != "/driver" {
+			return fmt.Errorf("went to %s", u.Path)
+		}
+		return nil
+	})
+	sc.Step(`^the answer goes back to the post form$`, func() error {
+		u, err := redirect()
+		if err != nil {
+			return err
+		}
+		if u.Path != "/driver/post" {
+			return fmt.Errorf("went to %s", u.Path)
+		}
+		return nil
+	})
+	sc.Step(`^the driver screen confirms the drive started from ([ABCD])$`, func(which string) error {
+		w := doAs(p.t, p.sim.app, p.sim.cookies["kris"], "GET", p.last.Header().Get("Location"), nil)
+		want := "Drive started from " + p.cps[strings.Index("ABCD", which)].Name
+		if w.Code != http.StatusOK || !regexp.MustCompile(`class="post-done"[^>]*>[^<]*`+regexp.QuoteMeta(want)).MatchString(w.Body.String()) {
+			return fmt.Errorf("no confirmation %q on the driver screen (%d)", want, w.Code)
+		}
+		return nil
+	})
+	sc.Step(`^the post form script says it is uploading when a post is sent$`, func() error {
+		b, err := os.ReadFile("static/js/post.js")
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(string(b), "uploadingLabel(") || !strings.Contains(string(b), "addEventListener('submit'") {
+			return fmt.Errorf("post.js does not show progress on submit")
 		}
 		return nil
 	})

@@ -77,3 +77,10 @@ test('ladderChoice offers the best source and never picks No pin itself', () => 
   assert.equal(ladderChoice(false, false, true), 'checkpoint');
   assert.equal(ladderChoice(false, false, false), '');
 });
+
+test('uploadingLabel says what is happening', () => {
+  const { uploadingLabel } = createRequire(import.meta.url)('./post.js');
+  assert.equal(uploadingLabel(true, true), 'Starting the drive…');
+  assert.equal(uploadingLabel(false, true), 'Uploading your photo…');
+  assert.equal(uploadingLabel(false, false), 'Posting…');
+});

@@ -158,6 +158,14 @@
     return hasCheckpoint ? 'checkpoint' : '';
   }
 
+  // uploadingLabel is what the submit button says while the post is on its way:
+  // a phone photo can take several seconds, and a button that does nothing reads
+  // as a form that did not work.
+  function uploadingLabel(starting, hasPhoto) {
+    if (starting) return 'Starting the drive\u2026';
+    return hasPhoto ? 'Uploading your photo\u2026' : 'Posting\u2026';
+  }
+
   // askLocation asks geo (navigator.geolocation) for the phone's position at
   // once and reports it as {lat, lng, acc} (lat and lng to 4 dp, acc in
   // metres), or the error. Without a geolocation it reports an error, so the
@@ -190,7 +198,7 @@
   }
 
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone, askLocation: askLocation, ladderChoice: ladderChoice, sectionsFor: sectionsFor, locationReason: locationReason };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, sectionsFor: sectionsFor, locationReason: locationReason };
     return;
   }
 
@@ -360,6 +368,24 @@
       // 2026-09-02.
       fr.readAsArrayBuffer(f.slice(0, Math.min(EXIF_SLICE, f.size)));
       askFix(true);                   // the camera's position is the phone's, now
+    });
+  }
+
+  // Say the post is on its way, and stop a second tap sending it twice. The
+  // button is restored if the browser brings this page back from its cache.
+  var postForm = photo && photo.form;
+  if (postForm) {
+    var sentButton = null, sentLabel = '';
+    postForm.addEventListener('submit', function (e) {
+      var b = e.submitter || postForm.querySelector('button[type=submit]:not([hidden])');
+      if (!b) return;
+      var hasPhoto = !!(photo.files && photo.files.length);
+      sentButton = b; sentLabel = b.textContent;
+      b.textContent = uploadingLabel(b.id === 'btn-start', hasPhoto);
+      setTimeout(function () { b.disabled = true; }, 0);
+    });
+    window.addEventListener('pageshow', function () {
+      if (sentButton) { sentButton.disabled = false; sentButton.textContent = sentLabel; sentButton = null; }
     });
   }
 
