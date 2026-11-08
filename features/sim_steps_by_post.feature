@@ -22,6 +22,7 @@ Feature: On a KATE the simulated car moves one step per post, not by the clock
     Then A is departed
     And kris's simulated car is stepping
     And kris's simulated car is at A
+    And the post is pinned at A
 
   Scenario: The next post lands halfway to the first stop and checks in nowhere
     Given the drive has started at A with the stepping car

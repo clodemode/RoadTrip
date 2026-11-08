@@ -89,7 +89,11 @@ func (a *App) funcs() template.FuncMap {
 			}
 			return t.Format(fmtDay)
 		},
-		"card": func(p Post, authed bool) postCard { return postCard{Post: p, Authed: authed} },
+		"card": func(p Post, authed bool) postCard {
+			// CanUnfuzz is a yes or no from the store; the kept point itself never
+			// reaches a template.
+			return postCard{Post: p, Authed: authed, CanUnfuzz: authed && p.PinFuzzed && a.store.CanUnfuzz(p.ID)}
+		},
 		"row": func(c Checkpoint, legOrd int, driver, chesterOn bool, nextID int64, showTZ bool) stopRow {
 			return stopRow{Checkpoint: c, LegOrd: legOrd, Driver: driver, ChesterOn: chesterOn, Next: c.ID == nextID, ShowTZ: showTZ}
 		},
@@ -186,6 +190,8 @@ func (a *App) routes() http.Handler {
 	// The census: every post, for finding duplicates the road left behind.
 	mux.Handle("GET /driver/posts.json", a.requireRide(a.postsJSON))
 	mux.Handle("POST /driver/post/{id}/pin", a.requireRide(a.postRepin))
+	mux.Handle("POST /driver/post/{id}/fuzz", a.requireRide(a.postFuzz))
+	mux.Handle("POST /driver/post/{id}/unfuzz", a.requireRide(a.postUnfuzz))
 	mux.Handle("GET /driver/post/{id}/edit", a.requireRide(a.postEditForm))
 	mux.Handle("POST /driver/post/{id}/edit", a.requireRide(a.postEditSave))
 	mux.Handle("GET /driver/lodging", a.requireRide(a.lodgingForm))
@@ -961,6 +967,13 @@ type stopRow struct {
 type postCard struct {
 	Post
 	Authed bool
+	// CanUnfuzz: the post is fuzzed and a kept exact point exists (never the
+	// point). CanFuzz: it has a published pin that is not fuzzed.
+	CanUnfuzz bool
+}
+
+func (c postCard) CanFuzz() bool {
+	return c.Authed && !c.HideLocation && !c.PinFuzzed && c.Lat != nil && c.PinSource != pinNone
 }
 
 // PinLine is the signed-in-only account of one post's pin: what the photo
@@ -972,7 +985,8 @@ type postCard struct {
 func (c postCard) PinLine() string {
 	coord := func(lat, lng *float64) string { return fmt.Sprintf("%.4f, %.4f", *lat, *lng) }
 	var raw []string
-	if c.Photo != nil && c.Photo.Lat != nil && c.Photo.Lng != nil {
+	// A fuzzed post shows no exact point anywhere, the photo's own GPS included.
+	if c.Photo != nil && c.Photo.Lat != nil && c.Photo.Lng != nil && !c.PinFuzzed {
 		raw = append(raw, "photo GPS "+coord(c.Photo.Lat, c.Photo.Lng))
 	}
 	if c.PinSource == pinBrowser && c.AccuracyM != nil {
@@ -1571,7 +1585,8 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 		"Private":      pd.forRide(rv.Ride.Slug, a.rideSlug).addressByOrd(),
 		"DefaultLegID": dlID, "DefaultLeg": dl, "DefaultTZ": tz, "Zones": zones(rv.Legs, tz),
 		"Day": di, "Error": errMsg, "Notice": r.URL.Query().Get("notice"),
-		"Start": startChoice(rv.Legs), "NextStop": nextStopName(rv.Legs),
+		"NoticePost": a.noticePost(r, rv.Ride.Slug),
+		"Start":      startChoice(rv.Legs), "NextStop": nextStopName(rv.Legs),
 		// What the form needs to say, before posting, what will be published:
 		// the private cells the fuzz toggle pre-ticks itself for, and which way
 		// PIN_PRECISION tips that default. These are the ALREADY-FUZZED
@@ -1651,7 +1666,11 @@ type pinResult struct {
 	AccuracyM    *float64
 	CheckpointID int64 // set when fuzzing moved the post into a checkpoint's cell
 	Fuzzed       bool
-	Note         string
+	// The point before it was fuzzed, kept privately so Unfuzz can restore it.
+	// Set whenever Fuzzed is.
+	ExactLat, ExactLng *float64
+	ExactSource        string
+	Note               string
 }
 
 // resolvePin runs the ladder (or honours an explicit choice) and then applies
@@ -1766,13 +1785,15 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 		}
 		return res
 	}
+	exLat, exLng, exSrc := *res.Lat, *res.Lng, res.Source
 	res.Fuzzed, res.AccuracyM = true, nil
+	res.ExactLat, res.ExactLng, res.ExactSource = &exLat, &exLng, exSrc
+	flat, flng, fsrc, fcp := fuzzedPoint(exLat, exLng, exSrc, pc)
+	res.Lat, res.Lng, res.Source = &flat, &flng, fsrc
 	if pc != nil {
 		// Name the place it belongs to, so the popup can say "near <name>" —
 		// and move the post onto that checkpoint, as the pre-toggle build did.
-		plat, plng := pc.Lat, pc.Lng
-		res.Lat, res.Lng, res.Source = &plat, &plng, pinCheckpoint
-		res.CheckpointID = pc.ID
+		res.CheckpointID = fcp
 		res.Note += fmt.Sprintf(" → fuzzed to checkpoint %d (%s)", pc.Ord, pc.Name)
 		if precision == pinPrecisionExact {
 			res.Note += " (fuzz on)"
@@ -1781,15 +1802,26 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	}
 	// Somewhere with no checkpoint of its own — a friend's driveway. Coarsen
 	// the point to the grid and keep the source; there is no name to carry.
-	flat, flng := snap(*res.Lat), snap(*res.Lng)
-	res.Lat, res.Lng = &flat, &flng
 	res.Note += " → fuzzed to the 0.05° grid (no checkpoint)"
 	return res
+}
+
+// fuzzedPoint is the one rule for "fuzz this point", shared by the form's
+// toggle and the Fuzz This button: a point near a private stop goes to that
+// stop's cell (its snapped point, and the post is filed under it); anywhere
+// else it snaps to the 0.05 degree grid and keeps its source. pc is
+// nearPrivate's answer for the point.
+func fuzzedPoint(lat, lng float64, source string, pc *Checkpoint) (flat, flng float64, fsource string, checkpointID int64) {
+	if pc != nil {
+		return pc.Lat, pc.Lng, pinCheckpoint, pc.ID
+	}
+	return snap(lat), snap(lng), source, 0
 }
 
 // apply copies a resolved pin onto a post.
 func (res pinResult) apply(p *Post) {
 	p.Lat, p.Lng, p.PinSource, p.AccuracyM, p.PinFuzzed = res.Lat, res.Lng, res.Source, res.AccuracyM, res.Fuzzed
+	p.exactLat, p.exactLng, p.exactSource = res.ExactLat, res.ExactLng, res.ExactSource
 	if res.CheckpointID != 0 {
 		p.CheckpointID = res.CheckpointID
 	}
@@ -2009,6 +2041,12 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		// On a KATE the pretend car is where the phone is: it pins the post
 		// ahead of the photo's own GPS, which is a real place.
 		in.SimLat, in.SimLng = a.simFix(r)
+		if starting && startSim {
+			// The car only appears at the start once this post is saved, so
+			// the start photo takes the start's own published point.
+			lat, lng := start.Lat, start.Lng
+			in.SimLat, in.SimLng = &lat, &lng
+		}
 		res := resolvePin(in, rideCheckpoints(rv.Legs), a.pinPrecision)
 		res.apply(post)
 		pinNote = res.Note
@@ -2054,17 +2092,18 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		if startSim {
 			msg += " by the simulated car"
 		}
-		http.Redirect(w, r, "/driver/post?notice="+url.QueryEscape(msg), http.StatusSeeOther)
+		http.Redirect(w, r, "/driver/post?post="+strconv.FormatInt(post.ID, 10)+"&notice="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
 	}
 	if start != nil && start.ArrivedAt != "" {
 		msg, err := a.checkInFromPhoto(r, rv.Legs, photo, loc)
+		noticeURL := "/driver/post?post=" + strconv.FormatInt(post.ID, 10) + "&notice="
 		if err != nil {
 			fail("The post is saved, but the check-in failed: " + err.Error())
 			return
 		}
 		if msg != "" {
-			http.Redirect(w, r, "/driver/post?notice="+url.QueryEscape(msg), http.StatusSeeOther)
+			http.Redirect(w, r, noticeURL+url.QueryEscape(msg), http.StatusSeeOther)
 			return
 		}
 	}
@@ -2406,6 +2445,7 @@ func (a *App) postRepin(w http.ResponseWriter, r *http.Request) {
 	post.HideLocation = in.Want == pinNone
 	if post.HideLocation {
 		post.Lat, post.Lng, post.PinSource, post.AccuracyM, post.PinFuzzed = nil, nil, pinNone, nil, false
+		post.exactLat, post.exactLng, post.exactSource = nil, nil, ""
 		post.CheckpointID = 0
 		log.Printf("post %d: re-pinned → none (hidden)", post.ID)
 	} else {
@@ -2419,6 +2459,87 @@ func (a *App) postRepin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, backTo(r, "/")+"#post-"+strconv.FormatInt(post.ID, 10), http.StatusSeeOther)
+}
+
+// noticePost is the post the notice on the form page is about, for its Fuzz
+// This button: only a post of the active ride that has a pin and is not yet
+// fuzzed, so the query cannot make the page offer a button for any other post.
+func (a *App) noticePost(r *http.Request, rideSlug string) *Post {
+	id, err := strconv.ParseInt(r.URL.Query().Get("post"), 10, 64)
+	if err != nil {
+		return nil
+	}
+	p, err := a.store.Post(id)
+	if err != nil || p.LegSlug == "" || p.HideLocation || p.PinFuzzed || p.Lat == nil {
+		return nil
+	}
+	if posts, err := a.store.Posts(rideSlug, p.LegID); err == nil {
+		for _, q := range posts {
+			if q.ID == p.ID {
+				return p
+			}
+		}
+	}
+	return nil
+}
+
+// postFuzz is the one-tap Fuzz This on an existing post. It uses the same rule
+// as the form's toggle (fuzzedPoint) and keeps the exact point privately for
+// Unfuzz. A post with no pin, or one already fuzzed, is left as it is.
+func (a *App) postFuzz(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	post, err := a.store.Post(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if post.Lat != nil && post.Lng != nil && !post.HideLocation && !post.PinFuzzed {
+		rv, err := a.loadRide()
+		if err != nil {
+			http.Error(w, "database error", 500)
+			return
+		}
+		pc := nearPrivate(*post.Lat, *post.Lng, rideCheckpoints(rv.Legs))
+		flat, flng, fsrc, fcp := fuzzedPoint(*post.Lat, *post.Lng, post.PinSource, pc)
+		changed, err := a.store.FuzzPost(id, flat, flng, fsrc, fcp)
+		if err != nil {
+			http.Error(w, "could not fuzz", 500)
+			return
+		}
+		if changed {
+			log.Printf("post %d: fuzzed by Fuzz This", id)
+			a.melt.Event("post_fuzzed", map[string]any{"post": id})
+		}
+	}
+	http.Redirect(w, r, backTo(r, "/"), http.StatusSeeOther)
+}
+
+// postUnfuzz restores the exact point Fuzz This kept. With none kept it does
+// nothing.
+func (a *App) postUnfuzz(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := a.store.Post(id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	changed, err := a.store.UnfuzzPost(id)
+	if err != nil {
+		http.Error(w, "could not unfuzz", 500)
+		return
+	}
+	if changed {
+		log.Printf("post %d: unfuzzed", id)
+		a.melt.Event("post_unfuzzed", map[string]any{"post": id})
+	}
+	http.Redirect(w, r, backTo(r, "/"), http.StatusSeeOther)
 }
 
 // maxPrivateBytes caps the carriage's body. The overlay is a handful of

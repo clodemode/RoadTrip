@@ -61,6 +61,7 @@ func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) {
 	s := initStartCheckinScenarios(sc, p)
 	initPinSkipScenarios(sc, p, s)
 	initDoneStopsScenarios(sc, p)
+	initFuzzThisScenarios(sc, p, s)
 	initSimStepsScenarios(sc, p, s)
 }
 

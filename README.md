@@ -106,7 +106,7 @@ session cookie will never come back.
 | `$DATA_DIR/private.json` | private overlay, keyed by ride and then by checkpoint ord: the top-level `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` is the first ride's (`RIDE_SLUG`), every other ride has its own block under `"rides":{"<slug>":{"checkpoints":{…}}}`; rendered on admin pages only, never in the repo or the seed; absent = no private data |
 | `SITE_URL` | the canonical origin, e.g. `https://roadtrip.opeongo.net`; unset (the local default) ⇒ no redirect and no canonical/og tags |
 | `SITE_VISIBILITY` | `public` (default in code) or `private`; **private puts the whole site behind the one admin password** — see below |
-| `PIN_PRECISION` | `snap` (default) or `exact`; decides only whether the post form's **Fuzz location** toggle starts ticked at a private place |
+| `PIN_PRECISION` | `snap` (default) or `exact`; decides only whether the post form's **Fuzz This** toggle starts ticked at a private place |
 | `ANTHROPIC_API_KEY` | the key Chester asks the Claude API with. **A secret: a Fly secret on the live site, the gitignored `.env` for a local run, never a tracked file**; unset ⇒ Chester is off, its page says so and boot logs `chester: disabled`. See "Chester" |
 | `CHESTER_MODEL_QUICK`, `CHESTER_MODEL_PLAN` | the model each mode asks; both default `claude-opus-5-5`. It must be a model the web search tool in use (`web_search_20260209`) is documented for: `claude-opus-5-5`, `claude-opus-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-5-5`, `claude-sonnet-5` or `claude-sonnet-4-6`. Any other leaves Chester off, and boot logs why |
 | `CHESTER_EFFORT_QUICK`, `CHESTER_EFFORT_PLAN` | `low`, `medium`, `high`, `xhigh` or `max`; default `low` for quick and `medium` for plan |
@@ -756,6 +756,16 @@ The form says which case it is in before you post — *publishes as: near
 *publishes as: 34.2100, -118.5000 — the exact point, not a private place* —
 and the line updates live when the toggle flips. `posts.pin_fuzzed` records
 the outcome so a fuzzed (or an exact) post is findable later.
+
+**Fuzz This** (ruled 2026-11-08) is that toggle made one tap, during and after
+an upload: a **Fuzz This** button on every post card with a pin (and beside the
+notice after a check-in post), **Unfuzz** once it is fuzzed. Being signed in is
+the trust; there is no device token. Fuzzing keeps the exact point in private
+columns (`posts.exact_*`, read by no post select and rendered nowhere) so
+Unfuzz restores it; the published pin and every page, file and log show only
+the fuzzy one. A post's pin is told to Claude at its stored precision, so
+exactly, unless the post is fuzzed or lies near a private stop; the car's live
+position stays at three decimals, and a photo is still never sent.
 
 The same rule ran once at boot over posts pinned before it existed
 (`migrate: post N … snapped to checkpoint …`, meta key

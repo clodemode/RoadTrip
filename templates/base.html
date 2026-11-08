@@ -135,6 +135,12 @@
     {{/* Signed-in only. This line carries raw coordinates and never renders
          to an anonymous visitor — the {{if .Authed}} is the whole gate. */}}
     <p class="post-pin muted small">{{.PinLine}}</p>
+    {{if .CanFuzz}}<form method="post" action="/driver/post/{{.ID}}/fuzz" class="post-fuzz">
+      <button class="btn btn-sm btn-outline-primary">Fuzz This</button>
+      <span class="muted small">make this location inexact</span></form>
+    {{else if .CanUnfuzz}}<form method="post" action="/driver/post/{{.ID}}/unfuzz" class="post-fuzz">
+      <button class="btn btn-sm btn-outline-secondary">Unfuzz</button>
+      <span class="muted small">this location is fuzzy</span></form>{{end}}
     <p class="post-edit"><a href="/driver/post/{{.ID}}/edit">Edit kind, leg, checkpoint, time&hellip;</a></p>
     <form method="post" action="/driver/post/{{.ID}}/pin" class="post-repin">
       <input type="hidden" name="fuzz_choice" value="1">

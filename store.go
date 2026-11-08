@@ -163,6 +163,12 @@ type Post struct {
 	PinSource string
 	AccuracyM *float64
 	PinFuzzed bool
+	// The exact point a fuzzed post had, kept so Unfuzz can restore it. Set
+	// only by resolvePin (via pinResult.apply) for CreatePost and
+	// UpdatePostPin to write. Unexported, so no JSON or template can carry it,
+	// and never read back into a Post: the columns are in no post select.
+	exactLat, exactLng *float64
+	exactSource        string
 	// Joined for rendering.
 	LegSlug        string
 	LegName        string
@@ -403,6 +409,9 @@ func (s *Store) migrate() error {
 	if err := s.addColumns("posts", []string{
 		"lat REAL", "lng REAL", "pin_source TEXT NOT NULL DEFAULT 'none'", "accuracy_m REAL",
 		"pin_fuzzed INTEGER NOT NULL DEFAULT 0",
+		// The exact point a post had before Fuzz This. Private: no post read
+		// selects these; see FuzzPost and UnfuzzPost.
+		"exact_lat REAL", "exact_lng REAL", "exact_source TEXT NOT NULL DEFAULT ''",
 	}); err != nil {
 		return err
 	}
@@ -740,6 +749,17 @@ func nearPrivate(lat, lng float64, cps []Checkpoint) *Checkpoint {
 // find the next fuel stop, and no finer than that needs. The checkpoints
 // must be the store's own, already snapped.
 func publishPosition(lat, lng float64, cps []Checkpoint) (LatLng, *Checkpoint) {
+	return publishPositionAt(lat, lng, cps, false)
+}
+
+// publishPostPosition is publishPosition for a signed-in driver's post: the
+// same private tests run first, then the point goes at the precision it is
+// stored (a fuzzed post is stored fuzzy already). Ruled 2026-11-08.
+func publishPostPosition(lat, lng float64, cps []Checkpoint) (LatLng, *Checkpoint) {
+	return publishPositionAt(lat, lng, cps, true)
+}
+
+func publishPositionAt(lat, lng float64, cps []Checkpoint, exact bool) (LatLng, *Checkpoint) {
 	if pc := nearPrivate(lat, lng, cps); pc != nil {
 		return LatLng{Lat: pc.Lat, Lng: pc.Lng}, pc
 	}
@@ -756,6 +776,9 @@ func publishPosition(lat, lng float64, cps []Checkpoint) (LatLng, *Checkpoint) {
 	}
 	if best != nil {
 		return LatLng{Lat: best.Lat, Lng: best.Lng}, best
+	}
+	if exact {
+		return LatLng{Lat: lat, Lng: lng}, nil
 	}
 	return LatLng{Lat: math.Round(lat*1000) / 1000, Lng: math.Round(lng*1000) / 1000}, nil
 }
@@ -1105,10 +1128,10 @@ func (s *Store) CreatePost(p *Post) error {
 	}
 	res, err := s.db.Exec(`INSERT INTO posts
 	  (leg_id,checkpoint_id,kind,occurred_at,tz,title,body,photo_id,hide_location,created_at,
-	   lat,lng,pin_source,accuracy_m,pin_fuzzed)
-	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	   lat,lng,pin_source,accuracy_m,pin_fuzzed,exact_lat,exact_lng,exact_source)
+	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		p.LegID, cp, p.Kind, p.OccurredAt, p.TZ, p.Title, p.Body, ph, p.HideLocation, p.CreatedAt,
-		p.Lat, p.Lng, p.PinSource, p.AccuracyM, p.PinFuzzed)
+		p.Lat, p.Lng, p.PinSource, p.AccuracyM, p.PinFuzzed, p.exactLat, p.exactLng, p.exactSource)
 	if err != nil {
 		return err
 	}
@@ -1150,10 +1173,57 @@ func (s *Store) UpdatePostPin(id int64, p *Post) error {
 	if p.CheckpointID != 0 {
 		cp = p.CheckpointID
 	}
+	// A re-pin starts clean: the kept exact point is whatever this pin says,
+	// which is nothing unless it was itself fuzzed.
 	_, err := s.db.Exec(`UPDATE posts SET lat=?,lng=?,pin_source=?,accuracy_m=?,pin_fuzzed=?,
-	  checkpoint_id=?,hide_location=? WHERE id=?`,
-		p.Lat, p.Lng, p.PinSource, p.AccuracyM, p.PinFuzzed, cp, p.HideLocation, id)
+	  checkpoint_id=?,hide_location=?,exact_lat=?,exact_lng=?,exact_source=? WHERE id=?`,
+		p.Lat, p.Lng, p.PinSource, p.AccuracyM, p.PinFuzzed, cp, p.HideLocation,
+		p.exactLat, p.exactLng, p.exactSource, id)
 	return err
+}
+
+// FuzzPost is Fuzz This on an existing post: the current pin moves into the
+// private exact_* columns and the post is published at the fuzzed point. It
+// does nothing to a post with no pin or one already fuzzed (the kept point is
+// then the true one, and must not be overwritten by a fuzzy one). source is
+// the pin source the fuzzed point carries; checkpointID 0 leaves the post's
+// checkpoint alone. Returns whether a post changed. The exact point is moved
+// inside SQL and never passes through Go.
+func (s *Store) FuzzPost(id int64, lat, lng float64, source string, checkpointID int64) (bool, error) {
+	res, err := s.db.Exec(`UPDATE posts SET exact_lat=lat,exact_lng=lng,exact_source=pin_source,
+	  lat=?,lng=?,pin_source=?,accuracy_m=NULL,pin_fuzzed=1,
+	  checkpoint_id=CASE WHEN ?=0 THEN checkpoint_id ELSE ? END
+	  WHERE id=? AND pin_fuzzed=0 AND lat IS NOT NULL AND lng IS NOT NULL`,
+		lat, lng, source, checkpointID, checkpointID, id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// UnfuzzPost is Unfuzz: the kept exact point becomes the pin again and the
+// private columns are cleared. This is the only place the exact point is read,
+// and it is read by the database itself: it never reaches Go, a template, a
+// log or a JSON. (A fuzz that moved the post into a private checkpoint's cell
+// also filed it under that checkpoint; Unfuzz leaves the filing alone.)
+func (s *Store) UnfuzzPost(id int64) (bool, error) {
+	res, err := s.db.Exec(`UPDATE posts SET lat=exact_lat,lng=exact_lng,pin_source=exact_source,
+	  pin_fuzzed=0,exact_lat=NULL,exact_lng=NULL,exact_source=''
+	  WHERE id=? AND exact_lat IS NOT NULL AND exact_lng IS NOT NULL`, id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// CanUnfuzz says whether a kept exact point exists for the post. It reads no
+// coordinate.
+func (s *Store) CanUnfuzz(id int64) bool {
+	var n int
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM posts WHERE id=? AND exact_lat IS NOT NULL AND exact_lng IS NOT NULL`, id).Scan(&n)
+	return n > 0
 }
 
 const postSelect = `SELECT p.id,p.leg_id,COALESCE(p.checkpoint_id,0),p.kind,p.occurred_at,p.tz,

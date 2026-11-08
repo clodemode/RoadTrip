@@ -16,8 +16,12 @@ package main
 //   - The key is read from the environment once, held in one unexported
 //     field, and never logged, rendered or written anywhere.
 //   - The API is told the plan as the public pages show it and one position
-//     that has been through Store's fuzz seam (publishPosition). It is never
-//     told the private overlay, a checklist's private text, or a photo.
+//     that has been through Store's fuzz seam (publishPosition). The car's live
+//     position is rounded to three decimals. A signed-in driver's post is told
+//     at its stored precision, so its exact point, unless the post is fuzzed
+//     (then it is already fuzzy) or lies near a private stop (then it is that
+//     stop's cell): publishPostPosition, ruled 2026-11-08. It is never told
+//     the private overlay, a checklist's private text, or a photo.
 //   - Chester only suggests. Nothing it says is written into the plan.
 
 import (
@@ -56,7 +60,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-8"
+	chesterPromptVersion = "chester-rt-9"
 
 	maxChesterQuestion = 1000
 )
@@ -710,17 +714,23 @@ func (a *App) chesterContext(now time.Time, lat, lng *float64) (*chesterContext,
 			if p.Lat == nil || p.Lng == nil || p.HideLocation {
 				continue
 			}
-			pub, pc := publishPosition(*p.Lat, *p.Lng, cps)
+			pub, pc := publishPostPosition(*p.Lat, *p.Lng, cps)
 			cx.Pos = &chesterPos{Lat: pub.Lat, Lng: pub.Lng, Source: "post"}
 			if pc != nil {
 				cx.Pos.Snapped, cx.Pos.Label = true, "near "+pc.Name
+			}
+			// A private place's cell keeps three decimals; any other post point
+			// is written at its stored precision.
+			fmtN := numPost
+			if pc != nil {
+				fmtN = num3
 			}
 			age := "at an unknown time"
 			if at, ok := parseUTC(p.OccurredAt); ok {
 				age = fmtLocalStamp(at, p.TZ)
 			}
 			posNote = fmt.Sprintf("%s, %s, from the last pinned post, made %s. The car may have moved since.",
-				num3(pub.Lat), num3(pub.Lng), age)
+				fmtN(pub.Lat), fmtN(pub.Lng), age)
 			break
 		}
 	}
@@ -836,6 +846,12 @@ func (a *App) chesterContext(now time.Time, lat, lng *float64) (*chesterContext,
 	}
 	cx.Volatile = v.String()
 	return cx, nil
+}
+
+// numPost writes a post's published coordinate at the precision it is stored:
+// to six places (about a tenth of a metre), trailing zeros dropped.
+func numPost(f float64) string {
+	return strconv.FormatFloat(math.Round(f*1e6)/1e6, 'f', -1, 64)
 }
 
 func num3(f float64) string { return strconv.FormatFloat(f, 'f', 3, 64) }
