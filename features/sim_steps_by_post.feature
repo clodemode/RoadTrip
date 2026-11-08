@@ -47,6 +47,12 @@ Feature: On a KATE the simulated car moves one step per post, not by the clock
     And no stop was skipped
     And kris's simulated car is at C
 
+  Scenario: A note with no photo does not move the car
+    Given the drive has started at A with the stepping car
+    When kris posts a text-only note
+    Then the note was saved
+    And kris's simulated car is at A
+
   Scenario: The car does not move with the clock
     Given the drive has started at A with the stepping car
     When an hour passes with no post

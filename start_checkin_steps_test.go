@@ -50,6 +50,13 @@ func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) *scWorld
 	sc.Step(`^kris starts the drive with no photo$`, func() error { p.photo = nil; return s.send(0, false, false) })
 	sc.Step(`^kris starts the drive with that photo$`, func() error { return s.send(0, true, false) })
 	sc.Step(`^kris posts that photo$`, func() error { return s.send(-1, true, s.phone) })
+	sc.Step(`^kris posts a text-only note$`, s.sendNote)
+	sc.Step(`^the note was saved$`, func() error {
+		if p.last.Code != http.StatusSeeOther || strings.Contains(p.last.Header().Get("Location"), "error=") {
+			return fmt.Errorf("the note was not saved: %d %s", p.last.Code, p.last.Header().Get("Location"))
+		}
+		return nil
+	})
 	sc.Step(`^the request is refused$`, func() error { return s.refusedBody("") })
 	sc.Step(`^A is still not arrived at$`, func() error { return s.notArrived(0) })
 	sc.Step(`^B is still not arrived at$`, func() error { return s.notArrived(1) })
@@ -264,6 +271,28 @@ func (s *scWorld) send(i int, withPhoto, withPhone bool) error {
 	if withPhoto && p.photo != nil {
 		fw, _ := mw.CreateFormFile("photo", "p.jpg")
 		_, _ = fw.Write(p.photo)
+	}
+	_ = mw.Close()
+	req := httptest.NewRequest("POST", "/driver/post", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.AddCookie(p.sim.cookies["kris"])
+	w := httptest.NewRecorder()
+	p.sim.app.routes().ServeHTTP(w, req)
+	p.last = w
+	return nil
+}
+
+// sendNote posts a text-only note, with the phone's position if it has one.
+func (s *scWorld) sendNote() error {
+	p := s.p
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	_ = mw.WriteField("leg_id", strconv.FormatInt(p.cps[0].LegID, 10))
+	_ = mw.WriteField("kind", "note")
+	_ = mw.WriteField("title", "A note")
+	if s.phone {
+		_ = mw.WriteField("lat", strconv.FormatFloat(p.cps[1].Lat, 'f', 4, 64))
+		_ = mw.WriteField("lng", strconv.FormatFloat(p.cps[1].Lng, 'f', 4, 64))
 	}
 	_ = mw.Close()
 	req := httptest.NewRequest("POST", "/driver/post", &buf)

@@ -2015,9 +2015,10 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 
 	// On a KATE the stepping car moves one step per post, BEFORE the pin and the
 	// vouch read it, so the post is pinned at, and checks in at, the new spot.
+	// A note with no photo is not a check-in and does not move it.
 	// A post that does not get saved must not have moved the car: the step is
 	// put back unless CreatePost succeeds.
-	if st, ok := a.stepState(r, start); ok {
+	if st, ok := a.stepState(r, start); ok && photo != nil {
 		prev, user := st.StepPos, a.userOf(r)
 		to := nextSimStep(rv.Legs, LatLng{prev[0], prev[1]})
 		a.sim.StepTo(user, to.Lat, to.Lng)
@@ -2107,7 +2108,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/driver/post?post="+strconv.FormatInt(post.ID, 10)+"&notice="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
 	}
-	if start != nil && start.ArrivedAt != "" {
+	if start != nil && start.ArrivedAt != "" && photo != nil {
 		msg, err := a.checkInFromPhoto(r, rv.Legs, photo, loc)
 		noticeURL := "/driver/post?post=" + strconv.FormatInt(post.ID, 10) + "&notice="
 		if err != nil {
