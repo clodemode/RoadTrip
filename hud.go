@@ -77,6 +77,8 @@ type hudView struct {
 
 	// Tracks says whether the RoadTracks card is on; nothing else about it.
 	Tracks *tracksView `json:"tracks,omitempty"`
+	// Resume is the signed-in user's RoadTracks resume point, under 12 hours old.
+	Resume *resumeView `json:"resume,omitempty"`
 }
 
 func hudMiles(mi float64) string { return strconv.Itoa(int(math.Round(mi))) + " mi" }
@@ -271,7 +273,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 		a.freeSvc().set(a.userOf(r), func(s *freeState) { s.enter(modeDestined) })
 	}
 	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h, "DriveStarted": a.driveStarted(),
-		"Notice": r.URL.Query().Get("notice"), "NoticePost": a.noticePost(r, a.activeSlug()), "TracksOn": a.tracks != nil, "TracksURL": a.tracks.playerURL(), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
+		"Notice": r.URL.Query().Get("notice"), "NoticePost": a.noticePost(r, a.activeSlug()), "TracksOn": a.tracks != nil, "TracksURL": a.tracks.playerURL(), "Resume": a.resumeFor(r), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 
 // hudJSON is the live HUD: position-aware, with the hazard chips of the leg.
@@ -318,6 +320,7 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	if a.tracks != nil {
 		h.Tracks = &tracksView{Enabled: true}
+		h.Resume = a.resumeFor(r)
 	}
 	hz := a.hazards
 	if hz == nil {

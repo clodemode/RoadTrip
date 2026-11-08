@@ -17,9 +17,15 @@
     if (!v || typeof v !== 'object') return false;
     return Object.keys(v).some(function (k) { return BANNED[k.toLowerCase()] || hasBanned(v[k]); });
   }
+  // An address is never a telemetry field: the music player's srcs are signed.
+  function hasUrl(v) {
+    if (typeof v === 'string') return /^\s*([a-z][a-z0-9+.-]*:|\/\/)/i.test(v);
+    if (!v || typeof v !== 'object') return false;
+    return Object.keys(v).some(function (k) { return hasUrl(v[k]); });
+  }
   function telemetryBody(event, fields) {
     fields = fields || {};
-    if (hasBanned(fields)) return null;
+    if (hasBanned(fields) || hasUrl(fields)) return null;
     return JSON.stringify({ event: event, fields: fields });
   }
   // Is the car moving? The phone's own speed above 2 m/s, or more than 200 m
@@ -278,7 +284,7 @@
   window.addEventListener('offline', net);
   setText('hud-net', navigator.onLine !== false ? 'online' : 'offline');
 
-  // --- RoadTracks: search the music library; a tap opens its player in a new tab ---
+  // --- RoadTracks: search the music library; a tap plays the album in the player (player.js) ---
   var rtForm = $('rt-form');
   if (rtForm) {
     rtForm.addEventListener('submit', function (e) {
@@ -294,10 +300,14 @@
           var albums = x.o.albums || [];
           setText('rt-msg', albums.length ? '' : 'No albums found.');
           albums.forEach(function (a) {
-            var li = document.createElement('li'), l = document.createElement('a');
-            l.href = a.url; l.target = '_blank'; l.rel = 'noopener';
-            l.textContent = a.album + ' \u2014 ' + a.albumartist + (a.year ? ' (' + a.year + ')' : '');
-            li.appendChild(l); list.appendChild(li);
+            // An album the library says it cannot play is not offered.
+            if (a.playable === false || !a.album_id) return;
+            var li = document.createElement('li'), b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = a.album + ' \u2014 ' + a.albumartist + (a.year ? ' (' + a.year + ')' : '');
+            // The tap is the gesture the phone needs to allow sound: it goes straight to the player.
+            b.addEventListener('click', function () { if (window.RTPlayer) window.RTPlayer.start(a); });
+            li.appendChild(b); list.appendChild(li);
           });
         })
         .catch(function () { setText('rt-msg', 'Music library unavailable'); });

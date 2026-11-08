@@ -11,6 +11,15 @@ import (
 
 const rtKey = "rt-secret-token-123"
 
+// moAlbum42 is the album answer: a path-only src, an https src, two hostile
+// srcs, and a track that is not available (src null).
+const moAlbum42 = `{"album_id":42,"album":"Abbey Road","albumartist":"The Beatles","year":1969,"art":"/album/42/art","playable":true,"tracks":[` +
+	`{"id":1,"track":1,"disc":1,"title":"One","artist":"A","length":100,"available":true,"src":"/media/t1?sig=x"},` +
+	`{"id":2,"track":2,"disc":1,"title":"Two","artist":"A","length":100,"available":true,"src":"https://cdn.example.test/t2.mp3?sig=y"},` +
+	`{"id":3,"track":3,"disc":1,"title":"Three","artist":"A","length":100,"available":true,"src":"javascript:alert(1)"},` +
+	`{"id":4,"track":4,"disc":1,"title":"Four","artist":"A","length":100,"available":true,"src":"http://elsewhere.example.test/x.mp3"},` +
+	`{"id":5,"track":5,"disc":1,"title":"Five","artist":"A","length":100,"available":false,"src":null}]}`
+
 type moStub struct {
 	srv    *httptest.Server
 	mu     sync.Mutex
@@ -30,6 +39,16 @@ func newMO(t *testing.T) *moStub {
 		s.auth, s.query = r.Header.Get("Authorization"), r.URL.Query().Get("q")
 		st, body := s.status, strings.ReplaceAll(s.body, "BASE", s.srv.URL)
 		s.mu.Unlock()
+		if r.URL.Path == "/api/roadtracks/album/42" {
+			w.WriteHeader(st)
+			w.Write([]byte(strings.ReplaceAll(moAlbum42, "BASE", s.srv.URL)))
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/roadtracks/album/") {
+			w.WriteHeader(404)
+			w.Write([]byte(`{"error":"no such album ` + rtKey + `"}`))
+			return
+		}
 		if r.URL.Path != "/api/roadtracks/search" {
 			t.Errorf("path %s", r.URL.Path)
 		}

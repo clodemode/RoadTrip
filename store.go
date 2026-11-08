@@ -376,6 +376,15 @@ CREATE TABLE IF NOT EXISTS chester_leanings (
   note  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS chester_leanings_user ON chester_leanings(user, id);
+CREATE TABLE IF NOT EXISTS player_state (
+  user       TEXT PRIMARY KEY,
+  album_id   INTEGER NOT NULL,
+  album      TEXT NOT NULL DEFAULT '',
+  artist     TEXT NOT NULL DEFAULT '',
+  track_idx  INTEGER NOT NULL DEFAULT 0,
+  position_s REAL NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
 `
 
 type Store struct{ db *sql.DB }
@@ -2305,4 +2314,37 @@ func letterMark(n int) string {
 		s = string(rune('A'+(n-1)%26)) + s
 	}
 	return s
+}
+
+// SavePlayerState keeps the one RoadTracks resume point of a signed-in user,
+// on the server so any tab or page reload offers the same one.
+func (s *Store) SavePlayerState(user string, albumID int64, album, artist string, idx int, pos float64, now time.Time) error {
+	_, err := s.db.Exec(`INSERT INTO player_state(user, album_id, album, artist, track_idx, position_s, updated_at)
+VALUES(?,?,?,?,?,?,?) ON CONFLICT(user) DO UPDATE SET album_id=excluded.album_id, album=excluded.album,
+artist=excluded.artist, track_idx=excluded.track_idx, position_s=excluded.position_s, updated_at=excluded.updated_at`,
+		user, albumID, album, artist, idx, pos, now.UTC().Format(time.RFC3339))
+	return err
+}
+
+// PlayerState is the user's resume point, or nil when none or older than 12 h.
+func (s *Store) PlayerState(user string, now time.Time) (*resumeView, error) {
+	var rv resumeView
+	var at string
+	err := s.db.QueryRow(`SELECT album_id, album, artist, track_idx, position_s, updated_at FROM player_state WHERE user = ?`, user).
+		Scan(&rv.AlbumID, &rv.Album, &rv.Artist, &rv.TrackIdx, &rv.PositionS, &at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	t, perr := time.Parse(time.RFC3339, at)
+	if perr != nil || now.Sub(t) >= resumeMaxAge || now.Sub(t) < -time.Minute {
+		return nil, nil
+	}
+	rv.AgeS = int(now.Sub(t).Seconds())
+	if rv.AgeS < 0 {
+		rv.AgeS = 0
+	}
+	return &rv, nil
 }

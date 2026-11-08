@@ -117,6 +117,22 @@
     <ul class="rt-list" id="rt-list"></ul>{{end}}
   </section>{{end}}
 
+  {{if .TracksOn}}<section class="hud-player" id="rt-player" aria-label="RoadTracks player"{{if not .Resume}} hidden{{end}}>
+    <audio id="rt-audio" preload="none"></audio>
+    <img class="rt-art" id="rt-art" alt="" width="64" height="64" hidden>
+    <div class="rt-meta">
+      <b id="rt-title">{{with .Resume}}{{.Album}}{{end}}</b>
+      <span class="hud-s" id="rt-artist">{{with .Resume}}{{.Artist}}{{end}}</span>
+      <span class="hud-s" id="rt-track"></span>
+    </div>
+    <div class="rt-controls">
+      <button type="button" class="btn btn-dark rt-big" id="rt-play">Play</button>
+      <button type="button" class="btn btn-outline-dark rt-next" id="rt-next">Next</button>
+      {{with .Resume}}<button type="button" class="btn btn-primary rt-resume" id="rt-resume" data-album-id="{{.AlbumID}}" data-album="{{.Album}}" data-artist="{{.Artist}}" data-idx="{{.TrackIdx}}" data-pos="{{.PositionS}}">Resume {{.Album}}</button>{{end}}
+    </div>
+    <p class="hud-s" id="rt-status" role="status" aria-live="polite"></p>
+  </section>{{end}}
+
   {{if and .SimAllowed (not .SimOn)}}<details class="hud-sim">
     <summary class="hud-k">Simulated drive</summary>
     <form class="hud-dest" method="post" action="/driver/sim/start" aria-label="Start a simulated drive">
@@ -141,4 +157,5 @@
 </section>
 <script defer src="/static/js/sim.js?v={{.V}}"></script>
 <script defer src="/static/js/hud.js?v={{.V}}"></script>
+<script defer src="/static/js/player.js?v={{.V}}"></script>
 {{template "foot" .}}
