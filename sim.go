@@ -76,6 +76,17 @@ func (s *simSvc) Stop(user string) {
 	delete(s.byUser, user)
 }
 
+// StepTo moves a stepping car to a point. A clock-driven drive, or none, is
+// left as it is.
+func (s *simSvc) StepTo(user string, lat, lng float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if st, ok := s.byUser[user]; ok && st.Step {
+		st.StepPos = [2]float64{lat, lng}
+		s.byUser[user] = st
+	}
+}
+
 func (s *simSvc) State(user string) (simState, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -89,6 +100,12 @@ func (s *simSvc) PositionAt(user string, now time.Time) (lat, lng, heading, mph,
 	st, ok := s.State(user)
 	if !ok {
 		return 0, 0, 0, 0, 0, false
+	}
+	if st.Step {
+		// A stepping car never moves with the clock: it is where the last post
+		// put it, and it has no speed.
+		along, _ := projectOnLine(simCorridors[st.Corridor], st.StepPos[0], st.StepPos[1])
+		return st.StepPos[0], st.StepPos[1], 0, 0, along, true
 	}
 	elapsed := math.Max(0, now.Sub(st.T0).Seconds())
 	w := simWalk(st, elapsed)
@@ -232,14 +249,16 @@ func (a *App) simFix(r *http.Request) (lat, lng *float64) {
 	return &la, &ln
 }
 
-// restartSim begins the pretend car afresh for user: the same settings when
-// one is running, else the Kingston corridor at x60 on a seed from the clock.
-func (a *App) restartSim(user string) {
+// startSteppingSim begins the pretend car for user as a STEPPING drive at the
+// start checkpoint's store coordinates, replacing any drive (clock or not). It
+// moves only when a post moves it (nextSimStep), never with the clock.
+func (a *App) startSteppingSim(user string, start *Checkpoint) {
 	st := simState{Corridor: simCorKGN, Seed: uint32(time.Now().UnixNano()), X: 60}
 	if old, ok := a.simSvc().State(user); ok {
-		st = old
+		st.Corridor, st.Seed = old.Corridor, old.Seed
 	}
 	st.T0 = a.simSvc().now()
+	st.Step, st.StepPos = true, [2]float64{start.Lat, start.Lng}
 	a.simSvc().Start(user, st)
 }
 
@@ -255,6 +274,9 @@ func (a *App) simBanner(r *http.Request) string {
 		return ""
 	}
 	_, _, _, mph, done, _ := a.sim.PositionAt(user, a.sim.now())
+	if st.Step {
+		return fmt.Sprintf("SIMULATED GPS — stepping, one step per post, %.1f mi along %s", done, simLabels[st.Corridor])
+	}
 	return fmt.Sprintf("SIMULATED GPS — %s, seed %d, %.1f mi at %d mph x%s", simLabels[st.Corridor], st.Seed, done,
 		int(math.Round(mph)), strconv.FormatFloat(st.X, 'f', -1, 64))
 }
@@ -304,6 +326,13 @@ func (a *App) simJSON(w http.ResponseWriter, r *http.Request) {
 		user := a.userOf(r)
 		if st, ok := a.sim.State(user); ok {
 			_, _, _, mph, done, _ := a.sim.PositionAt(user, a.sim.now())
+			if st.Step {
+				out = map[string]any{"running": true, "stepping": true, "corridor": st.Corridor, "seed": st.Seed,
+					"miles_done": math.Round(done*10) / 10, "started_at": st.T0.UTC().Format(time.RFC3339)}
+				w.Header().Set("Cache-Control", "private, no-store")
+				writeJSON(w, http.StatusOK, out)
+				return
+			}
 			out = map[string]any{"running": true, "corridor": st.Corridor, "seed": st.Seed,
 				"miles_done": math.Round(done*10) / 10, "mph": math.Round(mph), "started_at": st.T0.UTC().Format(time.RFC3339)}
 		}

@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/cucumber/godog"
@@ -168,4 +171,36 @@ func (w *stepWorld) halfMiles() error {
 		return fmt.Errorf("the screen says %.0f mi to B, half of A to B is %.1f mi", got, want)
 	}
 	return nil
+}
+
+// While a simulated car runs, a re-pin may not store a photo's own GPS or a
+// browser fix: on a KATE the car is the only position.
+func TestRepinRefusesRealPointsWhileTheSimRuns(t *testing.T) {
+	app := testApp(t)
+	app.simAllowed = true
+	app.sim = newSimSvc()
+	legs := testLegs(t, app)
+	lat, lng := 44.2, -76.5
+	post := mustCreate(t, app, &Post{LegID: legs[0].ID, Kind: "photo", Title: "t", Lat: &lat, Lng: &lng, PinSource: pinBrowser})
+	repin := func(source string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/driver/post/x/pin", strings.NewReader(url.Values{"pin_source": {source}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.SetPathValue("id", strconv.FormatInt(post.ID, 10))
+		app.sim.Start(app.userOf(req), simState{Corridor: simCorKGN, Step: true, StepPos: [2]float64{44.2, -76.5}})
+		w := httptest.NewRecorder()
+		app.postRepin(w, req)
+		return w
+	}
+	for _, src := range []string{pinEXIF, pinBrowser} {
+		w := repin(src)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "the simulated car is the only position") {
+			t.Fatalf("re-pin to %s answered %d %q, want a 400 naming the car", src, w.Code, w.Body.String())
+		}
+	}
+	if got := mustGet(t, app, post.ID); got.PinSource != pinBrowser {
+		t.Fatalf("a refused re-pin changed the pin to %q", got.PinSource)
+	}
+	if w := repin(pinNone); w.Code != http.StatusSeeOther {
+		t.Fatalf("re-pin to none answered %d, want 303", w.Code)
+	}
 }

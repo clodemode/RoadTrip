@@ -1475,6 +1475,50 @@ func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, photo *Photo, loc *t
 	return msg, nil
 }
 
+// stepState is the stepping drive of the request's user once the drive has
+// started: the one state a post moves. Only where SIM_ALLOWED.
+func (a *App) stepState(r *http.Request, start *Checkpoint) (simState, bool) {
+	if !a.simAllowed || a.sim == nil || start == nil || start.ArrivedAt == "" {
+		return simState{}, false
+	}
+	st, ok := a.sim.State(a.userOf(r))
+	return st, ok && st.Step
+}
+
+// simAtStopKm is how close the stepping car must be to a stop to count as
+// standing at it.
+const simAtStopKm = 0.5
+
+// nextSimStep is where the stepping car goes on the next post: halfway to the
+// next open stop along the planned line, and then to that stop, and so on. The
+// next open stop is the first after the start that is neither arrived at nor
+// skipped. A car standing at it needs no move; with no open stop left it stays
+// put. Halfway and at-the-stop alternate by whether the car now stands at a
+// stop (any stop, so a step past a skipped one starts again from halfway).
+func nextSimStep(legs []Leg, cur LatLng) LatLng {
+	open := openStops(legs)
+	if len(open) == 0 {
+		return cur
+	}
+	next := open[0]
+	if haversineKm(cur.Lat, cur.Lng, next.Lat, next.Lng) <= simAtStopKm {
+		return cur
+	}
+	atStop := false
+	for _, c := range rideCheckpoints(legs) {
+		if haversineKm(cur.Lat, cur.Lng, c.Lat, c.Lng) <= simAtStopKm {
+			atStop = true
+		}
+	}
+	// A hop of a kilometre or so has no halfway worth a post of its own.
+	if !atStop || haversineKm(cur.Lat, cur.Lng, next.Lat, next.Lng) < 1 {
+		return LatLng{next.Lat, next.Lng}
+	}
+	way := plannedWay(legs, &Checkpoint{Lat: cur.Lat, Lng: cur.Lng, LegID: next.LegID}, &next)
+	mid, _ := simWalkPath(way.pts, simPathLength(way.pts)/2)
+	return LatLng{mid[0], mid[1]}
+}
+
 // startChoice is the Start the drive choice while the drive has not started;
 // nil once it has.
 func startChoice(legs []Leg) *milestoneChoice {
@@ -1897,6 +1941,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var photo *Photo
+	stepKept := false
 	if f, _, err := r.FormFile("photo"); err == nil {
 		defer f.Close()
 		photo, err = a.savePhoto(f, loc)
@@ -1916,6 +1961,21 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	if post.Title == "" && post.Body == "" && photo == nil {
 		fail("Say something, or attach a photo.")
 		return
+	}
+
+	// On a KATE the stepping car moves one step per post, BEFORE the pin and the
+	// vouch read it, so the post is pinned at, and checks in at, the new spot.
+	// A post that does not get saved must not have moved the car: the step is
+	// put back unless CreatePost succeeds.
+	if st, ok := a.stepState(r, start); ok {
+		prev, user := st.StepPos, a.userOf(r)
+		to := nextSimStep(rv.Legs, LatLng{prev[0], prev[1]})
+		a.sim.StepTo(user, to.Lat, to.Lng)
+		defer func() {
+			if !stepKept {
+				a.sim.StepTo(user, prev[0], prev[1])
+			}
+		}()
 	}
 
 	// Pin: whatever the operator picked on the radio, else the ladder — the
@@ -1969,6 +2029,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		fail("Could not save: " + err.Error())
 		return
 	}
+	stepKept = true
 	log.Printf("post %d: pin %s", post.ID, pinNote)
 	a.melt.Event("post_created", map[string]any{"pin_source": post.PinSource, "has_photo": photo != nil,
 		"exif_gps": photo != nil && photo.Lat != nil, "fuzzed": pinFuzzed})
@@ -1979,7 +2040,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if startSim {
-			a.restartSim(a.userOf(r))
+			a.startSteppingSim(a.userOf(r), start)
 		}
 		a.melt.Event("drive_started", map[string]any{"vouched_by": startSrc, "km": math.Round(startKm*10) / 10})
 		log.Printf("post %d: drive started from %s by %s", post.ID, start.Name, startSrc)
@@ -2323,6 +2384,18 @@ func (a *App) postRepin(w http.ResponseWriter, r *http.Request) {
 	// real option: re-pinning must not silently drop a pin it cannot re-derive.
 	if post.PinSource == pinBrowser && post.Lat != nil {
 		in.BrowLat, in.BrowLng, in.Accuracy = post.Lat, post.Lng, post.AccuracyM
+	}
+	// While a simulated car runs (a KATE) the car is the only position: a
+	// real point, a photo's own or a browser's, is never stored there, so a
+	// re-pin may not choose one and the ladder may not fall to one.
+	if a.simAllowed && a.sim != nil {
+		if _, running := a.sim.State(a.userOf(r)); running {
+			if in.Want == pinEXIF || in.Want == pinBrowser {
+				http.Error(w, "on a KATE the simulated car is the only position", http.StatusBadRequest)
+				return
+			}
+			in.ExifLat, in.ExifLng, in.BrowLat, in.BrowLng, in.Accuracy = nil, nil, nil, nil, nil
+		}
 	}
 	post.HideLocation = in.Want == pinNone
 	if post.HideLocation {
