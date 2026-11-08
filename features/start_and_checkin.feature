@@ -33,6 +33,13 @@ Feature: Start the drive, then every photo checks in wherever the car got to
     Then A is departed at 09:15 in A's zone
     And the bus carries a drive_started record whose source is "photo" with no latitude and no longitude
 
+  Scenario: A note with no photo checks in nothing, whatever the phone says
+    Given the drive has started at A
+    And the phone reports a position at B
+    When kris posts a text-only note
+    Then the note was saved
+    And B is still not arrived at
+
   Scenario: A photo taken far from A does not start the drive
     Given a photo taken at 09:15 with its GPS 60 km from A
     When kris starts the drive with that photo
