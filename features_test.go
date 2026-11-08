@@ -22,6 +22,7 @@ func TestFeatures(t *testing.T) {
 				initDayBadgeScenarios(sc)
 				initDriveTracksScenarios(t, sc)
 				initStartButtonScenarios(sc)
+				initRoadtracksPlayerScenarios(t, sc)
 				initCanadianWeatherScenarios(t, sc)
 				initTrafficChipBudgetScenarios(t, sc)
 				initRouteMeHereScenarios(t, sc)
