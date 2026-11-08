@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,6 +26,16 @@ var (
 func initPostFormByTypeScenarios(sc *godog.ScenarioContext, p *postWorld) {
 	sc.Step(`^kris is in "(trip|aimless|destined)" mode$`, func(mode string) error {
 		p.sim.app.freeSvc().set("kris", func(s *freeState) { s.enter(mode) })
+		return nil
+	})
+	sc.Step(`^the page never picks No pin by itself$`, func() error {
+		js, err := os.ReadFile("static/js/post.js")
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(js), "rNone.checked = true") {
+			return fmt.Errorf("post.js selects No pin on its own")
+		}
 		return nil
 	})
 	sc.Step(`^the form has a "kind" radio for every post kind$`, func() error {

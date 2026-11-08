@@ -62,3 +62,8 @@ Feature: The post form opens on what is being posted
     When kris starts the drive with no photo
     Then the request is refused
     And A is still not arrived at
+
+  Scenario: With no position to offer the form leaves the pin to the server
+    # "No pin" is a choice the driver makes. Picked by the page on its own, it
+    # would beat the simulated car and any position the server has.
+    Then the page never picks No pin by itself
