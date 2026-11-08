@@ -34,6 +34,26 @@ Feature: Test-mode phone location
     Then Chester's context carries a position
     And that position is the simulated one, coarsened the same way a phone position is
 
+  Scenario: Chester's Send my position is the simulated car, never the phone
+    Given kris started a simulated drive on corridor "kgn-yyz" with seed 7 and compression 60
+    When kris opens the Chester page
+    Then the page says the position is simulated
+    When kris asks Chester a question with no browser position
+    Then that position is the simulated one, coarsened the same way a phone position is
+    When kris stops the simulated drive
+    And kris opens the Chester page
+    Then the page does not say the position is simulated
+
+  Scenario: The post form's My phone location is the simulated car, never the phone
+    Given kris started a simulated drive on corridor "kgn-yyz" with seed 7 and compression 60
+    When kris opens the post page
+    Then the page says the position is simulated
+    When kris posts a photo choosing My phone location with no coordinates
+    Then the post is pinned by the simulated car
+    When kris stops the simulated drive
+    And kris opens the post page
+    Then the page does not say the position is simulated
+
   Scenario: Stopping the drive forgets the position everywhere
     Given kris started a simulated drive on corridor "kgn-yyz" with seed 7 and compression 60
     When kris stops the simulated drive

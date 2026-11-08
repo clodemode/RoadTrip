@@ -127,27 +127,6 @@
 
   // --- the form -------------------------------------------------------------
 
-  // suggestMilestone returns the id of the nearest offered milestone within
-  // 2 km of the point, else null. choices: [{id, lat, lng}]. A suggestion only:
-  // the page marks it, the driver still taps it.
-  var MS_NEAR_KM = 2.0;
-  function haversineKm(aLat, aLng, bLat, bLng) {
-    var R = 6371, rad = Math.PI / 180;
-    var dLat = (bLat - aLat) * rad, dLng = (bLng - aLng) * rad;
-    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    return 2 * R * Math.asin(Math.sqrt(h));
-  }
-  function suggestMilestone(point, choices) {
-    if (!point || !choices) return null;
-    var best = null, bestKm = Infinity;
-    for (var i = 0; i < choices.length; i++) {
-      var c = choices[i], d = haversineKm(point.lat, point.lng, c.lat, c.lng);
-      if (d <= MS_NEAR_KM && d < bestKm) { best = c.id; bestKm = d; }
-    }
-    return best;
-  }
-
   // ladderChoice is the source the form pre-selects: photo GPS, else the phone,
   // else the checkpoint, else nothing. It never answers "none": No pin is a
   // choice the driver makes, and sent on its own it would beat every position
@@ -198,7 +177,7 @@
   }
 
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, sectionsFor: sectionsFor, locationReason: locationReason };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, sectionsFor: sectionsFor, locationReason: locationReason };
     return;
   }
 
@@ -217,6 +196,11 @@
   var cells = window.RT_PRIVATE || [];
   var precision = window.RT_PIN_PRECISION || 'snap';
   var exif = null, fix = null, touched = false;
+  // A simulated drive (data-sim="1", set by the server while one runs) is the
+  // phone: the server pins the post from its own copy of the car, so the page
+  // never asks the browser and never holds a coordinate to post back.
+  var formEl = $('post-form'), brName = $('p-brow-name');
+  var simOn = !!formEl && formEl.getAttribute('data-sim') === '1';
 
   function snap(v) { return Math.round(Math.round(v / CELL) * CELL * 1000) / 1000; }
 
@@ -259,33 +243,16 @@
   // touches the radio — after that their choice stands.
   function ladder() {
     if (touched) return;
-    var pick = ladderChoice(!!exif, !!fix, !!(cpSel && cpSel.value));
+    var pick = ladderChoice(!!exif, !!fix || simOn, !!(cpSel && cpSel.value));
     rExif.checked = pick === 'exif';
     rBrow.checked = pick === 'browser';
     rCp.checked = pick === 'checkpoint';
     rNone.checked = false;
   }
 
-  // The milestone radios carry their published position. The one nearest the
-  // pin point is flagged, never selected: marking a stop reached is deliberate.
-  var msLabels = [].slice.call(document.querySelectorAll('label[data-lat][data-lng]'));
-  function suggest(p) {
-    var choices = msLabels.map(function (l) {
-      var r = l.querySelector('input');
-      return { id: r.value, lat: +l.getAttribute('data-lat'), lng: +l.getAttribute('data-lng') };
-    });
-    var id = p ? suggestMilestone(p, choices) : null;
-    msLabels.forEach(function (l) {
-      var on = id !== null && l.querySelector('input').value === id;
-      l.classList.toggle('ms-suggested', on);
-      var n = l.querySelector('.ms-near');
-      if (n) n.hidden = !on;
-    });
-  }
-
   function refresh(fromToggle) {
     rExif.disabled = !exif;
-    rBrow.disabled = !fix;
+    rBrow.disabled = !fix && !simOn;
     rCp.disabled = !(cpSel && cpSel.value);
     if (rExif.disabled && rExif.checked) rExif.checked = false;
     if (rBrow.disabled && rBrow.checked) rBrow.checked = false;
@@ -302,8 +269,13 @@
     if (la) { la.value = fix ? fix.lat : ''; ln.value = fix ? fix.lng : ''; ac.value = fix ? fix.acc : ''; }
     if (pla) { pla.value = exif ? exif.lat.toFixed(4) : ''; pln.value = exif ? exif.lng.toFixed(4) : ''; }
 
+    if (simOn && rBrow.checked) {
+      fuzz.disabled = true;
+      fuzzSet.value = '1';
+      says.textContent = 'publishes as: the simulated position, placed by the server';
+      return;
+    }
     var p = point(), near = p && p.raw ? nearPrivate(p.lat, p.lng) : null;
-    suggest(p && p.raw ? p : null);
     fuzz.disabled = !(p && p.raw);
     if (!fromToggle) fuzz.checked = !!near && precision !== 'exact';
     fuzzSet.value = '1';              // from here on the toggle's state is deliberate
@@ -409,6 +381,7 @@
     refresh(false);
   }
   function askFix(fresh) {
+    if (simOn) return;
     if (geoSt) geoSt.textContent = fix ? 'location: on (±' + fix.acc + ' m), refreshing…' : 'location: asking…';
     askLocation(navigator.geolocation, onFix, function (e) { onNoFix(e, fresh); }, fresh);
   }
@@ -448,6 +421,12 @@
     });
   }
 
+  if (simOn) {
+    if (brName) brName.textContent = 'Simulated position';
+    if (geoSt) geoSt.textContent = '\u2014 the pretend car, not the phone';
+    refresh(false);
+    return;
+  }
   if (geoSt && secure === false) geoSt.textContent = 'location: off — ' + locationReason(false, 1);
   else if (geoSt && navigator.geolocation) geoSt.textContent = 'location: asking…';
   else if (geoSt) geoSt.textContent = 'location: off';

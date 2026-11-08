@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"math"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -64,6 +66,12 @@ func initSimScenarios(t *testing.T, sc *godog.ScenarioContext) *simWorld {
 	sc.Step(`^(\w+) asks Chester a question with no browser position$`, w.asksChester)
 	sc.Step(`^Chester's context carries a position$`, w.chesterHasPosition)
 	sc.Step(`^that position is the simulated one, coarsened the same way a phone position is$`, w.chesterPositionCoarsened)
+	sc.Step(`^(\w+) opens the Chester page$`, func(n string) error { return w.open(n, "/chester") })
+	sc.Step(`^(\w+) opens the post page$`, func(n string) error { return w.open(n, "/driver/post") })
+	sc.Step(`^the page says the position is simulated$`, func() error { return w.pageSim(true) })
+	sc.Step(`^the page does not say the position is simulated$`, func() error { return w.pageSim(false) })
+	sc.Step(`^(\w+) posts a photo choosing My phone location with no coordinates$`, w.postsBrowserPinned)
+	sc.Step(`^the post is pinned by the simulated car$`, w.pinnedBySim)
 	sc.Step(`^(\w+) stops the simulated drive$`, w.stop)
 	sc.Step(`^asking for the simulated position answers that none is running$`, w.noneRunning)
 	sc.Step(`^the request is refused with (\d+)$`, w.refusedWith)
@@ -311,6 +319,67 @@ func (w *simWorld) meltHasNoCoordinates() error {
 		if f, ok := v.(float64); ok && (math.Abs(f-44) < 1 && k != "miles_left") && k != "ts" {
 			return fmt.Errorf("the record carries a coordinate-like value %s=%v", k, v)
 		}
+	}
+	return nil
+}
+
+func (w *simWorld) open(name, path string) error {
+	w.last = doAs(w.t, w.app, w.cookies[name], "GET", path, nil)
+	if w.last.Code != http.StatusOK {
+		return fmt.Errorf("%s answered %d", path, w.last.Code)
+	}
+	return nil
+}
+
+// pageSim: the page carries data-sim="1" exactly while a drive runs, which is
+// what tells chester.js and post.js not to ask the phone.
+func (w *simWorld) pageSim(want bool) error {
+	if got := strings.Contains(w.last.Body.String(), `data-sim="1"`); got != want {
+		return fmt.Errorf(`page carries data-sim="1": %v, want %v`, got, want)
+	}
+	return nil
+}
+
+func (w *simWorld) postsBrowserPinned(name string) error {
+	rv, err := w.app.loadRide()
+	if err != nil || len(rv.Legs) == 0 {
+		return fmt.Errorf("no ride to post to: %v", err)
+	}
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	_ = mw.WriteField("leg_id", strconv.FormatInt(rv.Legs[0].ID, 10))
+	_ = mw.WriteField("kind", "photo")
+	_ = mw.WriteField("pin_source", "browser")
+	fw, _ := mw.CreateFormFile("photo", "p.jpg")
+	_, _ = fw.Write(jpegTaken(""))
+	_ = mw.Close()
+	req := httptest.NewRequest("POST", "/driver/post", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.AddCookie(w.cookies[name])
+	rec := httptest.NewRecorder()
+	w.app.routes().ServeHTTP(rec, req)
+	w.last = rec
+	if rec.Code != http.StatusSeeOther {
+		return fmt.Errorf("posting answered %d: %s", rec.Code, rec.Body.String())
+	}
+	return nil
+}
+
+func (w *simWorld) pinnedBySim() error {
+	posts, err := w.app.store.Posts(w.app.activeSlug(), 0)
+	if err != nil || len(posts) != 1 {
+		return fmt.Errorf("want one post, have %d (%v)", len(posts), err)
+	}
+	p := posts[0]
+	if p.PinSource != pinSim || p.Lat == nil || p.Lng == nil {
+		return fmt.Errorf("the post is pinned %q, want %q", p.PinSource, pinSim)
+	}
+	sp, ok := w.pos(w.cookies["kris"], w.now)
+	if !ok {
+		return fmt.Errorf("no simulated position is running")
+	}
+	if km := haversineKm(*p.Lat, *p.Lng, sp.lat, sp.lng); km > 6 {
+		return fmt.Errorf("the post is %.1f km from the simulated car", km)
 	}
 	return nil
 }

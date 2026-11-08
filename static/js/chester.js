@@ -46,7 +46,15 @@
   }
 
   // --- the position: sent only when asked for, and said out loud -------------------
-  if (locate) {
+  var simOn = form.getAttribute('data-sim') === '1';
+  if (locate && simOn) {
+    // A simulated drive is the phone: the server answers from its own copy of
+    // the car, so the button asks nothing and no coordinate is held here.
+    locate.textContent = 'Simulated position';
+    locate.disabled = true;
+    geo.textContent = 'Chester will use the simulated car, not the phone.';
+    la.value = ''; ln.value = '';
+  } else if (locate) {
     locate.addEventListener('click', function () {
       if (!navigator.geolocation) { geo.textContent = 'This browser has no position to give.'; return; }
       geo.textContent = 'Asking the phone…';

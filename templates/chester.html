@@ -12,7 +12,7 @@
   <p class="muted mb-0">This site has no API key for it, so there is nothing to ask. Everything else works as it did.</p>
 </div></section>
 {{else}}
-<form id="ch-form" class="ch-form" method="post" action="/chester/ask" autocomplete="off">
+<form id="ch-form" class="ch-form" method="post" action="/chester/ask" autocomplete="off"{{if .SimOn}} data-sim="1"{{end}}>
   <fieldset class="ch-presets">
     <legend>Ask in one tap</legend>
     {{range .Presets}}<button type="button" class="btn btn-outline-primary ch-preset" data-preset="{{.ID}}" data-question="{{.Question}}">{{.Label}}</button>
