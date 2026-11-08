@@ -28,9 +28,10 @@ import (
 // "source"; the bus keeps that word for the app (roadtrip), so the field is
 // vouched_by.
 type scWorld struct {
-	p       *postWorld
-	phone   bool        // the phone reports a position (at B unless phoneAt says where)
-	phoneAt *[2]float64 // where the phone reports it is, when not at B
+	p           *postWorld
+	phone       bool        // the phone reports a position (at B unless phoneAt says where)
+	phoneAt     *[2]float64 // where the phone reports it is, when not at B
+	startSource string      // the start form's position choice; empty sends none
 }
 
 const stopsLng = -100.0
@@ -51,6 +52,29 @@ func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) *scWorld
 	sc.Step(`^the form says the next stop is ([ABCD])$`, s.nextIs)
 	sc.Step(`^kris starts the drive with no photo$`, func() error { p.photo = nil; return s.send(0, false, false) })
 	sc.Step(`^kris starts the drive with that photo$`, func() error { return s.send(0, true, false) })
+	sc.Step(`^kris starts the drive with that photo by real GPS$`, func() error {
+		s.startSource = "gps"
+		return s.send(0, true, false)
+	})
+	sc.Step(`^the form (does not )?offers? "(Real GPS|Simulated car)"$`, func(not, what string) error {
+		has := strings.Contains(p.body, what)
+		if not == "" && !has {
+			return fmt.Errorf("the form does not offer %q", what)
+		}
+		if not != "" && has {
+			return fmt.Errorf("the form offers %q", what)
+		}
+		return nil
+	})
+	sc.Step(`^kris's simulated car is not running$`, func() error {
+		if p.sim.app.sim == nil {
+			return nil
+		}
+		if _, ok := p.sim.app.sim.State("kris"); ok {
+			return fmt.Errorf("a simulated car is running for kris")
+		}
+		return nil
+	})
 	sc.Step(`^kris posts that photo$`, func() error { return s.send(-1, true, s.phone) })
 	sc.Step(`^kris posts a text-only note$`, s.sendNote)
 	sc.Step(`^the note was saved$`, func() error {
@@ -305,6 +329,9 @@ func (s *scWorld) send(i int, withPhoto, withPhone bool) error {
 	_ = mw.WriteField("kind", "photo")
 	if i >= 0 {
 		_ = mw.WriteField("milestone_id", strconv.FormatInt(p.cps[i].ID, 10))
+	}
+	if s.startSource != "" {
+		_ = mw.WriteField("start_source", s.startSource)
 	}
 	if withPhone {
 		lat, lng := p.cps[1].Lat, p.cps[1].Lng

@@ -138,3 +138,38 @@ Feature: Start the drive, then every photo checks in wherever the car got to
     And a photo with no GPS of its own
     When kris posts that photo
     Then B is still not arrived at
+
+  Scenario: On a KATE the Start form offers Real GPS or Simulated car
+    Given simulation is allowed
+    When kris opens the post form
+    Then the form offers "Real GPS"
+    And the form offers "Simulated car"
+
+  Scenario: Off a KATE the Start form offers no position choice
+    Given simulation is not allowed
+    When kris opens the post form
+    Then the form does not offer "Real GPS"
+
+  Scenario: On a KATE Real GPS starts the drive at the photo's GPS and starts no simulated car
+    Given simulation is allowed
+    And a photo taken at 09:15 with its GPS at A
+    When kris starts the drive with that photo by real GPS
+    Then A is departed at 09:15 in A's zone
+    And kris's simulated car is not running
+    And the bus carries a drive_started record whose source is "photo"
+
+  Scenario: On a KATE Real GPS with no position is refused
+    Given simulation is allowed
+    And a photo with no GPS of its own
+    When kris starts the drive with that photo by real GPS
+    Then the request is refused
+    And A is still not arrived at
+
+  Scenario: On a KATE Real GPS stops a simulated car left running
+    Given simulation is allowed
+    And kris's simulated car is at B
+    And a photo taken at 09:15 with its GPS at A
+    When kris starts the drive with that photo by real GPS
+    Then A is departed
+    And kris's simulated car is not running
+    And the bus carries a drive_started record whose source is "photo"

@@ -89,8 +89,20 @@
         <input class="form-check-input" type="radio" name="milestone_id" value="{{.Start.ID}}"{{if .StartMode}} checked{{end}}>
         <span class="ms-name">Start the drive from {{.Start.Name}}</span></label>
       <p class="muted small mb-0">Starting needs a photo; its own GPS, or your phone&rsquo;s location, says you are there. It is stamped at the photo&rsquo;s own time.</p>
+      {{if and $.SimAllowed (not .StartMode)}}<fieldset class="milestone"><legend>Position for this drive</legend>
+      <label class="form-check"><input class="form-check-input" type="radio" name="start_source" value="sim" checked>
+        <span>Simulated car</span></label>
+      <label class="form-check"><input class="form-check-input" type="radio" name="start_source" value="gps">
+        <span>Real GPS: the photo&rsquo;s GPS or the phone</span></label>
+    </fieldset>{{end}}
     </fieldset>{{else if .NextStop}}<p class="muted" id="next-stop">Next stop: {{.NextStop}}</p>
     <p class="muted small">Post a photo near a stop and it is checked in at the photo&rsquo;s own time; stops passed on the way are marked missed or rerouted.</p>{{end}}
+    {{if and .StartMode $.SimAllowed}}<fieldset class="milestone"><legend>Position for this drive</legend>
+      <label class="form-check"><input class="form-check-input" type="radio" name="start_source" value="sim" checked>
+        <span>Simulated car</span></label>
+      <label class="form-check"><input class="form-check-input" type="radio" name="start_source" value="gps">
+        <span>Real GPS: the photo&rsquo;s GPS or the phone</span></label>
+    </fieldset>{{end}}
     {{if .StartMode}}<button type="submit" class="btn btn-primary btn-lg tap-lg" id="btn-start">Start the drive from {{.Start.Name}}</button>{{end}}
     <button type="submit" class="btn btn-primary btn-lg"{{if .StartMode}} id="btn-post" hidden{{end}}>Post</button>
     <p class="muted small">Best pin: choose from Photo Library &mdash; the photo keeps its own GPS and time. A shot taken here carries no GPS, so the phone&rsquo;s location when you pick it is used; the phone shares it only over https.</p>
