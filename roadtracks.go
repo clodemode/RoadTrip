@@ -21,9 +21,13 @@ import (
 const roadtracksTimeout = 5 * time.Second
 
 type roadtracksSvc struct {
-	base   string
-	token  string
-	client *http.Client
+	base  string
+	token string
+	// linkBase, when set, replaces base at the front of every link handed to
+	// the phone (ROADTRACKS_LINK_BASE). A KATE reaches its local MusicOrgan
+	// over the container network, an address the phone cannot open.
+	linkBase string
+	client   *http.Client
 }
 
 // newRoadtracks returns nil, which is the feature off, for a blank token.
@@ -91,6 +95,9 @@ func (s *roadtracksSvc) search(ctx context.Context, q string) ([]trackAlbum, err
 		// rebuilt from the id, so a hostile answer cannot plant a javascript: link.
 		if !strings.HasPrefix(link, s.base+"/") {
 			link = fmt.Sprintf("%s/album/%d/", s.base, a.ID)
+		}
+		if s.linkBase != "" {
+			link = s.linkBase + strings.TrimPrefix(link, s.base)
 		}
 		res = append(res, trackAlbum{Album: a.Album, Albumartist: a.Albumartist, Year: a.Year, URL: link})
 	}

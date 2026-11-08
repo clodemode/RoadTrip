@@ -136,3 +136,24 @@ func TestRoadTracksCardShownWhenOn(t *testing.T) {
 		t.Fatalf("hud tracks: %+v", h.Tracks)
 	}
 }
+
+// A KATE calls its local MusicOrgan over the container network
+// (ROADTRACKS_BASE=http://musicorgan:8000) but the phone can only open the LAN
+// address, so ROADTRACKS_LINK_BASE rewrites the links it hands back. Kris,
+// 2026-11-08: "local KATE roadtrip uses local KATE musicorgan".
+func TestRoadTracksLinkBaseRewritesLinksForThePhone(t *testing.T) {
+	mo := newMO(t)
+	app, c := tracksApp(t, mo)
+	app.tracks.linkBase = "http://192.0.2.10:8810"
+	w := doAs(t, app, c, "GET", "/driver/roadtracks/search?q=abbey", nil)
+	var a rtAnswer
+	if err := json.Unmarshal(w.Body.Bytes(), &a); err != nil || len(a.Albums) != 2 {
+		t.Fatalf("%v %s", err, w.Body.String())
+	}
+	if a.Albums[0].URL != "http://192.0.2.10:8810/album/42/" || a.Albums[1].URL != "http://192.0.2.10:8810/album/7/" {
+		t.Fatalf("links not on the link base: %q %q", a.Albums[0].URL, a.Albums[1].URL)
+	}
+	if strings.Contains(w.Body.String(), mo.srv.URL) {
+		t.Fatal("the internal base leaked into the answer")
+	}
+}
