@@ -314,7 +314,10 @@ func main() {
 	} else {
 		log.Print("traffic: TOMTOM_API_KEY set")
 	}
-	if app.tracks = newRoadtracks(os.Getenv("ROADTRACKS_TOKEN"), os.Getenv("ROADTRACKS_BASE")); app.tracks == nil {
+	if app.tracks = newRoadtracks(os.Getenv("ROADTRACKS_TOKEN"), os.Getenv("ROADTRACKS_BASE")); app.tracks != nil {
+		app.tracks.linkBase = strings.TrimRight(strings.TrimSpace(os.Getenv("ROADTRACKS_LINK_BASE")), "/")
+	}
+	if app.tracks == nil {
 		log.Print("roadtracks: ROADTRACKS_TOKEN unset, the RoadTracks card is off")
 	} else {
 		log.Print("roadtracks: enabled")
