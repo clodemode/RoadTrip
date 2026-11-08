@@ -6,7 +6,7 @@
 <section class="hud" id="hud" data-url="/driver/hud.json"{{if .SimOn}} data-sim="1"{{end}}>
 
   {{if not (or .Destined .Aimless)}}<header class="hud-top" aria-label="Gauges">
-    <div class="hud-gauge"><span class="hud-k">Day</span><b class="hud-v" id="hud-day">{{if .H.DayN}}{{.H.DayN}} of {{.H.DayTotal}}{{else}}—{{end}}</b><span class="hud-s" id="hud-leg">{{.H.LegName}}</span></div>
+    <div class="hud-gauge"><span class="hud-k">Day</span><b class="hud-v" id="hud-day">{{if .H.DayN}}{{if eq .H.DayTotal 1}}Today{{else}}{{.H.DayN}} of {{.H.DayTotal}}{{end}}{{else}}—{{end}}</b><span class="hud-s" id="hud-leg">{{.H.LegName}}</span></div>
     <div class="hud-gauge"><span class="hud-k">Done</span><b class="hud-v" id="hud-done">{{.H.MilesDone}}</b></div>
     <div class="hud-gauge"><span class="hud-k">Left</span><b class="hud-v" id="hud-left">{{.H.MilesLeft}}</b></div>
     <div class="hud-gauge"><span class="hud-k">ETA <span id="hud-tonight">{{.H.TonightName}}</span></span><b class="hud-v" id="hud-eta">{{.H.ETA}}</b><span class="hud-s" id="hud-pace">{{.H.ETAPace}}</span></div>

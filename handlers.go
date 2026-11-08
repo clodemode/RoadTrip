@@ -650,6 +650,9 @@ func dayOf(ride *Ride, legs []Leg, now time.Time) dayInfo {
 		if now.In(loadLoc(l.TZ)).Format("2006-01-02") == l.Date {
 			d.Today, d.N = l, i+1
 			d.Badge = "Day " + strconv.Itoa(i+1) + " of " + strconv.Itoa(d.Total)
+			if d.Total == 1 { // Kris ruled 2026-11-08: "Day 1 of 1" says nothing
+				d.Badge = "Today"
+			}
 			return d
 		}
 	}
