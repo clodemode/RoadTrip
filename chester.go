@@ -1742,6 +1742,50 @@ func (s *Store) SetChesterVerdict(id int64, verdict, checked, note string, cv, r
 	return nil
 }
 
+// SetChesterProposalOutcome records what became of the proposal on a row:
+// "saved" or "refused", and the reason when refused. It is a record, never a
+// gate: a row with no proposal is sql.ErrNoRows and the caller ignores it.
+func (s *Store) SetChesterProposalOutcome(id int64, outcome, reason string) error {
+	var raw string
+	if err := s.db.QueryRow(`SELECT proposal FROM chester_queries WHERE id=?`, id).Scan(&raw); err != nil {
+		return err
+	}
+	var p map[string]any
+	if raw == "" || json.Unmarshal([]byte(raw), &p) != nil || p == nil {
+		return sql.ErrNoRows
+	}
+	p["outcome"] = outcome
+	if outcome == "refused" && reason != "" {
+		p["reason"] = reason
+	} else {
+		delete(p, "reason")
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`UPDATE chester_queries SET proposal=? WHERE id=?`, string(b), id)
+	return err
+}
+
+// ProposalLine is the log page's one plain line about a proposal's fate.
+func (q ChesterQuery) ProposalLine() string {
+	var p struct{ Outcome, Reason string }
+	if len(q.Proposal) == 0 || json.Unmarshal(q.Proposal, &p) != nil {
+		return ""
+	}
+	switch p.Outcome {
+	case "saved":
+		return "Saved by the trip-keeper."
+	case "refused":
+		if p.Reason != "" {
+			return "Save refused: " + p.Reason
+		}
+		return "Save refused."
+	}
+	return ""
+}
+
 // chesterSummaryRow is one line of the summary: a mode and a verdict.
 type chesterSummaryRow struct {
 	Mode    string `json:"mode"`

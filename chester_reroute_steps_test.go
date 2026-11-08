@@ -99,6 +99,11 @@ func initChesterRerouteScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the log row records the proposal "([^"]*)" to "([^"]*)" as "([^"]*)"$`, w.logRecords)
 	sc.Step(`^the page builds the proposal card with a Save button that posts to the plan save$`, w.pageBuilds)
 	sc.Step(`^the trip-keeper taps Save on the proposal$`, w.tapSave)
+	sc.Step(`^the trip-keeper taps Save on the proposal with the Chester id "([^"]*)"$`, w.tapSaveWithID)
+	sc.Step(`^the log row's proposal outcome is "([^"]*)"$`, func(o string) error { return w.outcomeIs(o, false) })
+	sc.Step(`^the log row's proposal outcome is "([^"]*)" with a reason$`, func(o string) error { return w.outcomeIs(o, true) })
+	sc.Step(`^the page's Save sends the card's query id$`, w.pageSendsID)
+	sc.Step(`^the plan save response carries only status, selection and plan$`, w.saveKeys)
 	sc.Step(`^the plan save answers "([^"]*)"$`, func(s string) error { return w.saveAnswers(s, false) })
 	sc.Step(`^the plan save answers "([^"]*)" with a reason$`, func(s string) error { return w.saveAnswers(s, true) })
 	sc.Step(`^the saved plan takes "([^"]*)" for "([^"]*)"$`, w.savedTakes)
@@ -432,7 +437,19 @@ func (w *rerouteWorld) tapSave() error {
 	if p == nil {
 		return fmt.Errorf("no proposal to save")
 	}
-	form := url.Values{"start": {p.Start}}
+	return w.postSave(p, fmt.Sprint(p.QueryID))
+}
+
+func (w *rerouteWorld) tapSaveWithID(id string) error {
+	p := w.proposal()
+	if p == nil {
+		return fmt.Errorf("no proposal to save")
+	}
+	return w.postSave(p, id)
+}
+
+func (w *rerouteWorld) postSave(p *rerouteCard, chesterID string) error {
+	form := url.Values{"start": {p.Start}, "chester_id": {chesterID}}
 	for k, v := range p.Selection {
 		form.Set("opt-"+k, v)
 	}
@@ -471,6 +488,48 @@ func (w *rerouteWorld) savedTakes(choice, opt string) error {
 	}
 	if j.Saved.Selection[opt] != choice {
 		return fmt.Errorf("the saved plan takes %q for %q, want %q (%s)", j.Saved.Selection[opt], opt, choice, rec.Body.String())
+	}
+	return nil
+}
+
+func (w *rerouteWorld) outcomeIs(outcome string, reason bool) error {
+	row, err := w.logJSON()
+	if err != nil {
+		return err
+	}
+	p, _ := row["proposal"].(map[string]any)
+	if p == nil || p["outcome"] != outcome {
+		return fmt.Errorf("the log row's proposal is %v, want outcome %q", row["proposal"], outcome)
+	}
+	if r, _ := p["reason"].(string); reason && r == "" {
+		return fmt.Errorf("the outcome %q carries no reason: %v", outcome, p)
+	}
+	return nil
+}
+
+func (w *rerouteWorld) pageSendsID() error {
+	js, err := os.ReadFile("static/js/chester.js")
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(string(js), "'chester_id'") {
+		return fmt.Errorf("static/js/chester.js does not send chester_id with Save")
+	}
+	return nil
+}
+
+func (w *rerouteWorld) saveKeys() error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(w.save.Body.Bytes(), &m); err != nil {
+		return err
+	}
+	for _, k := range []string{"status", "selection", "plan"} {
+		if _, ok := m[k]; !ok {
+			return fmt.Errorf("the save response lacks %q: %s", k, w.save.Body.String())
+		}
+	}
+	if len(m) != 3 {
+		return fmt.Errorf("the save response has extra keys: %s", w.save.Body.String())
 	}
 	return nil
 }

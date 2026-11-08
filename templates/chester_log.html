@@ -83,6 +83,7 @@
       <div><dt>Cost</dt><dd>{{usd .USD}}{{if .USDEstimated}} (an estimate){{end}}</dd></div>
       <div><dt>Stopped</dt><dd>{{if .StopReason}}{{.StopReason}}{{else}}no stop reason{{end}}</dd></div>
       <div><dt>Position sent</dt><dd>{{.Position}}</dd></div>
+      {{with .ProposalLine}}<div><dt>Route proposal</dt><dd>{{.}}</dd></div>{{end}}
       {{with .Note}}<div><dt>Notes</dt><dd>{{.}}</dd></div>{{end}}
       {{if .Verdict}}
       <div><dt>Checked against</dt><dd>{{if .Checked}}{{.CheckedLabel}}{{else}}not said{{end}}</dd></div>
