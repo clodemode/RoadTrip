@@ -527,6 +527,10 @@ func TestFreeCandidatesAreKeptWhenChesterWasOffAndRankedLater(t *testing.T) {
 	tt := newTT(t)
 	fillAll(tt)
 	app, c := picksApp(t, tt, nil)
+	// The stub's route arrives 2026-11-07 15:40 at -06:00, so the music
+	// candidates are kept until 06:00 UTC on the 8th. Pin the clock inside
+	// that day, or this passes only while the real date is before it.
+	clockAt(app, "2026-11-08T05:00:00Z")
 	findPicks(t, app, c, true)
 	calls := tt.along.Load()
 	stub := newAPIStub(t, messageJSON(allNotes))
