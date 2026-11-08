@@ -148,8 +148,21 @@
     return best;
   }
 
+  // askLocation asks geo (navigator.geolocation) for the phone's position at
+  // once and reports it as {lat, lng, acc} (lat and lng to 4 dp, acc in
+  // metres), or the error. Without a geolocation it reports an error, so the
+  // caller's "off" path runs. It returns whether a request was made.
+  function askLocation(geo, ok, fail) {
+    if (!geo) { fail({ code: 0 }); return false; }
+    geo.getCurrentPosition(function (p) {
+      var c = p.coords;
+      ok({ lat: c.latitude.toFixed(4), lng: c.longitude.toFixed(4), acc: Math.round(c.accuracy || 0) });
+    }, fail, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+    return true;
+  }
+
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone, askLocation: askLocation };
     return;
   }
 
@@ -320,21 +333,21 @@
     });
   }
 
-  if (!navigator.geolocation) {
-    if (geoSt) geoSt.textContent = 'location: off';
+  // The phone's location is asked for the moment the form opens, never only
+  // when a radio is picked: a camera photo carries no GPS, and the fix has to
+  // be in the hidden fields before the photo is posted.
+  function onFix(f) {
+    fix = f;
+    if (geoSt) geoSt.textContent = 'location: on (±' + fix.acc + ' m)';
     refresh(false);
-  } else {
-    if (geoSt) geoSt.textContent = 'location: asking…';
-    refresh(false);
-    navigator.geolocation.getCurrentPosition(function (p) {
-      var c = p.coords;
-      fix = { lat: c.latitude.toFixed(4), lng: c.longitude.toFixed(4), acc: Math.round(c.accuracy || 0) };
-      if (geoSt) geoSt.textContent = 'location: on (±' + fix.acc + ' m)';
-      refresh(false);
-    }, function (e) {
-      fix = null;
-      if (geoSt) geoSt.textContent = 'location: off — ' + (e.code === 1 ? 'denied' : 'no fix');
-      refresh(false);
-    }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
   }
+  function onNoFix(e) {
+    fix = null;
+    if (geoSt) geoSt.textContent = 'location: off — ' + (e.code === 1 ? 'denied' : 'no fix');
+    refresh(false);
+  }
+  if (geoSt && navigator.geolocation) geoSt.textContent = 'location: asking…';
+  else if (geoSt) geoSt.textContent = 'location: off';
+  refresh(false);
+  askLocation(navigator.geolocation, onFix, onNoFix);
 })();

@@ -1310,6 +1310,84 @@ func pointSegKm(pLat, pLng, aLat, aLng, bLat, bLng float64) float64 {
 	return math.Hypot(ax+t*dx, ay+t*dy)
 }
 
+// plannedStretch is the stretch of the planned route between two resolved
+// points: the polyline the car was to follow, or, with no line to measure
+// along, the straight chord between them.
+type plannedStretch struct {
+	pts [][2]float64
+}
+
+// nearKm is the least distance from a point to the stretch.
+func (w plannedStretch) nearKm(lat, lng float64) float64 {
+	best := math.Inf(1)
+	for i := 1; i < len(w.pts); i++ {
+		a, b := w.pts[i-1], w.pts[i]
+		if d := pointSegKm(lat, lng, a[0], a[1], b[0], b[1]); d < best {
+			best = d
+		}
+	}
+	return best
+}
+
+// maxLineOffMi is how far a resolved point may sit from the planned line and
+// still be measured along it; farther, the line says nothing of this stretch.
+const maxLineOffMi = 25.0
+
+// plannedWay is the planned route between the last resolved point and the new
+// check-in: both are projected onto the line of the legs they lie on, and the
+// polyline between the two projections is the stretch. It falls back to the
+// chord when there is no line or either point lies far from it. A coastline
+// like the 401 bows well away from the chord, which is why a chord is not the
+// route.
+func plannedWay(legs []Leg, from, to *Checkpoint) plannedStretch {
+	chord := plannedStretch{pts: [][2]float64{{from.Lat, from.Lng}, {to.Lat, to.Lng}}}
+	lo, hi := legIndexOf(legs, from.LegID), legIndexOf(legs, to.LegID)
+	if lo < 0 || hi < 0 {
+		return chord
+	}
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+	var line [][2]float64
+	for i := lo; i <= hi; i++ {
+		line = append(line, linePoints(legs[i].Line)...)
+	}
+	if len(line) < 2 {
+		return chord
+	}
+	a, offA := projectOnLine(line, from.Lat, from.Lng)
+	b, offB := projectOnLine(line, to.Lat, to.Lng)
+	if offA > maxLineOffMi || offB > maxLineOffMi {
+		return chord
+	}
+	if a > b {
+		a, b = b, a
+	}
+	stretch := [][2]float64{simWalkPathPoint(line, a)}
+	cum := 0.0
+	for i := 1; i < len(line); i++ {
+		cum += simHaversine(line[i-1][0], line[i-1][1], line[i][0], line[i][1])
+		if cum > a && cum < b {
+			stretch = append(stretch, line[i])
+		}
+	}
+	return plannedStretch{pts: append(stretch, simWalkPathPoint(line, b))}
+}
+
+func simWalkPathPoint(pts [][2]float64, d float64) [2]float64 {
+	p, _ := simWalkPath(pts, d)
+	return p
+}
+
+func legIndexOf(legs []Leg, id int64) int {
+	for i := range legs {
+		if legs[i].ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
 // arrivalAt is the photo's own time read as wall-clock time in the stop's
 // zone, else now. loc is the zone the form read the photo's clock in.
 func arrivalAt(photo *Photo, loc *time.Location, stopTZ string) time.Time {
@@ -1362,10 +1440,11 @@ func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, photo *Photo, loc *t
 			last = &all[i]
 		}
 	}
+	way := plannedWay(legs, last, &x)
 	var missed, rerouted []string
 	for _, c := range open[:best] {
 		reason := "rerouted"
-		if last != nil && pointSegKm(c.Lat, c.Lng, last.Lat, last.Lng, x.Lat, x.Lng) <= missedRadiusKm {
+		if last != nil && way.nearKm(c.Lat, c.Lng) <= missedRadiusKm {
 			reason = "missed"
 		}
 		if err := a.store.SetSkipped(c.ID, at, reason); err != nil {
@@ -1384,6 +1463,9 @@ func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, photo *Photo, loc *t
 	a.melt.Event("checkin_verified", map[string]any{"stop": x.Ord, "vouched_by": v.src, "km": math.Round(bestKm*10) / 10})
 	log.Printf("checkin: stop %d (%s) reached by %s, %d skipped", x.Ord, x.Name, v.src, best)
 	msg := "Reached " + x.Name + " at " + at.In(loadLoc(x.TZ)).Format("3:04 PM MST")
+	if v.src == "sim" {
+		msg += " by the simulated car"
+	}
 	if len(missed) > 0 {
 		msg += "; missed " + strings.Join(missed, ", ")
 	}
@@ -1469,6 +1551,7 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 
 const (
 	pinEXIF       = "exif"
+	pinSim        = "sim"
 	pinBrowser    = "browser"
 	pinCheckpoint = "checkpoint"
 	pinNone       = "none"
@@ -1479,7 +1562,7 @@ const (
 // build from before the radio existed submits.
 func validPinSource(v string) bool {
 	switch v {
-	case pinEXIF, pinBrowser, pinCheckpoint, pinNone:
+	case pinEXIF, pinSim, pinBrowser, pinCheckpoint, pinNone:
 		return true
 	}
 	return false
@@ -1499,7 +1582,11 @@ type pinInput struct {
 	ExifLat, ExifLng *float64
 	BrowLat, BrowLng *float64
 	Accuracy         *float64
-	CP               *Checkpoint
+	// SimLat/Lng is the simulated car's position, set only where simulated
+	// drives are allowed (a KATE) and one runs for the user. It beats every
+	// other source but "No pin": a KATE must never hold a real position.
+	SimLat, SimLng *float64
+	CP             *Checkpoint
 	// Fuzz is the "Fuzz location" toggle; FuzzSet says the operator's page
 	// actually carried it (the form posts a companion fuzz_choice field,
 	// because an unticked checkbox sends nothing). Unset = the per-post
@@ -1532,6 +1619,10 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 			if in.ExifLat != nil && in.ExifLng != nil {
 				return in.ExifLat, in.ExifLng, nil, true
 			}
+		case pinSim:
+			if in.SimLat != nil && in.SimLng != nil {
+				return in.SimLat, in.SimLng, nil, true
+			}
 		case pinBrowser:
 			if in.BrowLat != nil && in.BrowLng != nil {
 				return in.BrowLat, in.BrowLng, in.Accuracy, true
@@ -1550,6 +1641,9 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	case in.Want == pinNone:
 		res.Note = "none (chosen)"
 		return res
+	case in.SimLat != nil && in.SimLng != nil:
+		// The simulated car pins the post, whatever else was offered or chosen.
+		chosen = pinSim
 	case in.Want != "":
 		if _, _, _, ok := have(in.Want); ok {
 			chosen = in.Want
@@ -1558,7 +1652,7 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 		}
 	}
 	if chosen == "" {
-		for _, src := range []string{pinEXIF, pinBrowser, pinCheckpoint} {
+		for _, src := range []string{pinSim, pinEXIF, pinBrowser, pinCheckpoint} {
 			if _, _, _, ok := have(src); ok {
 				chosen = src
 				break
@@ -1579,6 +1673,8 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	switch chosen {
 	case pinEXIF:
 		res.Note = "exif"
+	case pinSim:
+		res.Note = "sim (the simulated car)"
 	case pinBrowser:
 		res.Note = "browser (no accuracy)"
 		if acc != nil {
@@ -1598,7 +1694,7 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 
 	// A checkpoint pin is the checkpoint's own point, which the store has
 	// already snapped if the checkpoint is private. Nothing left to fuzz.
-	if res.Source != pinEXIF && res.Source != pinBrowser {
+	if res.Source != pinEXIF && res.Source != pinBrowser && res.Source != pinSim {
 		return res
 	}
 
@@ -1843,7 +1939,11 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		if photo != nil {
 			exLat, exLng = photo.Lat, photo.Lng
 		}
-		res := resolvePin(pinInputFrom(r, cp, exLat, exLng), rideCheckpoints(rv.Legs), a.pinPrecision)
+		in := pinInputFrom(r, cp, exLat, exLng)
+		// On a KATE the pretend car is where the phone is: it pins the post
+		// ahead of the photo's own GPS, which is a real place.
+		in.SimLat, in.SimLng = a.simFix(r)
+		res := resolvePin(in, rideCheckpoints(rv.Legs), a.pinPrecision)
 		res.apply(post)
 		pinNote = res.Note
 		pinFuzzed = res.Fuzzed
@@ -1884,6 +1984,9 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		a.melt.Event("drive_started", map[string]any{"vouched_by": startSrc, "km": math.Round(startKm*10) / 10})
 		log.Printf("post %d: drive started from %s by %s", post.ID, start.Name, startSrc)
 		msg := "Drive started from " + start.Name + " at " + at.In(loadLoc(start.TZ)).Format("3:04 PM MST")
+		if startSim {
+			msg += " by the simulated car"
+		}
 		http.Redirect(w, r, "/driver/post?notice="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
 	}
