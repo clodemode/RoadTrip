@@ -58,8 +58,10 @@ func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) {
 	sc.Step(`^an ETA prediction for B exists$`, p.seedPredictionB)
 	sc.Step(`^that prediction is scored$`, p.scored)
 	sc.Step(`^the bus carries an eta_hit record for B with no latitude and no longitude$`, p.busHit)
-	initStartCheckinScenarios(sc, p)
+	s := initStartCheckinScenarios(sc, p)
+	initPinSkipScenarios(sc, p, s)
 	initDoneStopsScenarios(sc, p)
+	initSimStepsScenarios(sc, p, s)
 }
 
 // trip pushes a small trip (the fixture's first leg: Alder, Birch Gate, Cedar
