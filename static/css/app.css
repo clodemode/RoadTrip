@@ -209,7 +209,6 @@ h2 { margin: 1.5rem 0 .5rem; }
 /* --- signed-in forms ------------------------------------------------------------------ */
 .card.narrow { max-width: 480px; margin: 1.25rem auto 0; }
 .card.narrow h1 { margin: 0 0 .3rem; font-size: 1.3rem; }
-.arrive-strip { display: flex; gap: .4rem; flex-wrap: wrap; margin: .6rem 0 .2rem; }
 /* Post form: the pin group. Four sources, one fuzz toggle, and a line that
    says in plain words what the public map will get. */
 fieldset.pin { border: 1px solid var(--ds-hairline); border-radius: var(--ds-radius); padding: .4rem .75rem .5rem; margin: 0; min-width: 0; }
@@ -533,8 +532,6 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 .rt-list { list-style: none; margin: 0; padding: .4rem; display: flex; flex-direction: column; gap: .4rem;
   height: 14rem; overflow-y: auto; overscroll-behavior: contain; border: 2px dashed #d1d5db; border-radius: .6rem; }
 .rt-list a { display: block; padding: .6rem .7rem; border: 2px solid #111827; border-radius: .6rem; background: #fff; color: #111827; font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
-.ms-suggested { font-weight: 700; }
-.ms-near { margin-left: .4rem; }
 
 /* --- the hours bar: a day's drive in whole hours, light theme only -------- */
 .hours { margin: .9rem 0 1.1rem; }

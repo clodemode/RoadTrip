@@ -9,7 +9,7 @@
     <button class="btn btn-sm btn-outline-primary">Fuzz This</button>
     <span class="muted small">&mdash; make that post&rsquo;s location inexact</span></form>{{end}}
 
-  <form method="post" action="/driver/post" enctype="multipart/form-data" class="d-flex flex-column gap-3 mt-3" id="post-form">
+  <form method="post" action="/driver/post" enctype="multipart/form-data" class="d-flex flex-column gap-3 mt-3" id="post-form"{{if .SimOn}} data-sim="1"{{end}}>
     {{/* What is being posted comes first. One radio per kind, all named kind,
          so the server reads it exactly as it read the old select. post.js
          opens and closes the sections below to suit it; without script every
@@ -56,7 +56,7 @@
         <label class="form-check touch"><input class="form-check-input" type="radio" name="pin_source" value="exif" id="p-exif" disabled>
           <span>Photo GPS <span class="muted small" id="p-exif-note">&mdash; no file picked</span></span></label>
         <label class="form-check touch"><input class="form-check-input" type="radio" name="pin_source" value="browser" id="p-brow" disabled>
-          <span>My phone location <span class="muted small" id="geo-status">location: &hellip;</span></span></label>
+          <span><span id="p-brow-name">My phone location</span> <span class="muted small" id="geo-status">location: &hellip;</span></span></label>
         <label class="form-check touch"><input class="form-check-input" type="radio" name="pin_source" value="checkpoint" id="p-cp">
           <span>Checkpoint <span class="muted small" id="p-cp-note">&mdash; none picked</span></span></label>
         <label class="form-check touch"><input class="form-check-input" type="radio" name="pin_source" value="none" id="p-none">
@@ -85,7 +85,7 @@
       <legend>Start the drive</legend>
       <label class="form-check"><input class="form-check-input" type="radio" name="milestone_id" value=""{{if not .StartMode}} checked{{end}}>
         <span>Just a photo</span></label>
-      <label class="form-check" data-lat="{{.Start.Lat}}" data-lng="{{.Start.Lng}}">
+      <label class="form-check">
         <input class="form-check-input" type="radio" name="milestone_id" value="{{.Start.ID}}"{{if .StartMode}} checked{{end}}>
         <span class="ms-name">Start the drive from {{.Start.Name}}</span></label>
       <p class="muted small mb-0">Starting needs a photo; its own GPS, or your phone&rsquo;s location, says you are there. It is stamped at the photo&rsquo;s own time.</p>
