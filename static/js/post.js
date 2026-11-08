@@ -151,18 +151,36 @@
   // askLocation asks geo (navigator.geolocation) for the phone's position at
   // once and reports it as {lat, lng, acc} (lat and lng to 4 dp, acc in
   // metres), or the error. Without a geolocation it reports an error, so the
-  // caller's "off" path runs. It returns whether a request was made.
-  function askLocation(geo, ok, fail) {
+  // caller's "off" path runs. It returns whether a request was made. fresh
+  // asks for a high-accuracy fix that may not come from the cache: the one
+  // taken when the page opened can be minutes old by the time a photo is.
+  function askLocation(geo, ok, fail, fresh) {
     if (!geo) { fail({ code: 0 }); return false; }
     geo.getCurrentPosition(function (p) {
       var c = p.coords;
       ok({ lat: c.latitude.toFixed(4), lng: c.longitude.toFixed(4), acc: Math.round(c.accuracy || 0) });
-    }, fail, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+    }, fail, { enableHighAccuracy: !!fresh, timeout: 8000, maximumAge: fresh ? 0 : 60000 });
     return true;
   }
 
+  // sectionsFor says which parts of the form a post type needs: the photo
+  // upload, and whether the title and body are open (else tucked away as an
+  // optional caption). An unknown type shows everything.
+  function sectionsFor(kind) {
+    if (kind === 'photo') return { upload: true, textOpen: false };
+    if (kind === 'note') return { upload: false, textOpen: true };
+    return { upload: true, textOpen: true };
+  }
+
+  // locationReason is the plain reason the phone's position is not on offer.
+  // Browsers give a position only to an https page, so that is said first.
+  function locationReason(secure, code) {
+    if (secure === false) return 'this page is not HTTPS, so the phone will not share it';
+    return code === 1 ? 'denied' : 'no fix';
+  }
+
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone, askLocation: askLocation };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone, askLocation: askLocation, sectionsFor: sectionsFor, locationReason: locationReason };
     return;
   }
 
@@ -330,24 +348,72 @@
       // a phone is exactly the kind of allocation that cost four posts on
       // 2026-09-02.
       fr.readAsArrayBuffer(f.slice(0, Math.min(EXIF_SLICE, f.size)));
+      askFix(true);                   // the camera's position is the phone's, now
     });
   }
 
   // The phone's location is asked for the moment the form opens, never only
   // when a radio is picked: a camera photo carries no GPS, and the fix has to
-  // be in the hidden fields before the photo is posted.
+  // be in the hidden fields before the photo is posted. It is asked again,
+  // fresh, when a photo is chosen; the earlier fix stands until that arrives.
+  var secure = window.isSecureContext;
   function onFix(f) {
     fix = f;
     if (geoSt) geoSt.textContent = 'location: on (±' + fix.acc + ' m)';
     refresh(false);
   }
-  function onNoFix(e) {
+  function onNoFix(e, fresh) {
+    if (fresh && fix) {
+      if (geoSt) geoSt.textContent = 'location: on (±' + fix.acc + ' m), could not refresh';
+      return;
+    }
     fix = null;
-    if (geoSt) geoSt.textContent = 'location: off — ' + (e.code === 1 ? 'denied' : 'no fix');
+    if (geoSt) geoSt.textContent = 'location: off — ' + locationReason(secure, e.code);
     refresh(false);
   }
-  if (geoSt && navigator.geolocation) geoSt.textContent = 'location: asking…';
+  function askFix(fresh) {
+    if (geoSt) geoSt.textContent = fix ? 'location: on (±' + fix.acc + ' m), refreshing…' : 'location: asking…';
+    askLocation(navigator.geolocation, onFix, function (e) { onNoFix(e, fresh); }, fresh);
+  }
+
+  // The post type decides which sections are open. The upload closes for a
+  // note, and a photo already chosen is dropped with it so a hidden photo is
+  // never posted. Without script every section stays open.
+  var secUp = $('sec-upload'), secText = $('sec-text');
+  function checkedKind() {
+    var r = document.querySelector('input[name="kind"]:checked');
+    return r ? r.value : '';
+  }
+  function applyKind() {
+    var s = sectionsFor(checkedKind());
+    if (secUp) secUp.hidden = !s.upload;
+    if (secText) secText.open = s.textOpen;
+    if (!s.upload && photo && photo.value) {
+      photo.value = '';
+      photo.dispatchEvent(new Event('change'));
+    }
+  }
+  [].slice.call(document.querySelectorAll('input[name="kind"]')).forEach(function (r) {
+    r.addEventListener('change', applyKind);
+  });
+  applyKind();
+
+  // Start mode opens on the photo alone. "Post something else" opens the rest.
+  var other = $('other-link');
+  if (other) {
+    other.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      ['post-types', 'form-rest', 'start-fieldset', 'btn-post'].forEach(function (id) { var e = $(id); if (e) e.hidden = false; });
+      ['btn-start', 'other-link'].forEach(function (id) { var e = $(id); if (e) e.hidden = true; });
+      var h = document.querySelector('h1'); if (h) h.textContent = 'Post a Photo';
+      var jp = document.querySelector('input[name="milestone_id"][value=""]'); if (jp) jp.checked = true;
+      applyKind();
+    });
+  }
+
+  if (geoSt && secure === false) geoSt.textContent = 'location: off — ' + locationReason(false, 1);
+  else if (geoSt && navigator.geolocation) geoSt.textContent = 'location: asking…';
   else if (geoSt) geoSt.textContent = 'location: off';
   refresh(false);
-  askLocation(navigator.geolocation, onFix, onNoFix);
+  askLocation(navigator.geolocation, onFix, function (e) { onNoFix(e, false); }, false);
 })();
