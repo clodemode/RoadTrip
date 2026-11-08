@@ -423,7 +423,7 @@ func (s *Store) migrate() error {
 	if err := s.addColumns("chester_queries", []string{
 		"partial TEXT NOT NULL DEFAULT ''", "usd_estimated INTEGER NOT NULL DEFAULT 0",
 		"answer_synth INTEGER NOT NULL DEFAULT 0", "usage_json TEXT NOT NULL DEFAULT '[]'",
-		"user TEXT NOT NULL DEFAULT ''",
+		"user TEXT NOT NULL DEFAULT ''", "proposal TEXT NOT NULL DEFAULT ''",
 	}); err != nil {
 		return err
 	}
@@ -2229,6 +2229,17 @@ func (s *Store) ApplyPlan(sd *seedData) (created bool, n RefreshCounts, err erro
 	}
 	n, err = s.refreshPlan(sd, true, saveSel)
 	return false, n, err
+}
+
+// PlanConflictsFor is the plan guard run read-only: the reasons ApplyPlan would
+// refuse sd with, and nothing written. Nothing is changed by asking.
+func (s *Store) PlanConflictsFor(sd *seedData) ([]string, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	return planConflicts(tx, sd)
 }
 
 // RideCensus is one ride's row counts: what is in the database for it,

@@ -485,7 +485,7 @@ func TestChesterCachedPrefixDoesNotMoveWithTheCar(t *testing.T) {
 	// The search tool still carries a location, and it is the day's zone
 	// alone: no town, no region, no number.
 	var tools []map[string]any
-	if err := json.Unmarshal(rawField(t, a, "tools"), &tools); err != nil || len(tools) != 3 {
+	if err := json.Unmarshal(rawField(t, a, "tools"), &tools); err != nil || len(tools) != 4 { // the fixture has options, so propose_route_choice is offered
 		t.Fatalf("the tools: %v", err)
 	}
 	if loc := js(tools[0]["user_location"]); loc != `{"timezone":"America/Chicago","type":"approximate"}` {
@@ -511,7 +511,7 @@ func TestChesterCachedPrefixDoesNotMoveWithTheCar(t *testing.T) {
 			t.Errorf("the tools carry %q, which moves with the car", moving)
 		}
 	}
-	if east.PromptVersion != "chester-rt-10" {
+	if east.PromptVersion != "chester-rt-11" {
 		t.Errorf("the prompt version is %q; the tool and the context block changed, so it must have too", east.PromptVersion)
 	}
 }

@@ -260,6 +260,11 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	if cx.Pos != nil {
 		row.PosLat, row.PosLng, row.PosSource, row.PosLabel = &cx.Pos.Lat, &cx.Pos.Lng, cx.Pos.Source, cx.Pos.Label
 	}
+	if res.Proposal != nil && res.Err == "" {
+		// The row says what was proposed; what became of it is not recorded here.
+		row.Proposal, _ = json.Marshal(map[string]string{"option": res.Proposal.Option, "choice": res.Proposal.Choice,
+			"why": res.Proposal.Why, "outcome": "proposed"})
+	}
 	if err := a.store.InsertChesterQuery(row); err != nil {
 		log.Printf("ERROR chester: the question could not be logged: %v", err)
 		emit(chesterEvent{T: "error", D: "The answer could not be written to the log."})
@@ -274,6 +279,10 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(res.Music) > 0 {
 		emit(chesterEvent{T: "music", Music: res.Music})
+	}
+	if res.Proposal != nil && res.Err == "" {
+		res.Proposal.QueryID = row.ID
+		emit(chesterEvent{T: "proposal", Proposal: res.Proposal})
 	}
 	if res.Err != "" {
 		// Drop: whatever words were streamed before this are not an answer,

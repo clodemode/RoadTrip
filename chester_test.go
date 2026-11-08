@@ -502,8 +502,9 @@ func TestChesterQuickQuestionEndToEnd(t *testing.T) {
 		}
 	}
 	tools, _ := req["tools"].([]any)
-	if len(tools) != 3 || js(tools[2].(map[string]any)["name"]) != `"`+chesterRememberTool+`"` {
-		t.Fatalf("%d tools, want the web search, the place cards and the memory note", len(tools))
+	if len(tools) != 4 || js(tools[2].(map[string]any)["name"]) != `"`+chesterRememberTool+`"` ||
+		js(tools[3].(map[string]any)["name"]) != `"`+chesterProposeTool+`"` {
+		t.Fatalf("%d tools, want the web search, the place cards, the memory note and the route proposal", len(tools))
 	}
 	search, places := tools[0].(map[string]any), tools[1].(map[string]any)
 	if search["type"] != "web_search_20260209" || search["name"] != "web_search" || search["max_uses"] != float64(2) {
