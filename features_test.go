@@ -18,6 +18,7 @@ func TestFeatures(t *testing.T) {
 				initEtaScenarios(t, sc, sim)
 				initPostScenarios(t, sc, sim)
 				initMarksScenarios(t, sc, sim)
+				initChesterMusicScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

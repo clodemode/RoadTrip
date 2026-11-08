@@ -15,7 +15,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var form = $('ch-form'), box = $('ch-q'), send = $('ch-send'),
       status = $('ch-status'), error = $('ch-error'), answer = $('ch-answer'),
-      places = $('ch-places'), meta = $('ch-meta'), speak = $('ch-speak'),
+      places = $('ch-places'), music = $('ch-music'), meta = $('ch-meta'), speak = $('ch-speak'),
       locate = $('ch-locate'), geo = $('ch-geo'), la = $('ch-lat'), ln = $('ch-lng');
   if (!form || !box || !send || !answer) return;
 
@@ -102,6 +102,42 @@
     return li;
   }
 
+  // An album card: the words are set as text, and Play is a link the server
+  // built to the album page on the music library, opened in a new tab. Nothing
+  // plays by itself; the library's own page starts the music on a second tap.
+  function albumCard(m) {
+    var li = document.createElement('li');
+    li.className = 'ch-place ch-album';
+    var kind = document.createElement('span');
+    kind.className = 'ch-kind';
+    kind.textContent = 'Album';
+    var name = document.createElement('b');
+    name.className = 'ch-place-name';
+    name.textContent = m.album || '';
+    li.appendChild(kind);
+    li.appendChild(name);
+    var by = document.createElement('span');
+    by.className = 'muted';
+    by.textContent = (m.artist || '') + (m.year ? ' (' + m.year + ')' : '');
+    li.appendChild(by);
+    if (m.why) {
+      var why = document.createElement('p');
+      why.className = 'ch-why';
+      why.textContent = m.why;
+      li.appendChild(why);
+    }
+    if (/^https?:\/\//i.test(m.href || '')) {
+      var a = document.createElement('a');
+      a.className = 'ch-play';
+      a.href = m.href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = m.label || 'Play';
+      li.appendChild(a);
+    }
+    return li;
+  }
+
   // --- one event ----------------------------------------------------------------------
   var spoken = '';
   function handle(ev) {
@@ -120,6 +156,11 @@
         (ev.places || []).forEach(function (p) { places.appendChild(card(p)); });
         places.hidden = !(ev.places || []).length;
         break;
+      case 'music':
+        music.textContent = '';
+        (ev.music || []).forEach(function (m) { music.appendChild(albumCard(m)); });
+        music.hidden = !(ev.music || []).length;
+        break;
       case 'error':
         hide(status);
         if (ev.drop) {
@@ -127,7 +168,8 @@
           // take it down, and let the sentence stand in its place.
           answer.textContent = '';
           places.textContent = '';
-          hide(answer); hide(places);
+          music.textContent = '';
+          hide(answer); hide(places); hide(music);
           spoken = '';
         }
         show(error, ev.d);
@@ -175,7 +217,8 @@
     spoken = '';
     answer.textContent = '';
     places.textContent = '';
-    hide(answer); hide(places); hide(error); hide(meta);
+    music.textContent = '';
+    hide(answer); hide(places); hide(music); hide(error); hide(meta);
     show(status, 'Asking…');
     if (canSpeak) window.speechSynthesis.cancel();
 

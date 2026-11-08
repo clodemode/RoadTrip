@@ -214,7 +214,12 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res := a.chester.ask(r.Context(), mode, cx, question, emit)
+	// The music library is offered only when RoadTracks is on.
+	var lib *chesterMusicLib
+	if a.tracks != nil {
+		lib = &chesterMusicLib{svc: a.tracks, melt: a.melt}
+	}
+	res := a.chester.ask(r.Context(), mode, cx, question, lib, emit)
 	if res.Err == "" && !res.Synth && res.Answer != "" {
 		a.remember(user, question, res.Answer, res.Leanings, now)
 	}
@@ -266,6 +271,9 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 
 	if len(res.Places) > 0 {
 		emit(chesterEvent{T: "places", Places: chesterCards(res.Places)})
+	}
+	if len(res.Music) > 0 {
+		emit(chesterEvent{T: "music", Music: res.Music})
 	}
 	if res.Err != "" {
 		// Drop: whatever words were streamed before this are not an answer,

@@ -420,6 +420,11 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 .ch-links { display: flex; flex-wrap: wrap; gap: .5rem; margin: .6rem 0 0; }
 .ch-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 .9rem;
   border: 1px solid var(--ds-primary); border-radius: var(--ds-radius); text-decoration: none; font-weight: 600; }
+/* Play on an album card: a link, big enough to hit on a phone in a car. */
+.ch-play { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 56px;
+  margin: .7rem 0 0; padding: 0 1rem; border-radius: var(--ds-radius); background: var(--ds-primary); color: #fff;
+  font-size: 1.4rem; font-weight: 800; letter-spacing: .02em; text-decoration: none; }
+.ch-play:hover, .ch-play:focus-visible { color: #fff; filter: brightness(1.12); }
 .ch-foot { margin-top: 1.6rem; }
 .ch-off { max-width: 36rem; }
 
