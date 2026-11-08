@@ -66,4 +66,5 @@ primary_region = "dfw"   # Dallas — the ride departs from Austin
   # decoded in memory) OOM-killed the process at anon-rss 158 MB and four
   # posts were lost. The decode path is bounded now (photo.go), but a road
   # trip is not the place to run at the edge of the kernel's patience.
-  memory = "512mb"
+  # 1 GB since 2026-11-08 (Kris), ahead of general photo upload and cataloging.
+  memory = "1gb"
