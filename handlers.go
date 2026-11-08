@@ -892,7 +892,7 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
 		"Title": "", "Ride": rv.Ride, "Legs": rv.Legs, "Posts": posts,
 		"Day": di, "PageLeg": pageLeg, "Multi": len(rv.Legs) > 1,
-		"NextID": nextOpenID(rv.Legs), "HoursBars": bars,
+		"NextID": nextOpenID(rv.Legs), "HoursBars": bars, "DriveStarted": driveStarted(rv.Legs),
 		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
 	// The checklist in one line, n of m done. Counts only.
 	if sum, ok := a.store.ChecklistSummary(rv.Ride.Slug); ok {
@@ -1240,6 +1240,12 @@ const missedRadiusKm = 15
 
 // tripStart is the checkpoint the car leaves from: the first of the first leg.
 // It is never a check-in; the drive is started there.
+// driveStarted is true once the trip's start carries its departure stamp.
+func driveStarted(legs []Leg) bool {
+	st := tripStart(legs)
+	return st != nil && st.ArrivedAt != ""
+}
+
 func tripStart(legs []Leg) *Checkpoint {
 	if len(legs) == 0 {
 		return nil
