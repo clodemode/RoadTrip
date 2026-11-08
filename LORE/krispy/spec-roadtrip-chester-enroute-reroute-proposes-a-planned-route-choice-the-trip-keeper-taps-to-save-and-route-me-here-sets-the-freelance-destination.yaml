@@ -42,6 +42,18 @@ entries:
     proposal is logged. Check that a question using search, a proposal and an answer fits inside chesterRounds.
     On the KATE, the test ride has no options, so verify on a synthetic trip with options, never a trip
     document in the repo.'
+  do_also: 'PLANNING REVIEW 2026-11-08 (Fable, codi-roadtrip-reroute-plan-2026-11-08), its key code claims
+    checked against the source the same day. BUILD ORDER: Route me here; then the proposal context, tool,
+    card and log; then Save with its outcome on the log row. If Save slips, the card links to the plan
+    page with the choice pre-selected and the existing Save there meets the ruling. MISSING CASE ADDED:
+    planConflicts locks only legs with posts or arrived or skipped checkpoints, so today''s leg being
+    driven with no post yet is switchable and a saved switch would replace the road under the car. The
+    route-choices block marks today''s leg IN PROGRESS once the drive has started, Chester does not propose
+    switching a leg in progress unless asked outright, and the card for one says so. A read-only Store.PlanConflictsFor
+    (Begin, planConflicts, Rollback) supplies the LOCKED marks; ApplyPlan and planConflicts are unchanged.
+    The tool is offered only when the trip has options. Figures say plan estimate, not traffic. Route
+    me here sends name and town to the existing destination search; a restart forgets the detour, and
+    the driver screen says so.'
   depends_on:
   - spec-roadtrip-chester-an-en-route-claude-helper-for-routing-lodging-food-and-diversions-signed-in-only-capped-and-every-answer-logged-with-a-verdict-against-waze-and-travelocity
   effort: L
