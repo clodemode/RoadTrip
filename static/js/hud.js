@@ -109,7 +109,7 @@
       if (h.free.state === 'aimless') paintAimless(h.free); else paintFree(h.free);
       return;
     }
-    setText('hud-day', h.day_n ? h.day_n + ' of ' + h.day_total : '—');
+    setText('hud-day', h.day_n ? (h.day_total === 1 ? 'Today' : h.day_n + ' of ' + h.day_total) : '—');
     setText('hud-leg', h.leg_name);
     setText('hud-done', h.miles_done);
     setText('hud-left', h.miles_left);
