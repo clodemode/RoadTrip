@@ -42,9 +42,11 @@ type simState struct {
 	Corridor string
 	Seed     uint32
 	T0       time.Time
-	X        float64 // time compression
-	MphCap   float64 // 0 = the seeded 55-75 mph
-	RungMi   float64 // 0 = the whole corridor
+	X        float64    // time compression
+	MphCap   float64    // 0 = the seeded 55-75 mph
+	RungMi   float64    // 0 = the whole corridor
+	Step     bool       // stepping: the car moves one step per post, never by the clock
+	StepPos  [2]float64 // where a stepping car is now
 }
 
 type simSvc struct {
