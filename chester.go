@@ -60,7 +60,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-9"
+	chesterPromptVersion = "chester-rt-10"
 
 	maxChesterQuestion = 1000
 )
@@ -883,6 +883,15 @@ Write plain text: no Markdown, no headings, no bullet symbols, no web addresses 
 In quick mode, the answer is a few short sentences, the most useful thing first, and names at most three places. It may be read aloud.
 In plan mode, the question is usually about tomorrow. A longer answer is right: compare the real options, name up to six places, and say what you would choose and why.`
 
+// systemPromptFor is the system prompt: the music section is added only when
+// the library is on, so with it off the prompt is exactly the one it was.
+func systemPromptFor(music *chesterMusicLib) string {
+	if music == nil {
+		return chesterSystemPrompt
+	}
+	return chesterSystemPrompt + chesterMusicPrompt
+}
+
 // chesterToolName is the cards tool. Its input is the place cards.
 const chesterToolName = "show_places"
 
@@ -976,13 +985,14 @@ func newChester(cfg *chesterConfig) *Chester {
 
 // chesterEvent is one line of the answer as the page receives it.
 type chesterEvent struct {
-	T      string        `json:"t"` // text | status | places | done | error
-	D      string        `json:"d,omitempty"`
-	Places []chesterCard `json:"places,omitempty"`
-	ID     int64         `json:"id,omitempty"`
-	Stop   string        `json:"stop,omitempty"`
-	USD    float64       `json:"usd,omitempty"`
-	MS     int64         `json:"ms,omitempty"`
+	T      string             `json:"t"` // text | status | places | music | done | error
+	D      string             `json:"d,omitempty"`
+	Places []chesterCard      `json:"places,omitempty"`
+	Music  []chesterMusicCard `json:"music,omitempty"`
+	ID     int64              `json:"id,omitempty"`
+	Stop   string             `json:"stop,omitempty"`
+	USD    float64            `json:"usd,omitempty"`
+	MS     int64              `json:"ms,omitempty"`
 	// Drop, on an error, tells the page that the words it has shown so far
 	// are not an answer and are to be taken down.
 	Drop bool `json:"drop,omitempty"`
@@ -1002,9 +1012,10 @@ type chesterResult struct {
 	// from the cards, and the row says it is not the model's.
 	Synth   bool
 	Places  []chesterPlace
-	Stop    string // the API's stop reason for the last request
-	Err     string // a plain sentence for the page, "" when it went well
-	ErrKind string // a short code for the log
+	Music   []chesterMusicCard // albums recommended from the library, built by the server
+	Stop    string             // the API's stop reason for the last request
+	Err     string             // a plain sentence for the page, "" when it went well
+	ErrKind string             // a short code for the log
 	Notes   []string
 	// Leanings are the notes Chester asked to keep (already cleaned).
 	Leanings []string
@@ -1066,7 +1077,7 @@ func chesterSynthAnswer(ps []chesterPlace) string {
 // ask runs one question and streams the answer through emit. It never
 // returns an error: whatever happened is in the result, in plain words,
 // because the row is written either way.
-func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, question string, emit func(chesterEvent)) chesterResult {
+func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, question string, music *chesterMusicLib, emit func(chesterEvent)) chesterResult {
 	m := c.cfg.mode(mode)
 	start := time.Now()
 	res := chesterResult{}
@@ -1095,7 +1106,7 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 		// plan caches all three. The question and everything that changes by
 		// the minute come after it, in the user message.
 		System: []anthropic.BetaTextBlockParam{
-			{Text: chesterSystemPrompt},
+			{Text: systemPromptFor(music)},
 			{Text: cx.Stable, CacheControl: anthropic.NewBetaCacheControlEphemeralParam()},
 		},
 		Messages: []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(
@@ -1105,6 +1116,11 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 		Thinking:     anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}},
 		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffort(m.Effort)},
 		Tools:        []anthropic.BetaToolUnionParam{m.searchTool(cx), chesterPlacesTool(m.MaxPlaces), chesterRemembersTool()},
+	}
+	var tunes *chesterMusicRun
+	if music != nil {
+		tunes = newChesterMusicRun(music)
+		params.Tools = append(params.Tools, chesterMusicTools()...)
 	}
 	if c.cfg.Fallback {
 		params.Fallbacks = anthropic.BetaFallbacksParamOfDefault()
@@ -1245,11 +1261,21 @@ rounds:
 
 		// Past here the turn is whole, so its tool calls can be believed.
 		var results []anthropic.BetaContentBlockParamUnion
+		// searched is true when this turn called search_music: its result is
+		// what the model is waiting for, so the next round is owed whether or
+		// not words came with it.
+		searched := false
 		for _, b := range msg.Content {
 			if b.Type != "tool_use" {
 				continue
 			}
-			if b.Name == chesterToolName {
+			if tunes != nil && b.Name == chesterSearchMusicTool {
+				text, isErr := tunes.search(ctx, string(b.Input))
+				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, text, isErr))
+				searched = true
+			} else if tunes != nil && b.Name == chesterShowMusicTool {
+				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, tunes.show(string(b.Input)), false))
+			} else if b.Name == chesterToolName {
 				placeInputs = append(placeInputs, string(b.Input))
 				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, chesterCardsNowWrite, false))
 			} else if b.Name == chesterRememberTool {
@@ -1271,7 +1297,7 @@ rounds:
 			// and one more round lets it be written. Words that did arrive
 			// ahead of the cards are an answer already: done, and the second
 			// request is not spent.
-			if !wrote() && len(results) > 0 && round < chesterRounds-1 {
+			if (!wrote() || searched) && len(results) > 0 && round < chesterRounds-1 {
 				params.Messages = append(params.Messages, msg.ToParam(), anthropic.NewBetaUserMessage(results...))
 				continue
 			}
@@ -1303,10 +1329,26 @@ rounds:
 			}
 		}
 	}
+	if tunes != nil {
+		res.Music = tunes.cards
+		if len(tunes.cards) > 0 {
+			res.Notes = append(res.Notes, "showed "+strconv.Itoa(len(tunes.cards))+" album card(s) from the music library")
+		}
+		if tunes.drops > 0 {
+			res.Notes = append(res.Notes, strconv.Itoa(tunes.drops)+" album reference(s) the music search had not returned were dropped")
+		}
+	}
 	switch {
 	case wrote():
-	case len(res.Places) == 0:
+	case len(res.Places) == 0 && len(res.Music) == 0:
 		res.Err, res.ErrKind = chesterSaidUnfinishd, "empty"
+	case len(res.Places) == 0:
+		res.Synth = true
+		res.Notes = append(res.Notes, "the model picked albums and wrote no words; the answer shown was built by the site from the cards")
+		said := chesterMusicSynth(res.Music)
+		answer.Reset()
+		answer.WriteString(said)
+		emit(chesterEvent{T: "text", D: said})
 	default:
 		// Cards and no words, even after being asked for them. The page is
 		// never left with a card and nothing above it: it gets one sentence
