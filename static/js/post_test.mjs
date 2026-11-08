@@ -69,3 +69,11 @@ test('a page that is not HTTPS says so instead of "denied"', () => {
   assert.equal(locationReason(true, 2), 'no fix');
   assert.equal(locationReason(undefined, 1), 'denied');
 });
+
+test('ladderChoice offers the best source and never picks No pin itself', () => {
+  const { ladderChoice } = createRequire(import.meta.url)('./post.js');
+  assert.equal(ladderChoice(true, true, true), 'exif');
+  assert.equal(ladderChoice(false, true, true), 'browser');
+  assert.equal(ladderChoice(false, false, true), 'checkpoint');
+  assert.equal(ladderChoice(false, false, false), '');
+});

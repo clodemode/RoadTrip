@@ -148,6 +148,16 @@
     return best;
   }
 
+  // ladderChoice is the source the form pre-selects: photo GPS, else the phone,
+  // else the checkpoint, else nothing. It never answers "none": No pin is a
+  // choice the driver makes, and sent on its own it would beat every position
+  // the server holds, the KATE's simulated car included.
+  function ladderChoice(hasExif, hasFix, hasCheckpoint) {
+    if (hasExif) return 'exif';
+    if (hasFix) return 'browser';
+    return hasCheckpoint ? 'checkpoint' : '';
+  }
+
   // askLocation asks geo (navigator.geolocation) for the phone's position at
   // once and reports it as {lat, lng, acc} (lat and lng to 4 dp, acc in
   // metres), or the error. Without a geolocation it reports an error, so the
@@ -180,7 +190,7 @@
   }
 
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone, askLocation: askLocation, sectionsFor: sectionsFor, locationReason: locationReason };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, suggestMilestone: suggestMilestone, askLocation: askLocation, ladderChoice: ladderChoice, sectionsFor: sectionsFor, locationReason: locationReason };
     return;
   }
 
@@ -241,10 +251,11 @@
   // touches the radio — after that their choice stands.
   function ladder() {
     if (touched) return;
-    if (exif) rExif.checked = true;
-    else if (fix) rBrow.checked = true;
-    else if (cpSel && cpSel.value) rCp.checked = true;
-    else rNone.checked = true;
+    var pick = ladderChoice(!!exif, !!fix, !!(cpSel && cpSel.value));
+    rExif.checked = pick === 'exif';
+    rBrow.checked = pick === 'browser';
+    rCp.checked = pick === 'checkpoint';
+    rNone.checked = false;
   }
 
   // The milestone radios carry their published position. The one nearest the
