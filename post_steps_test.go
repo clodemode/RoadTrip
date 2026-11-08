@@ -63,6 +63,7 @@ func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) {
 	initDoneStopsScenarios(sc, p)
 	initFuzzThisScenarios(sc, p, s)
 	initSimStepsScenarios(sc, p, s)
+	initPostFormByTypeScenarios(sc, p)
 }
 
 // trip pushes a small trip (the fixture's first leg: Alder, Birch Gate, Cedar

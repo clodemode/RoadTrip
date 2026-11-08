@@ -12,7 +12,7 @@
   </header>{{end}}
 
   <nav class="hud-tools hud-left" aria-label="Driver tools, left">
-    {{if .Driver}}<a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>{{if .DriveStarted}}Post photo{{else}}Start the drive{{end}}</a>{{end}}
+    {{if .Driver}}<a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>{{if or .DriveStarted .Aimless .Destined}}Post photo{{else}}Start the drive{{end}}</a>{{end}}
     {{if .ChesterOn}}<a class="hud-tool" href="/chester"><span class="hud-ico" aria-hidden="true">&#128172;</span>Ask Chester</a>{{end}}
   </nav>
 

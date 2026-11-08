@@ -1579,6 +1579,16 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 	if err != nil {
 		log.Printf("WARN private overlay: %v", err)
 	}
+	// Only a Trip-mode driver starts a drive. In FreeLance Aimless or Destined
+	// the form offers no start: starting would start the KATE's simulated car.
+	start := startChoice(rv.Legs)
+	if a.freeSvc().get(a.userOf(r)).Mode != modeTrip {
+		start = nil
+	}
+	kind := "photo"
+	if k := r.PostFormValue("kind"); validKind(k) {
+		kind = k
+	}
 	data := map[string]any{
 		"Title": "Post", "Ride": rv.Ride, "Legs": rv.Legs, "Kinds": postKinds,
 		// This ride's addresses and no other's: an ord means nothing without its ride.
@@ -1586,7 +1596,9 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 		"DefaultLegID": dlID, "DefaultLeg": dl, "DefaultTZ": tz, "Zones": zones(rv.Legs, tz),
 		"Day": di, "Error": errMsg, "Notice": r.URL.Query().Get("notice"),
 		"NoticePost": a.noticePost(r, rv.Ride.Slug),
-		"Start":      startChoice(rv.Legs), "NextStop": nextStopName(rv.Legs),
+		"Start":      start, "NextStop": nextStopName(rv.Legs),
+		"StartMode": start != nil && r.URL.Query().Get("full") == "",
+		"Kind":      kind,
 		// What the form needs to say, before posting, what will be published:
 		// the private cells the fuzz toggle pre-ticks itself for, and which way
 		// PIN_PRECISION tips that default. These are the ALREADY-FUZZED

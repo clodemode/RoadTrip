@@ -248,6 +248,8 @@
   var gps = $('hud-gps');
   if (simOn) {
     gps.textContent = 'simulated (server)';
+  } else if (window.isSecureContext === false) {
+    gps.textContent = 'off (this page is not HTTPS, so the phone will not share it)';
   } else if (!('geolocation' in navigator)) {
     gps.textContent = 'not available';
   } else {

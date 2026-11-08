@@ -216,6 +216,22 @@ fieldset.pin { border: 1px solid var(--ds-hairline); border-radius: var(--ds-rad
 fieldset.pin legend { float: none; width: auto; padding: 0 .35rem; margin: 0; font-size: .875rem; font-weight: 600; }
 fieldset.pin .form-check { flex-wrap: wrap; }
 fieldset.pin input:disabled + *, fieldset.pin .form-check input:disabled { opacity: .5; }
+/* Post form: the type chooser and the tucked-away sections. One light theme;
+   every tap target is at least 44px tall. */
+fieldset.kind-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: .5rem; border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.kind-row[hidden] { display: none; }
+fieldset.kind-row legend { grid-column: 1 / -1; float: none; width: auto; padding: 0; margin: 0 0 .1rem; font-size: .875rem; font-weight: 600; }
+.kind-choice { position: relative; margin: 0; }
+.kind-choice input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.kind-choice span { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: .3rem .5rem; border: 2px solid #111827; border-radius: .8rem; background: #fff; color: #111827; font-weight: 700; text-align: center; }
+.kind-choice input:checked + span { background: #111827; color: #fff; }
+.kind-choice input:focus-visible + span { outline: 3px solid #2563eb; outline-offset: 2px; }
+.tap, details > summary.tap { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: 600; }
+a.btn.tap { justify-content: center; }
+.tap-lg { min-height: 64px; font-size: 1.2rem; }
+#sec-upload[hidden], #form-rest[hidden], #start-fieldset[hidden] { display: none; }
+#sec-upload .photo-pick { min-height: 56px; padding-top: .9rem; }
+.pin-privacy { margin: 0; }
 #pin-publishes { margin: .35rem 0 0; padding-top: .35rem; border-top: 1px dashed var(--ds-hairline); }
 #exif-status { margin: -.4rem 0 0; }
 .post-edit-photo img { display: block; width: 110px; height: 110px; object-fit: cover; border-radius: var(--ds-radius); margin: .5rem 0; }
