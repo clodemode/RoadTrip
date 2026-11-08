@@ -107,6 +107,25 @@
       links.appendChild(a);
     });
     li.appendChild(links);
+    if (p.route) {
+      // A real form, so the browser lands on the driver screen. The place goes
+      // as text and the server looks it up; the plan is not touched.
+      var go = document.createElement('form');
+      go.method = 'post';
+      go.action = '/driver/freelance/dest';
+      go.className = 'ch-route';
+      var dest = document.createElement('input');
+      dest.type = 'hidden';
+      dest.name = 'dest';
+      dest.value = p.route;
+      var btn = document.createElement('button');
+      btn.type = 'submit';
+      btn.className = 'btn btn-sm btn-outline-dark';
+      btn.textContent = 'Route me here';
+      go.appendChild(dest);
+      go.appendChild(btn);
+      li.appendChild(go);
+    }
     return li;
   }
 
