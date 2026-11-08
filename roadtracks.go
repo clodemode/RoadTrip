@@ -223,7 +223,7 @@ func (s *roadtracksSvc) album(ctx context.Context, id int64) (*albumDoc, error) 
 		Albumartist string `json:"albumartist"`
 		Year        int    `json:"year"`
 		Art         string `json:"art"`
-		Playable    *bool  `json:"playable"`
+		Playable    *int   `json:"playable"`
 		Tracks      []struct {
 			ID        int64   `json:"id"`
 			Track     int     `json:"track"`
@@ -239,7 +239,7 @@ func (s *roadtracksSvc) album(ctx context.Context, id int64) (*albumDoc, error) 
 		return nil, errors.New("bad answer")
 	}
 	out := &albumDoc{ID: id, Album: in.Album, Albumartist: in.Albumartist, Year: in.Year,
-		Art: s.phoneAddr(in.Art), Playable: in.Playable == nil || *in.Playable, Tracks: make([]albumTrack, 0, len(in.Tracks))}
+		Art: s.phoneAddr(in.Art), Playable: in.Playable == nil || *in.Playable > 0, Tracks: make([]albumTrack, 0, len(in.Tracks))}
 	for _, t := range in.Tracks {
 		at := albumTrack{ID: t.ID, Track: t.Track, Disc: t.Disc, Title: t.Title, Artist: t.Artist, Length: t.Length, Available: t.Available}
 		if t.Available && t.Src != nil {
