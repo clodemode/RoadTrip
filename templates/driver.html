@@ -1,4 +1,8 @@
 {{template "head" .}}
+{{with .Notice}}<p class="post-done" role="status">{{.}}</p>{{end}}
+{{with .NoticePost}}<form method="post" action="/driver/post/{{.ID}}/fuzz" class="post-fuzz">
+  <button class="btn btn-sm btn-outline-primary">Fuzz This</button>
+  <span class="muted small">&mdash; make that post&rsquo;s location inexact</span></form>{{end}}
 <section class="hud" id="hud" data-url="/driver/hud.json"{{if .SimOn}} data-sim="1"{{end}}>
 
   {{if not (or .Destined .Aimless)}}<header class="hud-top" aria-label="Gauges">

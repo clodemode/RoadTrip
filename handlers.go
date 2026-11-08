@@ -2105,7 +2105,8 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		if startSim {
 			msg += " by the simulated car"
 		}
-		http.Redirect(w, r, "/driver/post?post="+strconv.FormatInt(post.ID, 10)+"&notice="+url.QueryEscape(msg), http.StatusSeeOther)
+		// A start is finished business: back to the driver screen, which says so.
+		http.Redirect(w, r, "/driver?post="+strconv.FormatInt(post.ID, 10)+"&notice="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
 	}
 	if start != nil && start.ArrivedAt != "" && photo != nil {

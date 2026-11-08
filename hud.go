@@ -271,7 +271,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 		a.freeSvc().set(a.userOf(r), func(s *freeState) { s.enter(modeDestined) })
 	}
 	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h, "DriveStarted": a.driveStarted(),
-		"TracksOn": a.tracks != nil, "TracksURL": a.tracks.playerURL(), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
+		"Notice": r.URL.Query().Get("notice"), "NoticePost": a.noticePost(r, a.activeSlug()), "TracksOn": a.tracks != nil, "TracksURL": a.tracks.playerURL(), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 
 // hudJSON is the live HUD: position-aware, with the hazard chips of the leg.

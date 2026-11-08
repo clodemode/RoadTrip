@@ -4,7 +4,7 @@
   <h1>{{if .StartMode}}Start the drive{{else}}Post a Photo{{end}}</h1>
   <p class="muted small">{{.Day.Badge}}{{with .DefaultLeg}} &middot; leg {{.Ord}}: {{.Name}}{{end}}</p>
   {{with .Error}}<p class="error">{{.}}</p>{{end}}
-  {{with .Notice}}<p class="muted small">{{.}}</p>{{end}}
+  {{with .Notice}}<p class="post-done" role="status">{{.}}</p>{{end}}
   {{with .NoticePost}}<form method="post" action="/driver/post/{{.ID}}/fuzz" class="post-fuzz">
     <button class="btn btn-sm btn-outline-primary">Fuzz This</button>
     <span class="muted small">&mdash; make that post&rsquo;s location inexact</span></form>{{end}}
