@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -167,9 +168,9 @@ func TestHUDJSONTripTrafficIsBudgetedByTheLegLineAndTheFix(t *testing.T) {
 		t.Fatal(err)
 	}
 	end := pts[len(pts)-1]
-	var gotQ string
+	var gotQ atomic.Value
 	tt := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotQ = r.URL.Query().Get("fields")
+		gotQ.Store(r.URL.Query().Get("fields"))
 		w.Write([]byte(`{"incidents":[
  {"geometry":{"type":"Point","coordinates":[` + strconv.FormatFloat(end[0], 'f', 6, 64) + `,` + strconv.FormatFloat(end[1], 'f', 6, 64) + `]},"properties":{"id":"on","iconCategory":8,"magnitudeOfDelay":4,"events":[{"description":"Road closed"}],"from":"Test Rd","to":"Spur Rd"}},
  {"geometry":{"type":"Point","coordinates":[10.0,10.0]},"properties":{"id":"far","iconCategory":8,"magnitudeOfDelay":4,"events":[{"description":"Road closed"}],"from":"Far Rd","to":"Away Rd"}}]}`))
@@ -180,8 +181,8 @@ func TestHUDJSONTripTrafficIsBudgetedByTheLegLineAndTheFix(t *testing.T) {
 	app.hazards = hazardSvcFor(nws, tt, "k-test")
 	c := asUser(t, app, "kris", roleAdmin)
 	h := hudAt(t, app, c, fmt.Sprintf("?lat=%f&lng=%f", lat, lng))
-	if !strings.Contains(gotQ, "geometry") {
-		t.Fatalf("the trip HUD must ask TomTom for geometry: %q", gotQ)
+	if q, _ := gotQ.Load().(string); !strings.Contains(q, "geometry") {
+		t.Fatalf("the trip HUD must ask TomTom for geometry: %q", q)
 	}
 	txt := chipTexts(h.Hazards)
 	if !strings.Contains(txt, "mi ahead, Road closed, Test Rd to Spur Rd") || strings.Contains(txt, "Far Rd") {
