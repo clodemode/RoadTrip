@@ -35,7 +35,7 @@ const (
 // on, so with RoadTracks off the prompt is the one it always was.
 const chesterMusicPrompt = `
 
-Music. When the traveller asks for music, call search_music with a short search (an artist, an album, a mood or a genre) and recommend only from the albums it returns. Then call show_music with the references of the albums you will recommend (one to three) and one short sentence on why each suits the drive. The page turns each into a card with a Play button that opens the album in the music library; you cannot play anything yourself and the music does not start by itself, so say that they tap Play to open it. If search_music says the library is unavailable, say so plainly and do not suggest an album. Write the answer after your last tool call, as for places.`
+Music. When the traveller asks for music, call search_music with an artist or an album title. The library matches album and artist names only, never moods or genres, so for a mood think of artists that suit it and search several of them at once, as separate search_music calls in the same turn. Recommend only from the albums the searches return. Then call show_music with the references of the albums you will recommend (one to three) and one short sentence on why each suits the drive. The page turns each into a card with a Play button that opens the album in the music library; you cannot play anything yourself and the music does not start by itself, so say that they tap Play to open it. If search_music says the library is unavailable, say so plainly and do not suggest an album. Write the answer after your last tool call, as for places.`
 
 // chesterMusicLib is the library as one question sees it; nil is the feature off.
 type chesterMusicLib struct {
@@ -72,10 +72,11 @@ func newChesterMusicRun(lib *chesterMusicLib) *chesterMusicRun {
 func chesterMusicTools() []anthropic.BetaToolUnionParam {
 	return []anthropic.BetaToolUnionParam{
 		clientTool(chesterSearchMusicTool,
-			"Search the music library for albums. Give a short search: an artist, an album, a mood or a genre. "+
+			"Search the music library for albums by artist or album title. It matches names only, so a mood or genre finds nothing. "+
+				"Several searches may go in one turn. "+
 				"It returns up to "+strconv.Itoa(chesterMusicResults)+" albums, each with a reference such as m1. "+
 				"Recommend only albums it returns.",
-			map[string]any{"query": map[string]any{"type": "string", "description": "A short search, under 80 characters."}},
+			map[string]any{"query": map[string]any{"type": "string", "description": "An artist or an album title, under 80 characters."}},
 			[]string{"query"}),
 		clientTool(chesterShowMusicTool,
 			"Show the albums you recommend as cards with a Play button. Give one to "+strconv.Itoa(chesterMusicCards)+

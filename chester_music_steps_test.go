@@ -66,6 +66,8 @@ func initChesterMusicScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^RoadTracks is off$`, func() error { w.on = false; return nil })
 	sc.Step(`^the music library is down$`, func() error { w.moDown = true; return nil })
 	sc.Step(`^Chester will search the library for "([^"]*)"$`, w.willSearch)
+	sc.Step(`^Chester will search the library for "([^"]*)" and "([^"]*)" in one turn$`, w.willSearchTwo)
+	sc.Step(`^Chester was told the library matches album and artist names, not moods or genres$`, w.toldNamesOnly)
 	sc.Step(`^Chester will then show the album "([^"]*)" because "([^"]*)"$`, w.willShow)
 	sc.Step(`^Chester will (?:then )?write "([^"]*)"$`, w.willWrite)
 	sc.Step(`^the trip-keeper asks Chester "([^"]*)"$`, w.ask)
@@ -109,6 +111,28 @@ func (w *musicWorld) willSearch(q string) error {
 	in := js(map[string]any{"query": q})
 	w.script = append(w.script, stream(events(evStart(stubModel, 100, 0, 0), evThinking(0),
 		evClientTool(1, "toolu_s"+strconv.Itoa(len(w.script)), "search_music", in), evEnd("tool_use", 20, 0, nil))...))
+	return nil
+}
+
+// willSearchTwo is one model turn carrying two search_music calls: the moStub
+// answers both with the same album, so the one reference m1 stands for it.
+func (w *musicWorld) willSearchTwo(a, b string) error {
+	n := strconv.Itoa(len(w.script))
+	w.script = append(w.script, stream(events(evStart(stubModel, 100, 0, 0), evThinking(0),
+		evClientTool(1, "toolu_a"+n, "search_music", js(map[string]any{"query": a})),
+		evClientTool(2, "toolu_b"+n, "search_music", js(map[string]any{"query": b})),
+		evEnd("tool_use", 20, 0, nil))...))
+	return nil
+}
+
+func (w *musicWorld) toldNamesOnly() error {
+	first := string(w.stub.requests()[0].Body)
+	if !strings.Contains(first, "matches album and artist names only") {
+		return fmt.Errorf("the model was not told the library matches names only")
+	}
+	if strings.Contains(first, "a mood or a genre") {
+		return fmt.Errorf("the model is still told it can search a mood or a genre")
+	}
 	return nil
 }
 

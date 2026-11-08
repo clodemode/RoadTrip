@@ -61,6 +61,16 @@ Feature: Chester finds music in the library and shows it as a Play card
     Then Chester was told the album "Abbey Road" by "The Beatles" and its reference "m1"
     And nothing sent to the model holds the library key or address
 
+  Scenario: A mood is searched as several artists in one turn, because the library matches names only
+    Given RoadTracks is on
+    And Chester will search the library for "the beatles" and "the band" in one turn
+    And Chester will then show the album "m1" because "Warm and unhurried"
+    And Chester will then write "Tap Play to open it."
+    When the trip-keeper asks Chester "Something mellow for the highway"
+    Then Chester was told the library matches album and artist names, not moods or genres
+    And the answer carries one album card for "Abbey Road" by "The Beatles"
+    And the answer was written after the last tool call
+
   Scenario: A music search is logged on the bus by length and count, never the words
     Given RoadTracks is on
     And Chester will search the library for "abbey road"
