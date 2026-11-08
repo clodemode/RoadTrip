@@ -476,6 +476,9 @@ type chesterCard struct {
 	chesterPlace
 	KindLabel string        `json:"kind_label"`
 	Links     []chesterLink `json:"links"`
+	// Route is the place as text, "Name, Town", for Route me here. Empty when
+	// the card has no town: a bare name is too loose to send a car to.
+	Route string `json:"route,omitempty"`
 }
 
 var chesterKinds = map[string]string{
@@ -574,6 +577,9 @@ func (p chesterPlace) card() chesterCard {
 		where += ", " + p.Town
 	}
 	c := chesterCard{chesterPlace: p, KindLabel: chesterKinds[p.Kind]}
+	if p.Name != "" && p.Town != "" {
+		c.Route = where
+	}
 	c.Links = append(c.Links,
 		chesterLink{"Navigate", wazeLink(where, 0, 0)},
 		chesterLink{"Map", "https://www.google.com/maps/search/?" + url.Values{"api": {"1"}, "query": {where}}.Encode()})
