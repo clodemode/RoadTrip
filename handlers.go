@@ -1600,8 +1600,9 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 		"Day": di, "Error": errMsg, "Notice": r.URL.Query().Get("notice"),
 		"NoticePost": a.noticePost(r, rv.Ride.Slug),
 		"Start":      start, "NextStop": nextStopName(rv.Legs),
-		"StartMode": start != nil && r.URL.Query().Get("full") == "",
-		"Kind":      kind,
+		"StartMode":  start != nil && r.URL.Query().Get("full") == "",
+		"SimAllowed": a.simAllowed,
+		"Kind":       kind,
 		// What the form needs to say, before posting, what will be published:
 		// the private cells the fuzz toggle pre-ticks itself for, and which way
 		// PIN_PRECISION tips that default. These are the ALREADY-FUZZED
@@ -1947,8 +1948,14 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 			a.renderPostForm(w, r, http.StatusBadRequest, "Starting the drive needs a photo")
 			return
 		}
+		// A KATE driver may choose the phone or the photo's GPS over the
+		// pretend car; a car already running would outrank both, so stop it.
+		src := r.PostFormValue("start_source")
+		if a.simAllowed && src == "gps" && a.sim != nil {
+			a.sim.Stop(a.userOf(r))
+		}
 		switch v := a.vouchFor(r, exLat, exLng); {
-		case a.simAllowed:
+		case a.simAllowed && src != "gps":
 			// On a KATE starting the drive starts the pretend car from the
 			// corridor's own origin: accepted, and the sim begins now.
 			startSrc, startSim = "sim", true
