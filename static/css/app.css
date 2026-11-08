@@ -268,7 +268,7 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 .hero-sky .terrain { position: absolute; left: 0; right: 0; bottom: 0; z-index: 0;
   width: 100%; height: 46%; display: block; pointer-events: none; }
 .hero-sky .muted, .hero-sky .cast, .hero-sky .guide-tag, .hero-sky .leg-sub { color: var(--leg-muted); }
-.hero-sky a { color: var(--leg-accent); }
+.hero-sky a:not(.btn) { color: var(--leg-accent); }
 .hero .day-badge { background: var(--leg-accent, var(--ds-primary)); color: #fff; }
 /* Chips, and Lance's guide card, are opaque paper: they stand on the
    silhouettes, so their text never meets a green hill. */
