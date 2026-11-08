@@ -61,6 +61,7 @@ type hazardSvc struct {
 
 	mu    sync.Mutex
 	cache map[string]hazardEntry
+	trips map[string]tripEntry // planned legs: fetched incidents, placed on the leg's line
 }
 
 type hazardEntry struct {
@@ -393,6 +394,14 @@ type ttIncident struct {
 	cat   int
 	text  string
 	delay int
+	// geom is the incident's own geometry, asked for only on a planned leg.
+	geom ttGeometry
+}
+
+// ttGeometry is a GeoJSON Point or LineString as TomTom draws an incident.
+type ttGeometry struct {
+	Type   string          `json:"type"`
+	Coords json.RawMessage `json:"coordinates"`
 }
 
 func (s *hazardSvc) Traffic(ctx context.Context, pts []ll) []hazardChip {
@@ -402,58 +411,7 @@ func (s *hazardSvc) Traffic(ctx context.Context, pts []ll) []hazardChip {
 	if len(pts) == 0 {
 		return unknownChip("Traffic", "no route")
 	}
-	incs, failed, err := fanOut(len(pts), func(i int) ([]ttIncident, error) {
-		const dLat, dLng = 0.3, 0.35 // a box well under TomTom's area limit
-		p := pts[i]
-		bbox := fmt.Sprintf("%.4f,%.4f,%.4f,%.4f", p.Lng-dLng, p.Lat-dLat, p.Lng+dLng, p.Lat+dLat)
-		q := url.Values{
-			"key":                {s.key},
-			"bbox":               {bbox},
-			"fields":             {"{incidents{type,properties{id,iconCategory,magnitudeOfDelay,events{description},from,to,roadNumbers,delay}}}"},
-			"language":           {"en-GB"},
-			"timeValidityFilter": {"present"},
-		}
-		var body struct {
-			Incidents []struct {
-				Properties struct {
-					ID     string `json:"id"`
-					Icon   int    `json:"iconCategory"`
-					Mag    int    `json:"magnitudeOfDelay"`
-					Events []struct {
-						Description string `json:"description"`
-					} `json:"events"`
-					From  string   `json:"from"`
-					To    string   `json:"to"`
-					Roads []string `json:"roadNumbers"`
-					Delay int      `json:"delay"`
-				} `json:"properties"`
-			} `json:"incidents"`
-		}
-		if e := s.getJSON(ctx, s.ttBase+"/traffic/services/5/incidentDetails?"+q.Encode(), nil, &body); e != nil {
-			return nil, e
-		}
-		var out []ttIncident
-		for _, in := range body.Incidents {
-			p := in.Properties
-			desc := ""
-			if len(p.Events) > 0 {
-				desc = p.Events[0].Description
-			}
-			var b strings.Builder
-			if len(p.Roads) > 0 {
-				b.WriteString(strings.Join(p.Roads, "/") + " ")
-			}
-			b.WriteString(desc)
-			if p.From != "" && p.To != "" {
-				b.WriteString(", " + p.From + " to " + p.To)
-			}
-			if p.Delay >= 60 {
-				b.WriteString(fmt.Sprintf(" (+%d min)", int(math.Round(float64(p.Delay)/60))))
-			}
-			out = append(out, ttIncident{id: p.ID, mag: p.Mag, cat: p.Icon, text: strings.TrimSpace(b.String()), delay: p.Delay})
-		}
-		return out, nil
-	})
+	incs, failed, err := s.fetchIncidents(ctx, pts, false)
 	if len(incs) == 0 {
 		if failed > 0 {
 			return unknownChip("Traffic", shortWhy(err))
@@ -492,6 +450,68 @@ func (s *hazardSvc) Traffic(ctx context.Context, pts []ll) []hazardChip {
 		chips = append(chips, hazardChip{Source: "Traffic", State: hazardItems, Text: "Traffic: " + in.text})
 	}
 	return capChips("Traffic", chips, failed > 0)
+}
+
+// fetchIncidents asks TomTom about every point and folds the answers. A
+// point that failed and no incident anywhere means the source cannot say clear.
+func (s *hazardSvc) fetchIncidents(ctx context.Context, pts []ll, withGeom bool) ([]ttIncident, int, error) {
+	return fanOut(len(pts), func(i int) ([]ttIncident, error) {
+		const dLat, dLng = 0.3, 0.35 // a box well under TomTom's area limit
+		p := pts[i]
+		fields := "{incidents{type,properties{id,iconCategory,magnitudeOfDelay,events{description},from,to,roadNumbers,delay}}}"
+		if withGeom {
+			fields = "{incidents{type,geometry{type,coordinates},properties{id,iconCategory,magnitudeOfDelay,events{description},from,to,roadNumbers,delay}}}"
+		}
+		bbox := fmt.Sprintf("%.4f,%.4f,%.4f,%.4f", p.Lng-dLng, p.Lat-dLat, p.Lng+dLng, p.Lat+dLat)
+		q := url.Values{
+			"key":                {s.key},
+			"bbox":               {bbox},
+			"fields":             {fields},
+			"language":           {"en-GB"},
+			"timeValidityFilter": {"present"},
+		}
+		var body struct {
+			Incidents []struct {
+				Geometry   ttGeometry `json:"geometry"`
+				Properties struct {
+					ID     string `json:"id"`
+					Icon   int    `json:"iconCategory"`
+					Mag    int    `json:"magnitudeOfDelay"`
+					Events []struct {
+						Description string `json:"description"`
+					} `json:"events"`
+					From  string   `json:"from"`
+					To    string   `json:"to"`
+					Roads []string `json:"roadNumbers"`
+					Delay int      `json:"delay"`
+				} `json:"properties"`
+			} `json:"incidents"`
+		}
+		if e := s.getJSON(ctx, s.ttBase+"/traffic/services/5/incidentDetails?"+q.Encode(), nil, &body); e != nil {
+			return nil, e
+		}
+		var out []ttIncident
+		for _, in := range body.Incidents {
+			p := in.Properties
+			desc := ""
+			if len(p.Events) > 0 {
+				desc = p.Events[0].Description
+			}
+			var b strings.Builder
+			if len(p.Roads) > 0 {
+				b.WriteString(strings.Join(p.Roads, "/") + " ")
+			}
+			b.WriteString(desc)
+			if p.From != "" && p.To != "" {
+				b.WriteString(", " + p.From + " to " + p.To)
+			}
+			if p.Delay >= 60 {
+				b.WriteString(fmt.Sprintf(" (+%d min)", int(math.Round(float64(p.Delay)/60))))
+			}
+			out = append(out, ttIncident{id: p.ID, mag: p.Mag, cat: p.Icon, text: strings.TrimSpace(b.String()), delay: p.Delay, geom: in.Geometry})
+		}
+		return out, nil
+	})
 }
 
 // --- where to ask ----------------------------------------------------------

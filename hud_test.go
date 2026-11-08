@@ -2,9 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -153,5 +156,36 @@ func TestHUDJSONCarriesHazardsFromTheStubs(t *testing.T) {
 	}
 	if cc := w.Header().Get("Cache-Control"); !strings.Contains(cc, "no-store") {
 		t.Fatalf("a signed-in answer must not be cached: %q", cc)
+	}
+}
+
+func TestHUDJSONTripTrafficIsBudgetedByTheLegLineAndTheFix(t *testing.T) {
+	app, rv := hudRide(t)
+	leg := rv.Legs[2]
+	lat, lng := midVertex(t, leg)
+	var pts [][]float64
+	if err := json.Unmarshal(leg.Line, &pts); err != nil {
+		t.Fatal(err)
+	}
+	end := pts[len(pts)-1]
+	var gotQ atomic.Value
+	tt := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQ.Store(r.URL.Query().Get("fields"))
+		w.Write([]byte(`{"incidents":[
+ {"geometry":{"type":"Point","coordinates":[` + strconv.FormatFloat(end[0], 'f', 6, 64) + `,` + strconv.FormatFloat(end[1], 'f', 6, 64) + `]},"properties":{"id":"on","iconCategory":8,"magnitudeOfDelay":4,"events":[{"description":"Road closed"}],"from":"Test Rd","to":"Spur Rd"}},
+ {"geometry":{"type":"Point","coordinates":[10.0,10.0]},"properties":{"id":"far","iconCategory":8,"magnitudeOfDelay":4,"events":[{"description":"Road closed"}],"from":"Far Rd","to":"Away Rd"}}]}`))
+	}))
+	defer tt.Close()
+	nws := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{"features":[]}`)) }))
+	defer nws.Close()
+	app.hazards = hazardSvcFor(nws, tt, "k-test")
+	c := asUser(t, app, "kris", roleAdmin)
+	h := hudAt(t, app, c, fmt.Sprintf("?lat=%f&lng=%f", lat, lng))
+	if q, _ := gotQ.Load().(string); !strings.Contains(q, "geometry") {
+		t.Fatalf("the trip HUD must ask TomTom for geometry: %q", q)
+	}
+	txt := chipTexts(h.Hazards)
+	if !strings.Contains(txt, "mi ahead, Road closed, Test Rd to Spur Rd") || strings.Contains(txt, "Far Rd") {
+		t.Fatalf("want the on-route closure with a distance and not the far one:\n%s", txt)
 	}
 }

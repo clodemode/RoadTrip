@@ -21,6 +21,7 @@ func TestFeatures(t *testing.T) {
 				initChesterMusicScenarios(t, sc)
 				initStartButtonScenarios(sc)
 				initCanadianWeatherScenarios(t, sc)
+				initTrafficChipBudgetScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

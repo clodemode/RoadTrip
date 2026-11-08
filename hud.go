@@ -357,14 +357,24 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var pts []ll
+	var line json.RawMessage
 	for _, l := range legs {
 		if l.Slug == h.LegSlug {
 			pts = legSamples(l.Line, 4, fuzzedOf(rideCheckpoints(legs)))
+			line = l.Line
+		}
+	}
+	// How far along the leg the car is, when the HUD has a position (a phone
+	// fix or the server-held sim); else the chips measure from the leg's start.
+	var aheadKm *float64
+	if lat != nil && lng != nil {
+		if al, _, _, ok := alongLine(line, *lat, *lng); ok {
+			aheadKm = &al
 		}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*hazardTimeout)
 	defer cancel()
-	h.Hazards = hz.ForLeg(ctx, h.LegSlug, pts)
+	h.Hazards = hz.ForTrip(ctx, h.LegSlug, pts, line, aheadKm)
 	a.hudServed(r, mode, h, lat != nil, simUsed)
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Type", "application/json")
