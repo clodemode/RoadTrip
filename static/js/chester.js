@@ -15,7 +15,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var form = $('ch-form'), box = $('ch-q'), send = $('ch-send'),
       status = $('ch-status'), error = $('ch-error'), answer = $('ch-answer'),
-      places = $('ch-places'), music = $('ch-music'), meta = $('ch-meta'), speak = $('ch-speak'),
+      places = $('ch-places'), music = $('ch-music'), proposal = $('ch-proposal'), meta = $('ch-meta'), speak = $('ch-speak'),
       locate = $('ch-locate'), geo = $('ch-geo'), la = $('ch-lat'), ln = $('ch-lng');
   if (!form || !box || !send || !answer) return;
 
@@ -165,6 +165,55 @@
     return li;
   }
 
+  // A route proposal: words as text only. Save posts the card's whole
+  // selection to the existing plan save, so Chester changes nothing and the
+  // plan's own guard decides; the answer is written into the card, in place.
+  function proposalCard(p) {
+    var li = document.createElement('li');
+    li.className = 'ch-place ch-proposal';
+    function line(cls, text, tag) {
+      var el = document.createElement(tag || 'p');
+      el.className = cls;
+      el.textContent = text;
+      li.appendChild(el);
+      return el;
+    }
+    line('ch-kind', 'Route choice', 'span');
+    line('ch-place-name', (p.option_title || p.option) + ': ' + (p.choice_label || p.choice), 'b');
+    if (p.detail) line('muted', p.detail, 'span');
+    line('ch-why', 'Changes the whole trip by ' + p.miles_delta + ' miles and ' + p.hours_delta +
+      ' hours (plan estimate, not traffic).');
+    if (p.why) line('ch-why', p.why);
+    if (p.in_progress) {
+      line('ch-why error', 'This is the leg being driven now. Saving changes the road under the car.');
+    }
+    var result = line('muted small', '');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm btn-outline-dark';
+    btn.textContent = 'Save';
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      // The plan save is strict: it is sent every choice, not only the change.
+      var body = new URLSearchParams();
+      Object.keys(p.selection || {}).forEach(function (k) { body.set('opt-' + k, p.selection[k]); });
+      body.set('start', p.start || '');
+      fetch('/driver/plan', {
+        method: 'POST', body: body, credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+      }).then(function (res) {
+        return res.json().then(function (j) {
+          result.textContent = j && j.status === 'ok' ? 'Saved.' : 'Not saved: ' + ((j && j.error) || 'the plan was not changed.');
+        });
+      }).catch(function () {
+        result.textContent = 'Not saved: the connection dropped. The plan was not changed.';
+      });
+    });
+    li.appendChild(btn);
+    li.appendChild(result);
+    return li;
+  }
+
   // --- one event ----------------------------------------------------------------------
   var spoken = '';
   function handle(ev) {
@@ -188,6 +237,11 @@
         (ev.music || []).forEach(function (m) { music.appendChild(albumCard(m)); });
         music.hidden = !(ev.music || []).length;
         break;
+      case 'proposal':
+        proposal.textContent = '';
+        if (ev.proposal) proposal.appendChild(proposalCard(ev.proposal));
+        proposal.hidden = !ev.proposal;
+        break;
       case 'error':
         hide(status);
         if (ev.drop) {
@@ -196,7 +250,8 @@
           answer.textContent = '';
           places.textContent = '';
           music.textContent = '';
-          hide(answer); hide(places); hide(music);
+          proposal.textContent = '';
+          hide(answer); hide(places); hide(music); hide(proposal);
           spoken = '';
         }
         show(error, ev.d);
@@ -245,7 +300,8 @@
     answer.textContent = '';
     places.textContent = '';
     music.textContent = '';
-    hide(answer); hide(places); hide(music); hide(error); hide(meta);
+    proposal.textContent = '';
+    hide(answer); hide(places); hide(music); hide(proposal); hide(error); hide(meta);
     show(status, 'Asking…');
     if (canSpeak) window.speechSynthesis.cancel();
 

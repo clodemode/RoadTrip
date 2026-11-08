@@ -60,7 +60,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-10"
+	chesterPromptVersion = "chester-rt-11"
 
 	maxChesterQuestion = 1000
 )
@@ -639,6 +639,14 @@ type chesterContext struct {
 	// Town is the nearest checkpoint's own name when that is a town, and is
 	// never finer. It is said in the volatile part, after the breakpoint.
 	Town string
+
+	// The planner state the route-choices block was built from, kept for the
+	// validator. Never sent anywhere.
+	plan    *planState
+	choices map[string]string // the saved choices
+	start   string            // the saved start date
+	locked  map[string]string // "option/choice" -> why the plan guard would refuse it
+	started map[string]bool   // option ids whose leg is being driven now
 }
 
 // coarseTown reads "Town, ST" out of a checkpoint name. Anything else gives
@@ -811,6 +819,7 @@ func (a *App) chesterContext(now time.Time, lat, lng *float64) (*chesterContext,
 			}
 		}
 	}
+	st.WriteString(a.routeChoices(cx, rv.Legs, di))
 	cx.Stable = st.String()
 
 	var v strings.Builder
@@ -887,7 +896,7 @@ Sensitive but legal questions are ordinary travel help. When someone asks about 
 Write plain text: no Markdown, no headings, no bullet symbols, no web addresses (the card carries the address).
 
 In quick mode, the answer is a few short sentences, the most useful thing first, and names at most three places. It may be read aloud.
-In plan mode, the question is usually about tomorrow. A longer answer is right: compare the real options, name up to six places, and say what you would choose and why.`
+In plan mode, the question is usually about tomorrow. A longer answer is right: compare the real options, name up to six places, and say what you would choose and why.` + chesterRoutePrompt
 
 // systemPromptFor is the system prompt: the music section is added only when
 // the library is on, so with it off the prompt is exactly the one it was.
@@ -991,14 +1000,16 @@ func newChester(cfg *chesterConfig) *Chester {
 
 // chesterEvent is one line of the answer as the page receives it.
 type chesterEvent struct {
-	T      string             `json:"t"` // text | status | places | music | done | error
+	T      string             `json:"t"` // text | status | places | music | proposal | done | error
 	D      string             `json:"d,omitempty"`
 	Places []chesterCard      `json:"places,omitempty"`
 	Music  []chesterMusicCard `json:"music,omitempty"`
-	ID     int64              `json:"id,omitempty"`
-	Stop   string             `json:"stop,omitempty"`
-	USD    float64            `json:"usd,omitempty"`
-	MS     int64              `json:"ms,omitempty"`
+	// Proposal is a route switch for the trip-keeper to save or leave.
+	Proposal *chesterProposalCard `json:"proposal,omitempty"`
+	ID       int64                `json:"id,omitempty"`
+	Stop     string               `json:"stop,omitempty"`
+	USD      float64              `json:"usd,omitempty"`
+	MS       int64                `json:"ms,omitempty"`
 	// Drop, on an error, tells the page that the words it has shown so far
 	// are not an answer and are to be taken down.
 	Drop bool `json:"drop,omitempty"`
@@ -1016,13 +1027,16 @@ type chesterResult struct {
 	// Synth is true when the model named places and wrote no words, even
 	// when asked again: Answer is then one fixed sentence the server built
 	// from the cards, and the row says it is not the model's.
-	Synth   bool
-	Places  []chesterPlace
-	Music   []chesterMusicCard // albums recommended from the library, built by the server
-	Stop    string             // the API's stop reason for the last request
-	Err     string             // a plain sentence for the page, "" when it went well
-	ErrKind string             // a short code for the log
-	Notes   []string
+	Synth  bool
+	Places []chesterPlace
+	Music  []chesterMusicCard // albums recommended from the library, built by the server
+	// Proposal is the one route switch Chester proposed that the plan checks
+	// out; nil when none, or when every one was dropped (Notes says why).
+	Proposal *chesterProposalCard
+	Stop     string // the API's stop reason for the last request
+	Err      string // a plain sentence for the page, "" when it went well
+	ErrKind  string // a short code for the log
+	Notes    []string
 	// Leanings are the notes Chester asked to keep (already cleaned).
 	Leanings []string
 	// Requests is the API's own usage for every request the question took.
@@ -1122,6 +1136,9 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 		Thinking:     anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}},
 		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffort(m.Effort)},
 		Tools:        []anthropic.BetaToolUnionParam{m.searchTool(cx), chesterPlacesTool(m.MaxPlaces), chesterRemembersTool()},
+	}
+	if cx.plan != nil {
+		params.Tools = append(params.Tools, chesterProposeToolDef())
 	}
 	var tunes *chesterMusicRun
 	if music != nil {
@@ -1284,6 +1301,19 @@ rounds:
 			} else if b.Name == chesterToolName {
 				placeInputs = append(placeInputs, string(b.Input))
 				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, chesterCardsNowWrite, false))
+			} else if b.Name == chesterProposeTool && cx.plan != nil {
+				card, dropped, told := cx.checkProposal(string(b.Input))
+				switch {
+				case card != nil && res.Proposal == nil:
+					res.Proposal = card
+					results = append(results, anthropic.NewBetaToolResultBlock(b.ID, told, false))
+				case card != nil:
+					res.Notes = append(res.Notes, "a second proposal was dropped: one card per answer")
+					results = append(results, anthropic.NewBetaToolResultBlock(b.ID, "One proposal per answer: the first is on the page. Write the answer now.", true))
+				default:
+					res.Notes = append(res.Notes, "a proposal was dropped: "+dropped)
+					results = append(results, anthropic.NewBetaToolResultBlock(b.ID, told, true))
+				}
 			} else if b.Name == chesterRememberTool {
 				leanInputs = append(leanInputs, string(b.Input))
 				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, "Noted.", false))
@@ -1475,9 +1505,12 @@ type ChesterQuery struct {
 	// (a list of chesterRequestUsage): counts only, nothing of the question
 	// or the answer. The tokens, searches and dollars above are worked out
 	// from it (chesterUsageFromJSON). A row from before it was kept has "[]".
-	UsageJSON    json.RawMessage `json:"usage_json"`
-	Partial      string          `json:"partial,omitempty"`
-	Places       []chesterPlace  `json:"places"`
+	UsageJSON json.RawMessage `json:"usage_json"`
+	Partial   string          `json:"partial,omitempty"`
+	Places    []chesterPlace  `json:"places"`
+	// Proposal is the route switch Chester proposed on this question, as
+	// {option, choice, why, outcome}; absent when it proposed none.
+	Proposal     json.RawMessage `json:"proposal,omitempty"`
 	StopReason   string          `json:"stop_reason"`
 	Error        string          `json:"error,omitempty"`
 	Note         string          `json:"note,omitempty"`
@@ -1546,12 +1579,12 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 	res, err := s.db.Exec(`INSERT INTO chester_queries
 	  (ride_slug,asked_at,tz,mode,preset,question,prompt_version,model,served_model,effort,first_ms,total_ms,
 	   tokens_in,tokens_out,cache_read,cache_write,searches,usd,answer,places,stop_reason,error,note,
-	   pos_lat,pos_lng,pos_source,pos_label,partial,usd_estimated,answer_synth,usage_json,user)
-	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	   pos_lat,pos_lng,pos_source,pos_label,partial,usd_estimated,answer_synth,usage_json,user,proposal)
+	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		q.Ride, q.AskedAt, q.TZ, q.Mode, q.Preset, q.Question, q.PromptVersion, q.Model, q.ServedModel, q.Effort,
 		q.FirstMS, q.TotalMS, q.TokensIn, q.TokensOut, q.CacheRead, q.CacheWrite, q.Searches, q.USD,
 		q.Answer, string(places), q.StopReason, q.Error, q.Note, q.PosLat, q.PosLng, q.PosSource, q.PosLabel,
-		q.Partial, q.USDEstimated, q.AnswerSynth, string(usage), q.User)
+		q.Partial, q.USDEstimated, q.AnswerSynth, string(usage), q.User, string(q.Proposal))
 	if err != nil {
 		return err
 	}
@@ -1562,23 +1595,26 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 const chesterCols = `id,ride_slug,asked_at,tz,mode,preset,question,prompt_version,model,served_model,effort,
   first_ms,total_ms,tokens_in,tokens_out,cache_read,cache_write,searches,usd,answer,places,stop_reason,error,note,
   pos_lat,pos_lng,pos_source,pos_label,verdict,checked_against,verdict_note,chester_value,reference_value,
-  value_unit,verdict_at,partial,usd_estimated,answer_synth,usage_json,user`
+  value_unit,verdict_at,partial,usd_estimated,answer_synth,usage_json,user,proposal`
 
 func scanChester(sc interface{ Scan(...any) error }) (ChesterQuery, error) {
 	var q ChesterQuery
-	var places, usage string
+	var places, usage, proposal string
 	var first sql.NullInt64
 	var lat, lng, cv, rv sql.NullFloat64
 	err := sc.Scan(&q.ID, &q.Ride, &q.AskedAt, &q.TZ, &q.Mode, &q.Preset, &q.Question, &q.PromptVersion,
 		&q.Model, &q.ServedModel, &q.Effort, &first, &q.TotalMS, &q.TokensIn, &q.TokensOut, &q.CacheRead,
 		&q.CacheWrite, &q.Searches, &q.USD, &q.Answer, &places, &q.StopReason, &q.Error, &q.Note,
 		&lat, &lng, &q.PosSource, &q.PosLabel, &q.Verdict, &q.Checked, &q.VerdictNote, &cv, &rv, &q.Unit, &q.VerdictAt,
-		&q.Partial, &q.USDEstimated, &q.AnswerSynth, &usage, &q.User)
+		&q.Partial, &q.USDEstimated, &q.AnswerSynth, &usage, &q.User, &proposal)
 	if err != nil {
 		return q, err
 	}
 	if first.Valid {
 		q.FirstMS = &first.Int64
+	}
+	if proposal != "" && json.Valid([]byte(proposal)) {
+		q.Proposal = json.RawMessage(proposal)
 	}
 	q.UsageJSON = json.RawMessage("[]")
 	if json.Valid([]byte(usage)) {
