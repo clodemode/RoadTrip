@@ -42,6 +42,18 @@ func newRoadtracks(token, base string) *roadtracksSvc {
 	return &roadtracksSvc{base: base, token: token, client: &http.Client{}}
 }
 
+// playerURL is where the driver screen's Drive Tracks button goes: the player
+// on the library, at the address the phone can open. Nil is the feature off.
+func (s *roadtracksSvc) playerURL() string {
+	if s == nil {
+		return ""
+	}
+	if s.linkBase != "" {
+		return s.linkBase + "/"
+	}
+	return s.base + "/"
+}
+
 // tracksView is the HUD's one word about the feature.
 type tracksView struct {
 	Enabled bool `json:"enabled"`
