@@ -26,8 +26,9 @@ import (
 // "source"; the bus keeps that word for the app (roadtrip), so the field is
 // vouched_by.
 type scWorld struct {
-	p     *postWorld
-	phone bool // the phone reports a position at stop phoneI
+	p       *postWorld
+	phone   bool        // the phone reports a position (at B unless phoneAt says where)
+	phoneAt *[2]float64 // where the phone reports it is, when not at B
 }
 
 const stopsLng = -100.0
@@ -35,7 +36,7 @@ const stopsLng = -100.0
 // stopLat is the latitude of stop i (0 = A): 0.5 degree, about 55 km, apart.
 func stopLat(i int) float64 { return 40.0 + 0.5*float64(i) }
 
-func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) {
+func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) *scWorld {
 	s := &scWorld{p: p}
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		*s = scWorld{p: p}
@@ -124,6 +125,7 @@ func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		func(why string) error { return s.bus("checkin_skipped", 1, "reason", why) })
 	sc.Step(`^the bus carries a checkin_skipped record for B with no latitude and no longitude$`,
 		func() error { return s.bus("checkin_skipped", 1, "", "") })
+	return s
 }
 
 // line pushes the trip of four stops (the fixture's first leg with a fourth
@@ -198,6 +200,11 @@ func (s *scWorld) moveStop(i int, lat, lng float64) error {
 
 // bOffLine moves B 40 km east of the line from A to C.
 func (s *scWorld) bOffLine() error {
+	if len(s.p.cps) == 0 {
+		if err := s.line(); err != nil {
+			return err
+		}
+	}
 	dLng := 40 / (111.195 * math.Cos(stopLat(1)*math.Pi/180))
 	return s.moveStop(1, stopLat(1), stopsLng+dLng)
 }
@@ -247,8 +254,12 @@ func (s *scWorld) send(i int, withPhoto, withPhone bool) error {
 		_ = mw.WriteField("milestone_id", strconv.FormatInt(p.cps[i].ID, 10))
 	}
 	if withPhone {
-		_ = mw.WriteField("lat", strconv.FormatFloat(p.cps[1].Lat, 'f', 4, 64))
-		_ = mw.WriteField("lng", strconv.FormatFloat(p.cps[1].Lng, 'f', 4, 64))
+		lat, lng := p.cps[1].Lat, p.cps[1].Lng
+		if s.phoneAt != nil {
+			lat, lng = s.phoneAt[0], s.phoneAt[1]
+		}
+		_ = mw.WriteField("lat", strconv.FormatFloat(lat, 'f', 4, 64))
+		_ = mw.WriteField("lng", strconv.FormatFloat(lng, 'f', 4, 64))
 	}
 	if withPhoto && p.photo != nil {
 		fw, _ := mw.CreateFormFile("photo", "p.jpg")
