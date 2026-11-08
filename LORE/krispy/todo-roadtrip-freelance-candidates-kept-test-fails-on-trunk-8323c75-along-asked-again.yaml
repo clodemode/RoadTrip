@@ -1,0 +1,16 @@
+entries:
+- slug: todo-roadtrip-freelance-candidates-kept-test-fails-on-trunk-8323c75-along-asked-again
+  title: TestFreeCandidatesAreKeptWhenChesterWasOffAndRankedLater fails on trunk 8323c75 (TomTom along
+    asked again, 13->15), likely clock-dependent
+  domain: lore
+  lore_type: todo
+  app_scope: roadtrip
+  lair: logic
+  character_slug: krispy
+  tags: []
+  status: design
+  description: 'Found by the fuzz-this CODI 2026-11-08: freelance_test.go:536 fails deterministically
+    on an untouched trunk checkout (run with go test -run TestFreeCandidatesAreKept in golang:1.25). The
+    second findPicks asks TomTom along again (13->15) instead of reusing candidates. Today is 2026-11-08,
+    the date the neighbouring tests hard-code, so the real clock probably leaks in. Not caused by Fuzz
+    This; left alone because freelance.go is no-touch for that work.'

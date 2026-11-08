@@ -2041,6 +2041,12 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		// On a KATE the pretend car is where the phone is: it pins the post
 		// ahead of the photo's own GPS, which is a real place.
 		in.SimLat, in.SimLng = a.simFix(r)
+		if starting && startSim {
+			// The car only appears at the start once this post is saved, so
+			// the start photo takes the start's own published point.
+			lat, lng := start.Lat, start.Lng
+			in.SimLat, in.SimLng = &lat, &lng
+		}
 		res := resolvePin(in, rideCheckpoints(rv.Legs), a.pinPrecision)
 		res.apply(post)
 		pinNote = res.Note
