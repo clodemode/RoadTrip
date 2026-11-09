@@ -169,8 +169,9 @@
      visit) and, on a page that is not framed (the driver screen while the ride
      is Planning), once inline. A page inside the frame has none. */}}
 {{define "drive_card"}}<section class="drive-card" id="rt-player" aria-labelledby="rt-card-h">
-  <h2 class="drive-card-title" id="rt-card-h"><span aria-hidden="true">&#127925;</span> Drive Tracks <span class="rt-nest" id="rt-nest" role="status">0 ready</span></h2>
+  <h2 class="drive-card-title" id="rt-card-h"><button type="button" class="rt-toggle" id="rt-toggle" aria-expanded="false" aria-controls="rt-card-body"><img class="rt-charter" src="/static/img/charter.svg?v={{.V}}" alt="" width="28" height="28"> Drive Tracks <span class="rt-chevron" aria-hidden="true">&#9662;</span></button> <span class="rt-nest" id="rt-nest" role="status">0 ready</span></h2>
   <audio id="rt-audio" preload="none"></audio>
+  <div id="rt-card-body" hidden>
   <div class="rt-row">
     <img class="rt-art" id="rt-art" alt="" width="64" height="64" hidden>
     <div class="rt-meta">
@@ -186,6 +187,7 @@
   </div>
   {{with .Resume}}<button type="button" class="btn btn-primary rt-resume" id="rt-resume" data-album-id="{{.AlbumID}}" data-album="{{.Album}}" data-artist="{{.Artist}}" data-idx="{{.TrackIdx}}" data-pos="{{.PositionS}}">Resume {{.Album}}</button>{{end}}
   <p id="rt-status" role="status" aria-live="polite"></p>
+  </div>
 </section>{{end}}
 
 {{define "drive_card_inline"}}{{if .StripOn}}{{template "drive_card" .}}{{end}}{{end}}

@@ -245,3 +245,8 @@ Feature: Music plays on between screens, in one Drive Tracks card, with the next
 
   Scenario: Downloaded songs are kept in memory only
     Then the player never writes a song to disk, a database or a cache and offers no save
+
+  Scenario: The card collapses to its header so the site stays visible on a phone
+    # Kris, 2026-11-09: it "takes up too much space and hides the rest of the
+    # site on a phone. Use the Charter icon from MusicOrgan."
+    Then the card opens collapsed with a header that expands it and the Charter icon

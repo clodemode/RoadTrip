@@ -52,3 +52,16 @@ test('hud telemetry never carries an address', () => {
   assert.equal(H.telemetryBody('player', { nested: { u: '//x.example.test/a' } }), null);
   assert.ok(H.telemetryBody('nav_tap', { app: 'waze', mode: 'trip' }));
 });
+
+test('toggleCard opens and closes the card body and says so', async () => {
+  const { createRequire } = await import('node:module');
+  const { toggleCard } = createRequire(import.meta.url)('./player.js');
+  const attrs = {}; const btn = { setAttribute: (k, v) => { attrs[k] = v; } };
+  const body = { hidden: true };
+  assert.equal(toggleCard(btn, body), true);
+  assert.equal(body.hidden, false);
+  assert.equal(attrs['aria-expanded'], 'true');
+  assert.equal(toggleCard(btn, body), false);
+  assert.equal(body.hidden, true);
+  assert.equal(attrs['aria-expanded'], 'false');
+});

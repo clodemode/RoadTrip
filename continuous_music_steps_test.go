@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -286,6 +287,18 @@ func initContinuousMusicScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the card says how many songs are ready$`, func() error {
 		if !strings.Contains(page, `id="rt-nest"`) {
 			return fmt.Errorf("no ready readout")
+		}
+		return nil
+	})
+	sc.Step(`^the card opens collapsed with a header that expands it and the Charter icon$`, func() error {
+		b, err := os.ReadFile("templates/base.html")
+		if err != nil {
+			return err
+		}
+		for _, want := range []string{`id="rt-toggle"`, `aria-expanded="false"`, `aria-controls="rt-card-body"`, `id="rt-card-body" hidden`, `/static/img/charter.svg`} {
+			if !strings.Contains(string(b), want) {
+				return fmt.Errorf("the card has no %s", want)
+			}
 		}
 		return nil
 	})
