@@ -272,7 +272,12 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 	if !onRide && st.Mode != modeDestined && !aimless {
 		a.freeSvc().set(a.userOf(r), func(s *freeState) { s.enter(modeDestined) })
 	}
-	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h, "DriveStarted": a.driveStarted(),
+	// The trip switcher is for the KATE only: elsewhere it costs no query.
+	var tripChoices []RideCensus
+	if a.simAllowed {
+		tripChoices, _ = a.store.Rides()
+	}
+	a.render(w, r, "driver.html", map[string]any{"TripChoices": tripChoices, "ActiveSlug": a.activeSlug(), "Title": "Driver", "HUD": true, "H": h, "DriveStarted": a.driveStarted(),
 		"Notice": r.URL.Query().Get("notice"), "NoticePost": a.noticePost(r, a.activeSlug()), "TracksOn": a.tracks != nil, "TracksURL": a.tracks.playerURL(), "Resume": a.resumeFor(r), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 

@@ -493,6 +493,10 @@ func (a *App) rideActivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("active ride: %s", slug)
+	if wantsHTML(r) {
+		http.Redirect(w, r, "/driver", http.StatusSeeOther)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "active": slug, "source": "meta"})
 }
 
