@@ -21,7 +21,7 @@
 
   // --- EXIF: JPEG APP1 -> TIFF -> IFD0 -> GPS IFD ---------------------------
   // Hand-rolled and deliberately small. Anything unexpected returns null and
-  // the form says "none in this file" — a parse failure never blocks a post.
+  // the form says the photo has no GPS — a parse failure never blocks a post.
 
   var GPS_IFD = 0x8825, T_LAT_REF = 1, T_LAT = 2, T_LNG_REF = 3, T_LNG = 4;
   // TIFF type sizes by type code: BYTE ASCII SHORT LONG RATIONAL SBYTE …
@@ -195,7 +195,7 @@
   var NEAR_KM = 2.0;                // must match store.go privateRadiusKm
   var cells = window.RT_PRIVATE || [];
   var precision = window.RT_PIN_PRECISION || 'snap';
-  var exif = null, fix = null, touched = false;
+  var exif = null, fix = null, touched = false, noExif = false;
   // A simulated drive (data-sim="1", set by the server while one runs) is the
   // phone: the server pins the post from its own copy of the car, so the page
   // never asks the browser and never holds a coordinate to post back.
@@ -310,6 +310,7 @@
   if (photo) {
     photo.addEventListener('change', function () {
       exif = null;
+      noExif = false;
       var f = photo.files && photo.files[0];
       if (!f) {
         exSt.textContent = 'photo GPS: no file picked';
@@ -330,8 +331,9 @@
           exSt.textContent = 'photo GPS: ' + fmt(exif.lat, exif.lng);
           exNote.textContent = '— ' + fmt(exif.lat, exif.lng);
         } else {
-          exSt.textContent = 'photo GPS: none in this file';
-          exNote.textContent = '— none in this file';
+          noExif = true;
+          sayNoExif();
+          exNote.textContent = '— none, normal for a camera shot';
         }
         refresh(false);
       };
@@ -366,8 +368,19 @@
   // be in the hidden fields before the photo is posted. It is asked again,
   // fresh, when a photo is chosen; the earlier fix stands until that arrives.
   var secure = window.isSecureContext;
+  // Safari strips GPS from a web camera capture, so a photo with none is the
+  // normal case on the road: the line says what will pin it, not that it failed.
+  function sayNoExif() {
+    if (!noExif) return;
+    exSt.textContent = 'No GPS in this photo, normal for a camera shot. ' + (simOn
+      ? 'The simulated car will pin it unless you choose another pin below.'
+      : fix
+        ? 'Your phone\u2019s location will pin it unless you choose another pin below.'
+        : 'The phone has not shared its location, so choose a pin below.');
+  }
   function onFix(f) {
     fix = f;
+    sayNoExif();
     if (geoSt) geoSt.textContent = 'location: on (±' + fix.acc + ' m)';
     refresh(false);
   }
@@ -377,6 +390,7 @@
       return;
     }
     fix = null;
+    sayNoExif();
     if (geoSt) geoSt.textContent = 'location: off — ' + locationReason(secure, e.code);
     refresh(false);
   }

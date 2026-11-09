@@ -67,3 +67,10 @@ Feature: The post form opens on what is being posted
     # "No pin" is a choice the driver makes. Picked by the page on its own, it
     # would beat the simulated car and any position the server has.
     Then the page never picks No pin by itself
+
+  Scenario: A camera photo's missing GPS does not read as a failure
+    # Kris, 2026-11-08: a photo taken in the form "said it did not get GPS",
+    # and the post had pinned from the phone. Safari strips GPS from a web
+    # camera capture, so this is the normal case and the line says so.
+    Then a photo with no GPS is explained as normal for a camera shot
+    And that line says whether the phone's location will pin the post

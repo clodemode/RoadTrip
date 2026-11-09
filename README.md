@@ -717,7 +717,7 @@ from the first of these that exists, and stored on the post as
 1. **`exif`** — the photo's own GPS IFD. The form reads it **in the browser**
    before you post — a hand-rolled parser in `static/js/post.js` over the
    first 256 KB of the chosen file (APP1 → TIFF → IFD0 → GPS IFD; no library,
-   no CDN) — and shows *photo GPS: 34.2100, -118.5000* or *none in this file*.
+   no CDN) — and shows *photo GPS: 34.2100, -118.5000* or *no GPS, normal for a camera shot*.
    Those parsed numbers are posted as `photo_lat`/`photo_lng` **for display
    only**; the server re-reads the EXIF out of the uploaded file and uses its
    own value.
