@@ -39,6 +39,7 @@ Feature: Think like a human, a car can only go so far in the time
     And the phone reports a position at B with an accuracy of 20000 metres
     When kris posts that photo
     Then B is arrived at
+    And B is arrived at the phone's time
     And the post is not flagged
 
   Scenario: The same fix with no accuracy is out of step
