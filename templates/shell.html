@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.RideName}}</title>
+<link rel="icon" href="/static/img/creature.svg?v={{.V}}">
+<link rel="stylesheet" href="/static/vendor/bootstrap.min.css?v={{.V}}">
+<link rel="stylesheet" href="/static/css/foundation.css?v={{.V}}">
+<link rel="stylesheet" href="/static/css/app.css?v={{.V}}">
+<script defer src="/static/js/hud.js?v={{.V}}"></script>
+<script defer src="/static/js/player.js?v={{.V}}"></script>
+</head>
+<body class="rt-shell">
+<iframe class="rt-frame" id="rt-frame" title="{{.RideName}}" src="{{.FrameSrc}}" allow="geolocation; camera; microphone; fullscreen"></iframe>
+<script>(function(){var f=document.getElementById('rt-frame');if(location.hash)f.src=f.getAttribute('src')+location.hash;})();</script>
+<div class="rt-dock">
+{{template "drive_card" .}}
+</div>
+</body>
+</html>

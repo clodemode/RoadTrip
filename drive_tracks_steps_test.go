@@ -248,7 +248,7 @@ func (w *dtWorld) plainButton() error {
 			return fmt.Errorf("the button carries %s: %s", bad, tag)
 		}
 	}
-	if !strings.Contains(tag, `type="button"`) || !strings.Contains(w.page[strings.Index(w.page, tag):], "Drive Tracks</button>") {
+	if !strings.Contains(tag, `type="button"`) || !strings.Contains(w.page[strings.Index(w.page, tag):], "Ask Chester for an album</button>") {
 		return fmt.Errorf("the button is not a labelled type=button: %s", tag)
 	}
 	return nil

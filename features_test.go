@@ -34,6 +34,7 @@ func TestFeatures(t *testing.T) {
 				initChangeTripScenarios(t, sc)
 				initRoutingPointsScenarios(t, sc)
 				initMenuStateScenarios(t, sc)
+				initContinuousMusicScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

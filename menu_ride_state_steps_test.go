@@ -22,22 +22,30 @@ func initMenuStateScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		page        string
 	)
 	var (
-		navRe    = regexp.MustCompile(`(?s)<nav class="mast-nav"[^>]*>(.*?)</nav>`)
-		linkRe   = regexp.MustCompile(`(?s)<a ([^>]*)>(.*?)</a>`)
-		stateRe  = regexp.MustCompile(`(?s)<[^>]*class="ride-state"[^>]*>(.*?)</[a-z]+>`)
-		crumbRe  = regexp.MustCompile(`(?s)<nav class="crumbs"[^>]*>(.*?)</nav>`)
-		h1Re     = regexp.MustCompile(`(?s)<h1[ >].*?</h1>`)
-		tagRe    = regexp.MustCompile(`<[^>]*>`)
-		idRe     = regexp.MustCompile(`\sid="([^"]+)"`)
-		stripRe  = regexp.MustCompile(`class="drive-strip"`)
-		cardRe   = regexp.MustCompile(`id="rt-card"`)
-		resumeRe = regexp.MustCompile(`id="rt-resume"[^>]*data-pos="([^"]*)"`)
+		navRe   = regexp.MustCompile(`(?s)<nav class="mast-nav"[^>]*>(.*?)</nav>`)
+		linkRe  = regexp.MustCompile(`(?s)<a ([^>]*)>(.*?)</a>`)
+		stateRe = regexp.MustCompile(`(?s)<[^>]*class="ride-state"[^>]*>(.*?)</[a-z]+>`)
+		crumbRe = regexp.MustCompile(`(?s)<nav class="crumbs"[^>]*>(.*?)</nav>`)
+		h1Re    = regexp.MustCompile(`(?s)<h1[ >].*?</h1>`)
+		tagRe   = regexp.MustCompile(`<[^>]*>`)
+		idRe    = regexp.MustCompile(`\sid="([^"]+)"`)
+		stripRe = regexp.MustCompile(`class="drive-card"`)
+		cardRe  = regexp.MustCompile(`id="rt-card"`)
 	)
 	plain := func(s string) string {
 		s = strings.NewReplacer("&rsaquo;", ">", "›", ">", "&amp;", "&", "&rarr;", "→").Replace(tagRe.ReplaceAllString(s, " "))
 		return strings.Join(strings.Fields(s), " ")
 	}
 	open := func(c *http.Cookie, path string) {
+		// A signed-in page while Active is the player shell; these scenarios read
+		// the page itself, which is what the shell's frame shows.
+		if c != nil {
+			if strings.Contains(path, "?") {
+				path += "&embed=1"
+			} else {
+				path += "?embed=1"
+			}
+		}
 		w := doAs(t, app, c, "GET", path, nil)
 		page = w.Body.String()
 		if w.Code != 200 {
@@ -123,7 +131,7 @@ func initMenuStateScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		return nil
 	})
 	sc.Step(`^the page has no Drive Tracks strip$`, func() error {
-		if stripRe.MatchString(page) || strings.Contains(page, `id="hud-drivetracks"`) {
+		if stripRe.MatchString(page) || strings.Contains(page, `id="hud-drivetracks"`) || strings.Contains(page, `id="rt-audio"`) {
 			return fmt.Errorf("the page carries the Drive Tracks strip")
 		}
 		return nil
@@ -131,17 +139,6 @@ func initMenuStateScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the page has no link to "([^"]*)"$`, func(href string) error {
 		if strings.Contains(page, `href="`+href+`"`) {
 			return fmt.Errorf("the page links to %s", href)
-		}
-		return nil
-	})
-	sc.Step(`^the page has exactly one Drive Tracks strip$`, func() error {
-		if n := len(stripRe.FindAllString(page, -1)); n != 1 {
-			return fmt.Errorf("%d strips", n)
-		}
-		for _, id := range []string{"hud-drivetracks", "rt-player", "rt-audio", "rt-play", "rt-next"} {
-			if n := strings.Count(page, `id="`+id+`"`); n != 1 {
-				return fmt.Errorf("id %s appears %d times", id, n)
-			}
 		}
 		return nil
 	})
@@ -163,16 +160,6 @@ func initMenuStateScenarios(t *testing.T, sc *godog.ScenarioContext) {
 				return fmt.Errorf("id %q appears twice", m[1])
 			}
 			seen[m[1]] = true
-		}
-		return nil
-	})
-	sc.Step(`^the strip offers a Resume of "([^"]*)" at (\d+) seconds$`, func(album string, s int) error {
-		m := resumeRe.FindStringSubmatch(page)
-		if m == nil || !strings.Contains(page, "Resume "+album) {
-			return fmt.Errorf("no Resume button for %s", album)
-		}
-		if m[1] != fmt.Sprint(s) {
-			return fmt.Errorf("resume at %q, want %d", m[1], s)
 		}
 		return nil
 	})

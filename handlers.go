@@ -223,7 +223,7 @@ func (a *App) routes() http.Handler {
 	mux.Handle("GET /driver/chester/log.json", a.requireAuth(a.chesterLogJSON))
 	mux.Handle("POST /driver/chester/log/{id}", a.requireAuth(a.chesterVerdict))
 
-	return logRequests(a.canonicalHost(a.visibility(mux)))
+	return logRequests(frameGuard(a.canonicalHost(a.visibility(a.shell(mux)))))
 }
 
 // visibilityOpen is the allowlist that stays reachable while the whole site is
@@ -259,7 +259,7 @@ func (a *App) visibility(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
-		http.Redirect(w, r, "/driver/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
+		http.Redirect(w, r, "/driver/login?next="+url.QueryEscape(dropEmbed(r.URL.RequestURI())), http.StatusFound)
 	})
 }
 
@@ -356,7 +356,7 @@ func (a *App) requireAuth(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.auth.IsAuthed(r) {
 			if r.Method == http.MethodGet {
-				http.Redirect(w, r, "/driver/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
+				http.Redirect(w, r, "/driver/login?next="+url.QueryEscape(dropEmbed(r.URL.RequestURI())), http.StatusFound)
 				return
 			}
 			http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -431,6 +431,9 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		data["Canonical"] = a.siteURL + r.URL.Path
 	}
 	data["SitePrivate"] = a.sitePrivate
+	// The page inside the player shell's frame: no card, no audio element.
+	data["Embed"] = embedded(r)
+	data["IsLogin"] = name == "login.html"
 	// A simulated drive says so on every page, from the server, at render.
 	data["SimAllowed"] = authed && a.simAllowed
 	data["SimBanner"] = ""
@@ -1251,7 +1254,7 @@ func (a *App) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.auth.Issue(w, a.secure, username)
-	next := r.PostFormValue("next")
+	next := dropEmbed(r.PostFormValue("next"))
 	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		next = "/driver"
 	}
