@@ -24,7 +24,7 @@ Use only knowledge from this project. Do not rely on conventions or patterns fro
 
 ## Orient first
 
-Read, in order: [README.md](README.md) — it is the long-form design record and the authority on every table below — then [CLAUDE.md](CLAUDE.md) for what bites, then `LORE/` (YAML, materialized into DB_INTENT by `lore_yaml_load`).
+Read, in order: [README.md](README.md) — it is the long-form design record and the authority on every table below — then [CLAUDE.md](CLAUDE.md) for what bites, then `LORE/` (YAML, materialized into DB_INTENT by `lore_yaml_load`; since 2026-11-08 a nested clone of the private `clodemode/roadtrip-lore`, not tracked by this public repo).
 
 **`app_scope` is `roadtrip`.** Ruled 2026-09-08 (`spec-clode-roadtrip-becomes-its-own-app-scope-bloodride-retires-to-static-2026-09-08`). Earlier rows were filed under `bloodride` because roadtrip had no scope of its own; that is history, not a pattern to copy. File new rows with `app_scope='roadtrip'` and they home in `roadtrip/LORE/<character>/<slug>.yaml`.
 

@@ -56,7 +56,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 | `APP_PROFILE.yaml` | the venue paths: binary `/app/roadtrip`, data `/data`. The CLODE harness reads it |
 | `templates/`, `static/` | server-rendered pages and assets |
 | `data/` | local volume stand-in — **gitignored**, holds `roadtrip.sqlite3`, `media/`, `private.json`, `trips/` |
-| `LORE/` | YAML LORE, canonical; `lore_yaml_load` materializes it into DB_INTENT |
+| `LORE/` | a NESTED clone of the private `clodemode/roadtrip-lore` (gitignored here); YAML LORE, canonical; `lore_yaml_load` materializes it into DB_INTENT. Commit there with `git -C LORE ...` or `lairs_git_commit(repo_name='roadtrip', files='LORE/...')` |
 | `.github/workflows/` | `ci.yml` (push/PR), `deploy.yml` (dispatch only), `data.yml` (by hand, writes `private.json` only) |
 
 ## Running locally
