@@ -234,8 +234,8 @@ func initRoadtracksPlayerScenarios(t *testing.T, sc *godog.ScenarioContext) {
 				}
 			}
 		}
-		// The enclosing #hud is depth 1; the player's own tag opens at the same level.
-		if depth != 1 || roads != 1 {
+		// The enclosing #hud is depth 1; the player's own tag opens at the same level, and it now sits above the road section.
+		if depth != 1 || roads != 0 {
 			return fmt.Errorf("player is nested inside a mode section (depth %d, mode sections before it %d)", depth, roads)
 		}
 		return nil
