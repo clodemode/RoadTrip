@@ -737,6 +737,23 @@ if the chosen source turns out to have no coordinates the server falls back
 down the ladder and the log line says so. **No pin** and the older
 `hide_location` field mean the same thing and both are accepted.
 
+**An old photo with no GPS** (its own EXIF time more than 20 minutes before
+now, no GPS of its own, not a Start) is not where the phone is, so the ladder
+above does not run for it. It is pinned as **`trail`**: the published pin of an
+earlier post of the ride (a photo's GPS, the phone or the simulated car; never
+a hidden post, a checkpoint pin or another trail pin) nearest in time to the
+photo's time, within 15 minutes; with none, the post has no pin. It keeps its
+own time, never checks in or moves the car, carries the flags `old_photo` (and
+`trail_pin`), and the notice and the signed-in pin line say how long ago it was
+taken and where it was pinned or that it was left off the map. A trail point at
+a private place is always fuzzed, whatever the toggle says, and keeps no exact
+point for Unfuzz. No phone fix is stored anywhere (telemetry goes to the bus
+with no coordinate), so earlier posts are the whole trail, on Fly and on the
+KATE alike. A radio the driver touched (the form's `pin_auto` is empty) is
+honoured for the pin alone; the page's own pre-selection (`pin_auto=1`) is not
+a choice. No `pin_auto` at all (an older page, curl) reads a sent `pin_source`
+as a choice. `features/old_photo_without_place.feature` states it.
+
 **Fuzz location** is the privacy control, and it is on every post:
 
 - **Ticked** — the published point is snapped to the 0.05° grid and the

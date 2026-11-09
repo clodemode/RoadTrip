@@ -1019,11 +1019,24 @@ func (c postCard) PinLine() string {
 	default:
 		pub = "exact " + coord(c.Lat, c.Lng)
 	}
-	line := "pin: "
+	line, lead := "pin: ", "published "
+	if hasFlag(c.Flag, flagOldPhoto) {
+		// An old photo with no GPS of its own: the phone is not where it was
+		// taken, so say how old it was and where its pin came from.
+		if age := oldPhotoAge(c.Post); age != "" {
+			line += "taken " + age + " ago, "
+		}
+		switch {
+		case hasFlag(c.Flag, flagTrailPin):
+			pub, lead = "pinned where the car was then ("+pub+")", ""
+		case c.Lat == nil || c.PinSource == pinNone:
+			pub, lead = "left off the map", ""
+		}
+	}
 	if len(raw) > 0 {
 		line += strings.Join(raw, ", ") + " → "
 	}
-	return line + "published " + pub
+	return line + lead + pub
 }
 
 // RepinCheckpoint is the name the re-pin control offers as the checkpoint
@@ -1747,6 +1760,12 @@ type pinInput struct {
 	// other source but "No pin": a KATE must never hold a real position.
 	SimLat, SimLng *float64
 	CP             *Checkpoint
+	// Old: the photo is an old one with no GPS of its own (old_photo.go), so
+	// the phone is not where it was taken. The ladder then holds only the
+	// trail, and TrailLat/Lng is the car's published position at the photo's
+	// time, nil when the trail has none.
+	Old                bool
+	TrailLat, TrailLng *float64
 	// Fuzz is the "Fuzz location" toggle; FuzzSet says the operator's page
 	// actually carried it (the form posts a companion fuzz_choice field,
 	// because an unticked checkbox sends nothing). Unset = the per-post
@@ -1761,6 +1780,7 @@ type pinResult struct {
 	AccuracyM    *float64
 	CheckpointID int64 // set when fuzzing moved the post into a checkpoint's cell
 	Fuzzed       bool
+	Trail        bool // the pin came from the car's trail (old_photo.go)
 	// The point before it was fuzzed, kept privately so Unfuzz can restore it.
 	// Set whenever Fuzzed is.
 	ExactLat, ExactLng *float64
@@ -1796,6 +1816,10 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 				lat, lng := in.CP.Lat, in.CP.Lng
 				return &lat, &lng, nil, true
 			}
+		case pinTrail:
+			if in.TrailLat != nil && in.TrailLng != nil {
+				return in.TrailLat, in.TrailLng, nil, true
+			}
 		}
 		return nil, nil, nil, false
 	}
@@ -1816,7 +1840,13 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 		}
 	}
 	if chosen == "" {
-		for _, src := range []string{pinSim, pinEXIF, pinBrowser, pinCheckpoint} {
+		ladder := []string{pinSim, pinEXIF, pinBrowser, pinCheckpoint}
+		if in.Old {
+			// The phone, the simulated car and the stop are not where an old
+			// photo was taken: only the trail is.
+			ladder = []string{pinTrail}
+		}
+		for _, src := range ladder {
 			if _, _, _, ok := have(src); ok {
 				chosen = src
 				break
@@ -1831,6 +1861,7 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	}
 	lat, lng, acc, _ := have(chosen)
 	res.Lat, res.Lng, res.Source, res.AccuracyM = lat, lng, chosen, acc
+	res.Trail = chosen == pinTrail
 	if in.CP != nil {
 		res.CheckpointID = in.CP.ID
 	}
@@ -1846,6 +1877,8 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 		}
 	case pinCheckpoint:
 		res.Note = fmt.Sprintf("checkpoint %d (%s)", in.CP.Ord, in.CP.Name)
+	case pinTrail:
+		res.Note = "trail (the car's pin nearest the photo's time)"
 	}
 	switch {
 	case fellBack != "":
@@ -1858,7 +1891,7 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 
 	// A checkpoint pin is the checkpoint's own point, which the store has
 	// already snapped if the checkpoint is private. Nothing left to fuzz.
-	if res.Source != pinEXIF && res.Source != pinBrowser && res.Source != pinSim {
+	if res.Source != pinEXIF && res.Source != pinBrowser && res.Source != pinSim && res.Source != pinTrail {
 		return res
 	}
 
@@ -1869,6 +1902,11 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	fuzz := pc != nil && precision != pinPrecisionExact
 	if in.FuzzSet {
 		fuzz = in.Fuzz
+	}
+	if res.Trail && pc != nil {
+		// A point from the trail at a private place is never published as it
+		// was, whatever the toggle or PIN_PRECISION says.
+		fuzz = true
 	}
 	where := "here"
 	if pc != nil {
@@ -1885,6 +1923,10 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	res.ExactLat, res.ExactLng, res.ExactSource = &exLat, &exLng, exSrc
 	flat, flng, fsrc, fcp := fuzzedPoint(exLat, exLng, exSrc, pc)
 	res.Lat, res.Lng, res.Source = &flat, &flng, fsrc
+	if res.Trail {
+		// A trail pin has no exact point of its own to keep for Unfuzz.
+		res.ExactLat, res.ExactLng, res.ExactSource = nil, nil, ""
+	}
 	if pc != nil {
 		// Name the place it belongs to, so the popup can say "near <name>" —
 		// and move the post onto that checkpoint, as the pre-toggle build did.
@@ -2135,7 +2177,15 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	// surface hides a home fix by default. Names, never coordinates.
 	post.PinSource = pinNone
 	pinNote := "none (hidden)"
-	pinFuzzed := false
+	pinFuzzed, pinFromTrail := false, false
+	// An old photo with no GPS of its own (old_photo.go) was not taken where
+	// the phone is: it is pinned from the car's trail or not at all, and it
+	// never checks in. Start is a departure, not a check-in, and is unchanged.
+	var oldTaken time.Time
+	old := false
+	if !starting {
+		oldTaken, old = oldPhotoTime(photo, time.Now())
+	}
 	if !post.HideLocation {
 		// The EXIF point is the one the SERVER read out of the uploaded file.
 		// photo_lat/photo_lng came from the browser's own parse and are never
@@ -2155,10 +2205,25 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 			lat, lng := start.Lat, start.Lng
 			in.SimLat, in.SimLng = &lat, &lng
 		}
+		if old {
+			in.Old = true
+			// The page pre-selects a pin source by itself; only a radio the
+			// driver touched (no pin_auto) is a choice, and that choice is
+			// honoured for the pin alone.
+			if r.PostFormValue("pin_auto") != "" {
+				in.Want = ""
+			}
+			if in.Want != pinBrowser && in.Want != pinSim {
+				in.SimLat, in.SimLng = nil, nil
+			}
+			if la, ln, ok := a.store.trailNear(rv.Ride.Slug, oldTaken); ok {
+				in.TrailLat, in.TrailLng = &la, &ln
+			}
+		}
 		res := resolvePin(in, rideCheckpoints(rv.Legs), a.pinPrecision)
 		res.apply(post)
 		pinNote = res.Note
-		pinFuzzed = res.Fuzzed
+		pinFuzzed, pinFromTrail = res.Fuzzed, res.Trail
 	}
 
 	// When: the form's explicit time (local to the chosen zone), else the
@@ -2189,9 +2254,15 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	if timeFromPhone {
 		_ = a.store.AddPostFlag(post.ID, flagTimeFromPhone)
 	}
+	if old {
+		_ = a.store.AddPostFlag(post.ID, flagOldPhoto)
+		if pinFromTrail {
+			_ = a.store.AddPostFlag(post.ID, flagTrailPin)
+		}
+	}
 	log.Printf("post %d: pin %s", post.ID, pinNote)
 	a.melt.Event("post_created", map[string]any{"pin_source": post.PinSource, "has_photo": photo != nil,
-		"exif_gps": photo != nil && photo.Lat != nil, "fuzzed": pinFuzzed})
+		"exif_gps": photo != nil && photo.Lat != nil, "fuzzed": pinFuzzed, "old_photo": old, "from_trail": pinFromTrail})
 	if starting {
 		// Start keeps the photo's clock: it is a departure, not a check-in.
 		at, _ := arrivalAt(photo, loc, start.TZ, "photo")
@@ -2210,6 +2281,12 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		// A start is finished business: back to the driver screen, which says so.
 		http.Redirect(w, r, "/driver?post="+strconv.FormatInt(post.ID, 10)+"&notice="+url.QueryEscape(msg), http.StatusSeeOther)
+		return
+	}
+	if old {
+		// Never a check-in, whatever the phone says: say what was done.
+		msg := oldPhotoNotice(time.Since(oldTaken), post.Lat != nil, pinFromTrail)
+		http.Redirect(w, r, "/driver/post?post="+strconv.FormatInt(post.ID, 10)+"&notice="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
 	}
 	if start != nil && start.ArrivedAt != "" && photo != nil {

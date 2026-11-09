@@ -35,7 +35,7 @@ Feature: Think like a human, a car can only go so far in the time
 
   Scenario: A phone fix with poor accuracy gets the benefit of the doubt
     Given the car was last checked in at A at 10:00
-    And a photo taken at 10:10 with no GPS of its own
+    And a photo with no GPS of its own
     And the phone reports a position at B with an accuracy of 20000 metres
     When kris posts that photo
     Then B is arrived at

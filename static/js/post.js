@@ -23,6 +23,7 @@
   // Hand-rolled and deliberately small. Anything unexpected returns null and
   // the form says the photo has no GPS — a parse failure never blocks a post.
 
+  var EXIF_IFD = 0x8769, T_TAKEN = 0x9003;
   var GPS_IFD = 0x8825, T_LAT_REF = 1, T_LAT = 2, T_LNG_REF = 3, T_LNG = 4;
   // TIFF type sizes by type code: BYTE ASCII SHORT LONG RATIONAL SBYTE …
   var TYPE_SIZE = [0, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8];
@@ -37,6 +38,52 @@
   // exifGPS walks the JPEG segment chain looking for APP1 "Exif\0\0" and
   // returns {lat, lng} in signed decimal degrees, or null.
   function exifGPS(buf) {
+    var seg = exifSegment(buf);
+    if (!seg) return null;
+    try { return gpsFromTIFF(seg.dv, seg.base, seg.end); } catch (e) { return null; }
+  }
+
+  // exifTaken returns the camera's DateTimeOriginal as 'YYYY:MM:DD HH:MM:SS'
+  // (its own wall clock, no zone), or null. It is for the display line only:
+  // the server reads the file again and decides.
+  function exifTaken(buf) {
+    var seg = exifSegment(buf);
+    if (!seg) return null;
+    try {
+      var dv = seg.dv, base = seg.base, end = seg.end;
+      var order = dv.getUint16(base);
+      if (order !== 0x4949 && order !== 0x4D4D) return null;
+      var le = order === 0x4949;
+      if (dv.getUint16(base + 2, le) !== 42) return null;
+      var sub = findLong(dv, base, end, base + dv.getUint32(base + 4, le), le, EXIF_IFD);
+      if (sub === null) return null;
+      var e = entry(dv, base, end, base + sub, le, T_TAKEN);
+      if (!e || e.type !== 2 || e.count < 19) return null;
+      var t = ascii(dv, e.off, 19);
+      return /^\d{4}:\d\d:\d\d \d\d:\d\d:\d\d$/.test(t) ? t : null;
+    } catch (e) { return null; }
+  }
+
+  // photoAgeWords says how long before now a photo with no GPS of its own was
+  // taken, when that is more than 20 minutes (the server's own line between a
+  // camera shot and an old photo), else ''. taken is exifTaken's string, read as
+  // the device's own clock: a hint, since the server reads it in the form's zone.
+  function photoAgeWords(taken, hasGps, now) {
+    if (!taken || hasGps) return '';
+    var m = /^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)$/.exec(taken);
+    if (!m) return '';
+    var ms = now - new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+    if (!(ms > 20 * 60000)) return '';
+    var h = ms / 3600000;
+    function pl(n, u) { return n + ' ' + u + (n === 1 ? '' : 's'); }
+    if (h < 1) return pl(Math.round(ms / 60000), 'minute');
+    if (h < 48) return pl(Math.round(h), 'hour');
+    return pl(Math.round(h / 24), 'day');
+  }
+
+  // exifSegment finds the JPEG's APP1 "Exif\0\0" segment and returns the
+  // DataView with the TIFF header's base and the segment's end, or null.
+  function exifSegment(buf) {
     try {
       var dv = new DataView(buf);
       if (dv.byteLength < 4 || dv.getUint16(0) !== 0xFFD8) return null;   // not a JPEG
@@ -50,7 +97,7 @@
         var len = dv.getUint16(off + 2);
         if (len < 2 || off + 2 + len > dv.byteLength) return null;        // cut off by our slice
         if (marker === 0xE1 && ascii(dv, off + 4, 6) === EXIF_MAGIC) {
-          return gpsFromTIFF(dv, off + 10, off + 2 + len);
+          return { dv: dv, base: off + 10, end: off + 2 + len };
         }
         off += 2 + len;
       }
@@ -177,7 +224,7 @@
   }
 
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, sectionsFor: sectionsFor, locationReason: locationReason };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, exifTaken: exifTaken, photoAgeWords: photoAgeWords, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, sectionsFor: sectionsFor, locationReason: locationReason };
     return;
   }
 
@@ -187,7 +234,7 @@
       exNote = $('p-exif-note'), cpNote = $('p-cp-note'),
       fuzz = $('f-fuzz'), fuzzSet = $('f-fuzzset'), says = $('pin-publishes'),
       la = $('f-lat'), ln = $('f-lng'), ac = $('f-acc'),
-      pla = $('f-plat'), pln = $('f-plng'), cpSel = $('f-cp');
+      pla = $('f-plat'), pln = $('f-plng'), cpSel = $('f-cp'), pinAuto = $('f-pinauto');
   if (!rExif || !rBrow || !rCp || !rNone || !fuzz || !fuzzSet || !says) return;
 
   var EXIF_SLICE = 256 * 1024;      // the APP1 segment lives at the head of the file
@@ -195,7 +242,7 @@
   var NEAR_KM = 2.0;                // must match store.go privateRadiusKm
   var cells = window.RT_PRIVATE || [];
   var precision = window.RT_PIN_PRECISION || 'snap';
-  var exif = null, fix = null, touched = false, noExif = false;
+  var exif = null, fix = null, touched = false, noExif = false, taken = null;
   // A simulated drive (data-sim="1", set by the server while one runs) is the
   // phone: the server pins the post from its own copy of the car, so the page
   // never asks the browser and never holds a coordinate to post back.
@@ -243,12 +290,21 @@
   // touches the radio — after that their choice stands.
   function ladder() {
     if (touched) return;
+    if (oldWords()) {                 // the phone is not where an old photo was taken
+      rExif.checked = rBrow.checked = rCp.checked = rNone.checked = false;
+      return;
+    }
     var pick = ladderChoice(!!exif, !!fix || simOn, !!(cpSel && cpSel.value));
     rExif.checked = pick === 'exif';
     rBrow.checked = pick === 'browser';
     rCp.checked = pick === 'checkpoint';
     rNone.checked = false;
   }
+
+  // oldWords: how long ago the chosen photo was taken, when it has no GPS and
+  // is older than 20 minutes; else ''. Such a photo is pinned by the server from
+  // the car's own trail at that time, or not at all, never from the phone.
+  function oldWords() { return photoAgeWords(taken, !!exif, Date.now()); }
 
   function refresh(fromToggle) {
     rExif.disabled = !exif;
@@ -268,6 +324,16 @@
     // the photo's parsed point goes up for the record, never as the pin.
     if (la) { la.value = fix ? fix.lat : ''; ln.value = fix ? fix.lng : ''; ac.value = fix ? fix.acc : ''; }
     if (pla) { pla.value = exif ? exif.lat.toFixed(4) : ''; pln.value = exif ? exif.lng.toFixed(4) : ''; }
+    // pin_auto says the pin source on the radios is only what this page
+    // pre-selected, not a choice: the server tells the two apart by it.
+    if (pinAuto) pinAuto.value = touched ? '' : '1';
+
+    if (oldWords() && !touched) {
+      fuzz.disabled = true;
+      fuzzSet.value = '1';
+      says.textContent = 'publishes as: taken ' + oldWords() + ' ago, so pinned where the car’s trail was then, or left off the map if the trail has nothing; it will not check in a stop';
+      return;
+    }
 
     if (simOn && rBrow.checked) {
       fuzz.disabled = true;
@@ -311,6 +377,7 @@
     photo.addEventListener('change', function () {
       exif = null;
       noExif = false;
+      taken = null;
       var f = photo.files && photo.files[0];
       if (!f) {
         exSt.textContent = 'photo GPS: no file picked';
@@ -327,6 +394,7 @@
       };
       fr.onload = function () {
         exif = exifGPS(fr.result);
+        taken = exifTaken(fr.result);
         if (exif) {
           exSt.textContent = 'photo GPS: ' + fmt(exif.lat, exif.lng);
           exNote.textContent = '— ' + fmt(exif.lat, exif.lng);
@@ -372,6 +440,10 @@
   // normal case on the road: the line says what will pin it, not that it failed.
   function sayNoExif() {
     if (!noExif) return;
+    if (oldWords()) {
+      exSt.textContent = 'No GPS in this photo, and it was taken ' + oldWords() + ' ago, so the phone’s location is not used. It is pinned where the car’s trail was then, or left off the map, and it will not check in a stop. Choose a pin below to override the pin.';
+      return;
+    }
     exSt.textContent = 'No GPS in this photo, normal for a camera shot. ' + (simOn
       ? 'The simulated car will pin it unless you choose another pin below.'
       : fix

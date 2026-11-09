@@ -16,13 +16,14 @@ Feature: An arrival is stamped by what vouched for it and never runs backward
     Given kris is signed in
     And the active trip has stops A, B, C and D in order along a line, none arrived at
 
-  Scenario: A phone-vouched arrival is stamped at the phone's time, not an older photo's
+  Scenario: A phone-vouched arrival is stamped at the phone's time, not the photo's
+    A photo with no GPS that is more than 20 minutes old never checks in at
+    all (old_photo_without_place.feature); this one is a fresh camera shot.
     Given the drive has started at A
-    And a photo taken at 15:00 with no GPS of its own
+    And a photo taken 10 minutes ago with no GPS of its own
     And the phone reports a position at B
     When kris posts that photo
     Then B is arrived now
-    And the post exists at 15:00 in its own zone
 
   Scenario: A simulated-car arrival is stamped now
     Given simulation is allowed
