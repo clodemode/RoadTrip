@@ -12,3 +12,5 @@ coWork_input/
 # baked into an image. Anchored on purpose, so it excludes this one file and
 # not env files as a class.
 /.env
+# The nested private LORE clone is never build context.
+LORE/

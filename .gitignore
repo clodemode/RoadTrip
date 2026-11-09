@@ -13,3 +13,6 @@ coWork_input/
 # Local secrets and settings. .env is never tracked (the fleet standard): copy
 # .env.example to .env and fill it in. The repo guard test requires this line.
 .env
+# LORE is its own private repo (clodemode/roadtrip-lore), cloned into LORE/ by hand,
+# like fintrack/LORE. Never tracked here: this repo is public.
+/LORE/
