@@ -1,7 +1,7 @@
 Feature: The menu follows the ride's state, Drive Tracks rides along, every page says where you are
   Kris, 2026-11-09: tighten the menu bar. A ride is Active (a simulated
   drive counts) or Planning. Drive Tracks is on every page while the ride is
-  Active. Each page shows a breadcrumb and a page title below the banner.
+  Active (in the player shell, see continuous_music_and_one_card.feature). Each page shows a breadcrumb and a page title below the banner.
   The state is read from the store, never from dates: Active is a started
   drive whose finish is not yet reached or skipped.
 
@@ -66,23 +66,11 @@ Feature: The menu follows the ride's state, Drive Tracks rides along, every page
     And a visitor opens "/"
     Then the page's ride state reads "Active"
 
-  Scenario Outline: A signed-in user gets the strip on every page while Active
-    When the drive is started
-    And Kris opens "<path>"
-    Then the page has exactly one Drive Tracks strip
-    And no element id appears twice on the page
+  # Since 2026-11-09 a signed-in page while Active is the player shell (see
+  # continuous_music_and_one_card.feature); these scenarios read the page the
+  # shell's frame shows, which carries no card and no audio element.
 
-    Examples:
-      | path             |
-      | /                |
-      | /plan            |
-      | /photos          |
-      | /chester         |
-      | /driver/post     |
-      | /driver/lodging  |
-      | /legs/day-1-ridge |
-
-  Scenario Outline: No strip while Planning
+  Scenario Outline: No Drive Tracks card while Planning
     When Kris opens "<path>"
     Then the page has no Drive Tracks strip
 
@@ -93,18 +81,12 @@ Feature: The menu follows the ride's state, Drive Tracks rides along, every page
       | /photos      |
       | /driver/post |
 
-  Scenario: The driver screen carries one strip and one player, no duplicate ids
+  Scenario: The driver screen inside the frame carries one search card, no card of its own and no duplicate ids
     When the drive is started
     And Kris opens "/driver"
-    Then the page has exactly one Drive Tracks strip
+    Then the page has no Drive Tracks strip
     And the page has exactly one RoadTracks search card
     And no element id appears twice on the page
-
-  Scenario: A saved resume point shows a one-tap Resume on a new page
-    When the drive is started
-    And Kris has a saved resume point for "Abbey Road" at 42 seconds
-    And Kris opens "/plan"
-    Then the strip offers a Resume of "Abbey Road" at 42 seconds
 
   Scenario Outline: Every page has one breadcrumb and one title below the banner
     When Kris opens "<path>"

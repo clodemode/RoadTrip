@@ -65,6 +65,12 @@
     }
     return pump();
   }
+  // The Drive Tracks tap's body: only a fix the phone itself gave, to 4 places.
+  function driveBody(fix) {
+    var b = new URLSearchParams({ source: 'drivetracks' });
+    if (fix) { b.set('lat', fix.latitude.toFixed(4)); b.set('lng', fix.longitude.toFixed(4)); }
+    return b.toString();
+  }
   function driveTracks(d) {
     d.player.asking('Asking Chester\u2026');
     var started = false, err = '';
@@ -85,9 +91,14 @@
       })
       .catch(function () { if (!started) d.player.say(DT_DOWN); });
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody, isMoving: isMoving, navTapBody: navTapBody, navResultBody: navResultBody, driveTracks: driveTracks };
-  // The other pages' Drive Tracks strip (player.js) reuses this one function.
-  if (typeof window !== 'undefined') window.RTDriveTracks = driveTracks;
+  if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody, isMoving: isMoving, navTapBody: navTapBody, navResultBody: navResultBody, driveTracks: driveTracks, driveBody: driveBody };
+  // The shell's card (player.js) reuses this one function for its Ask Chester button.
+  if (typeof window !== 'undefined') { driveTracks.body = driveBody; window.RTDriveTracks = driveTracks; }
+  // The page inside the player shell's frame starts the shell's player, not one of its own.
+  function topPlayer() {
+    try { if (window.top !== window && window.top.RTPlayer) return window.top.RTPlayer; } catch (e) { /* not ours */ }
+    return window.RTPlayer;
+  }
   function sendBody(b) {
     if (b === null) return;
     try { if (navigator.sendBeacon) navigator.sendBeacon('/driver/telemetry', b); } catch (e) { /* telemetry never breaks the page */ }
@@ -352,7 +363,7 @@
             b.type = 'button';
             b.textContent = a.album + ' \u2014 ' + a.albumartist + (a.year ? ' (' + a.year + ')' : '');
             // The tap is the gesture the phone needs to allow sound: it goes straight to the player.
-            b.addEventListener('click', function () { if (window.RTPlayer) window.RTPlayer.start(a); });
+            b.addEventListener('click', function () { var p = topPlayer(); if (p) p.start(a); });
             li.appendChild(b); list.appendChild(li);
           });
         })
@@ -360,19 +371,9 @@
     });
   }
 
-  // --- Drive Tracks: one tap, Chester picks, the card plays ----------------------
-  // The tap calls asking() first, in the gesture, so the phone allows the sound
-  // that follows. The position goes the way Find picks sends it; a simulated drive
-  // sends none and the server fills it in.
-  var dtBtn = $('hud-drivetracks');
-  if (dtBtn) dtBtn.addEventListener('click', function () {
-    if (!window.RTPlayer || dtBtn.disabled) return;
-    var body = new URLSearchParams({ source: 'drivetracks' });
-    if (fix) { body.set('lat', fix.latitude.toFixed(4)); body.set('lng', fix.longitude.toFixed(4)); }
-    dtBtn.disabled = true;
-    driveTracks({ fetch: window.fetch.bind(window), player: window.RTPlayer, body: body.toString() })
-      .then(function () { dtBtn.disabled = false; });
-  });
+  // --- Drive Tracks: the card's Ask Chester button (player.js) asks this page
+  // for the phone's fix, and only for a fix the phone itself gave.
+  window.RTHud = { fix: function () { return fix; } };
 
   // --- telemetry: nav taps, script errors, the page view -------------------------
   // The tap is sent at once (a beacon survives the page going away); how it

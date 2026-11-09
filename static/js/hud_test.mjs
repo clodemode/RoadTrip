@@ -106,14 +106,12 @@ test('the nav tap and its outcome are two shapes, and the tap no longer carries 
   assert.equal(JSON.parse(navResultBody('google', 'trip', false)).fields.hidden, false);
 });
 
-test('the Drive Tracks tap unlocks the card first, then posts source=drivetracks with the fix and starts the album', async () => {
-  const order = []; let click = null, geoOk = null;
-  const btn = fakeEl(); btn.addEventListener = (ev, f) => { if (ev === 'click') click = f; };
+test('the card\'s Ask Chester tap unlocks first, then posts source=drivetracks with the HUD\'s phone fix and starts the album', async () => {
+  const order = []; let geoOk = null;
   const ctx = {
-    document: { getElementById: (id) => (id === 'hud-drivetracks' ? btn : fakeEl()), createElement: () => fakeEl(), hidden: false, addEventListener() {} },
+    document: { getElementById: () => fakeEl(), createElement: () => fakeEl(), hidden: false, addEventListener() {} },
     navigator: { onLine: true, geolocation: { watchPosition(ok) { geoOk = ok; return 1; } } },
-    window: { addEventListener() {}, location: { search: '', pathname: '/driver' },
-      RTPlayer: { asking: () => order.push('asking'), say: (m) => order.push('say:' + m), start: (a) => order.push('start:' + a.album_id) } },
+    window: { addEventListener() {}, location: { search: '', pathname: '/driver' } },
     setInterval() { return 1; }, setTimeout() { return 1; },
     fetch(url, opts) {
       if (url === '/chester/ask') {
@@ -127,10 +125,14 @@ test('the Drive Tracks tap unlocks the card first, then posts source=drivetracks
   };
   ctx.window.fetch = ctx.fetch; ctx.window.document = ctx.document;
   vm.runInNewContext(readFileSync(new URL('./hud.js', import.meta.url), 'utf8'), ctx);
+  assert.equal(ctx.window.RTHud.fix(), null, 'no fix, nothing to send');
+  assert.equal(ctx.window.RTDriveTracks.body(null), 'source=drivetracks');
   geoOk({ coords: { latitude: 30.2672, longitude: -97.7431, accuracy: 10 } });
-  click();
+  const player = { asking: () => order.push('asking'), say: (m) => order.push('say:' + m), start: (a) => order.push('start:' + a.album_id) };
+  // what player.js does inside the tap: body from the HUD's fix, then the one function
+  const p = ctx.window.RTDriveTracks({ fetch: ctx.fetch, player, body: ctx.window.RTDriveTracks.body(ctx.window.RTHud.fix()) });
   assert.equal(order[0], 'asking', 'the card is unlocked inside the tap, before any request');
-  await settle(); await settle(); await settle();
+  await p;
   assert.equal(order[1], 'post:source=drivetracks&lat=30.2672&lng=-97.7431');
   assert.equal(order[2], 'start:42');
 });

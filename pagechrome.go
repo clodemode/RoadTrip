@@ -130,7 +130,8 @@ func (a *App) chrome(r *http.Request, name string, data map[string]any, authed, 
 	data["Menu"] = menuFor(active, started, driver, chesterOn, hc, admin, r.URL.Path)
 	hud, _ := data["HUD"].(bool)
 	data["TracksOn"] = a.tracks != nil
-	data["StripOn"] = authed && a.tracks != nil && (active || hud)
+	emb, _ := data["Embed"].(bool)
+	data["StripOn"] = authed && a.tracks != nil && (active || hud) && !emb
 	if data["StripOn"] == true {
 		data["Resume"] = a.resumeFor(r)
 	}

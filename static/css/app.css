@@ -556,17 +556,33 @@ button.hud-tool { width: 100%; font-family: inherit; cursor: pointer; }
 .post-done { margin: .6rem 0; padding: .7rem .9rem; border: 1px solid #059669; border-radius: var(--ds-radius); background: #ecfdf5; color: #065f46; font-weight: 600; }
 .start-drive { display: block; width: 100%; margin: .75rem 0; font-size: 1.25rem; }
 
-/* The player sits outside the mode sections so a mode change never moves it. */
-.hud-player { grid-area: player; background: #fff; border: 3px solid #111827; border-radius: 1rem; padding: .7rem; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; }
-.hud-player[hidden] { display: none; }
-.rt-art { border-radius: .5rem; object-fit: cover; }
+/* Drive Tracks: ONE full-width card; its title is its header. In the player
+   shell it is docked at the bottom, within thumb reach, and the frame takes the
+   rest of the screen. Light theme only; type is large for a driver. */
+.drive-card { box-sizing: border-box; width: 100%; background: #fff; border: 3px solid #111827; border-radius: 1rem;
+  padding: .55rem .8rem .7rem; display: flex; flex-direction: column; gap: .45rem; }
+.drive-card-title { display: flex; align-items: center; gap: .4rem; margin: 0; font-size: 1.1rem; font-weight: 800; }
+.drive-card-title .rt-nest { margin-left: auto; font-size: .85rem; font-weight: 600; color: #374151; }
+.rt-row { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+.rt-art { flex: 0 0 auto; width: 64px; height: 64px; border-radius: .5rem; object-fit: cover; }
 .rt-art[hidden] { display: none; }
-.rt-meta { display: flex; flex-direction: column; min-width: 0; flex: 1 1 10rem; overflow-wrap: anywhere; }
-.rt-controls { display: flex; flex-wrap: wrap; gap: .5rem; flex: 1 1 100%; }
-.rt-big { flex: 1 1 8rem; font-size: 1.4rem; font-weight: 700; padding: .9rem; border-radius: .8rem; }
-.rt-next { font-size: 1.1rem; padding: .9rem 1.2rem; border-radius: .8rem; }
-.rt-resume { flex: 1 1 100%; font-weight: 700; }
-.hud-player > #rt-status { flex: 1 1 100%; min-height: 1.4em; margin: 0; font-weight: 600; }
+.rt-meta { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; line-height: 1.25; }
+.rt-meta b { font-size: 1.15rem; }
+.rt-meta span { font-size: .95rem; color: #374151; }
+.rt-controls { display: flex; flex-wrap: wrap; gap: .5rem; }
+.drive-card .btn { min-height: 44px; border-radius: .8rem; font-weight: 700; }
+.rt-big { flex: 1 1 7rem; font-size: 1.3rem; }
+.rt-next { flex: 0 0 auto; font-size: 1.1rem; padding: .5rem 1.2rem; }
+.rt-ask { flex: 1 1 100%; font-size: 1.05rem; }
+.rt-ico { font-size: 1.3rem; line-height: 1; }
+.rt-resume { width: 100%; }
+.drive-card > #rt-status { min-height: 1.3em; margin: 0; font-weight: 600; }
+/* The shell: the frame takes what the dock leaves. */
+html:has(body.rt-shell), body.rt-shell { height: 100%; }
+body.rt-shell { margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.rt-frame { flex: 1 1 auto; min-height: 0; width: 100%; border: 0; background: #fff; }
+.rt-dock { flex: 0 0 auto; width: 100%; padding: 0 .5rem calc(.5rem + env(safe-area-inset-bottom)); background: #f3f4f6; border-top: 1px solid #d1d5db; box-sizing: border-box; }
+.rt-dock .drive-card { margin-top: .5rem; }
 
 /* The RoadTracks card: one full-width block directly under the gauges in every
    mode, the search box taking the whole row, the result box only once it has
@@ -589,7 +605,3 @@ button.hud-tool { width: 100%; font-family: inherit; cursor: pointer; }
 .crumbs .sep { color: #9ca3af; }
 .crumbs [aria-current="page"] { font-weight: 600; color: #111827; }
 .pagehead h1 { margin: 0 0 .25rem; }
-.drive-strip { max-width: 1000px; margin: .4rem auto 0; padding: .45rem 16px; background: #f3f4f6; border-bottom: 1px solid #d1d5db; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .8rem; }
-.drive-strip .hud-player { grid-area: auto; flex: 1 1 14rem; border-width: 2px; border-radius: .7rem; padding: .4rem .6rem; }
-.drive-strip .rt-big { font-size: 1.1rem; padding: .5rem; }
-.drive-strip .rt-next { font-size: 1rem; padding: .5rem .9rem; }
