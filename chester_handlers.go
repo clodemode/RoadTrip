@@ -126,7 +126,17 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusBadRequest, chesterSaidLong)
 		return
 	}
+	// Drive Tracks (source=drivetracks) is one fixed tap: the question is built
+	// here, always quick, never one of the preset buttons.
+	drive := strings.TrimSpace(r.PostFormValue("source")) == chesterSourceDrive
+	if drive && a.tracks == nil {
+		refuse(http.StatusServiceUnavailable, driveTracksSaidDown)
+		return
+	}
 	mode := strings.TrimSpace(r.PostFormValue("mode"))
+	if drive {
+		mode = chesterQuick
+	}
 	switch mode {
 	case "":
 		mode = chesterQuick
@@ -137,7 +147,9 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	preset := strings.TrimSpace(r.PostFormValue("preset"))
 	question := strings.TrimSpace(r.PostFormValue("q"))
-	if preset != "" {
+	if drive {
+		preset, question = chesterDriveTracksPreset, a.driveTracksQuestion(a.userOf(r), time.Now())
+	} else if preset != "" {
 		q, ok := chesterPreset(preset)
 		if !ok {
 			refuse(http.StatusBadRequest, chesterSaidPreset)
@@ -217,10 +229,10 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	// The music library is offered only when RoadTracks is on.
 	var lib *chesterMusicLib
 	if a.tracks != nil {
-		lib = &chesterMusicLib{svc: a.tracks, melt: a.melt}
+		lib = &chesterMusicLib{svc: a.tracks, melt: a.melt, one: drive}
 	}
 	res := a.chester.ask(r.Context(), mode, cx, question, lib, emit)
-	if res.Err == "" && !res.Synth && res.Answer != "" {
+	if res.Err == "" && !res.Synth && res.Answer != "" && !drive {
 		a.remember(user, question, res.Answer, res.Leanings, now)
 	}
 	// The row keeps the API's own usage for every request, and its tokens,
@@ -247,7 +259,7 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		TotalMS: res.TotalMS, TokensIn: used.In, TokensOut: used.Out,
 		CacheRead: used.CacheRead, CacheWrite: used.CacheWrite, Searches: used.Searches,
 		USD: usd, USDEstimated: estimated, UsageJSON: json.RawMessage(usageJSON),
-		Answer: res.Answer, AnswerSynth: res.Synth, Partial: res.Partial, Places: res.Places, StopReason: res.Stop,
+		Answer: res.Answer, AnswerSynth: res.Synth, Partial: res.Partial, Places: res.Places, Music: res.Music, StopReason: res.Stop,
 		Error: a.chester.stripKey(res.Err), Note: a.chester.stripKey(note), PosSource: "none",
 	}
 	// A first-word time is a time a word of the model's arrived. With no
@@ -279,6 +291,9 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(res.Music) > 0 {
 		emit(chesterEvent{T: "music", Music: res.Music})
+	}
+	if drive && len(res.Music) == 0 && res.MusicDown && res.Err == "" {
+		emit(chesterEvent{T: "error", D: driveTracksSaidDown})
 	}
 	if res.Proposal != nil && res.Err == "" {
 		res.Proposal.QueryID = row.ID
