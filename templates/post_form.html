@@ -45,7 +45,7 @@
       <label class="form-label d-block">Checkpoint<select class="form-select" name="checkpoint_id" id="f-cp">
         <option value="">—</option>
         {{range .Legs}}<optgroup label="Leg {{.Ord}}">
-          {{range .Checkpoints}}<option value="{{.ID}}" data-tz="{{.TZ}}" data-leg="{{.LegID}}">{{.Ord}}. {{.Name}}{{with index $.Private .Ord}} — {{.}}{{end}}</option>{{end}}
+          {{range .Checkpoints}}<option value="{{.ID}}"{{if eq .ID $.CheckinID}} selected{{end}} data-tz="{{.TZ}}" data-leg="{{.LegID}}">{{.Ord}}. {{.Name}}{{with index $.Private .Ord}} — {{.}}{{end}}</option>{{end}}
         </optgroup>{{end}}
       </select></label>
       <label class="form-label d-block">When <span class="form-text">(optional: else the photo's time, else now)</span>
@@ -98,7 +98,8 @@
       <label class="form-check"><input class="form-check-input" type="radio" name="start_source" value="gps">
         <span>Real GPS: the photo&rsquo;s GPS or the phone</span></label>
     </fieldset>{{end}}
-    </fieldset>{{else if .NextStop}}<p class="muted" id="next-stop">Next stop: {{.NextStop}}</p>
+    </fieldset>{{else if .CheckinCP}}<p class="muted" id="checkin-at">Checking in at <b>{{.CheckinCP.Name}}</b></p>
+    <p class="muted small">Post a photo here and the stop is checked in at the photo&rsquo;s own time once the photo, or your phone, says you are near it. Nothing is stamped until then; stops passed on the way are marked missed or rerouted.</p>{{else if .NextStop}}<p class="muted" id="next-stop">Next stop: {{.NextStop}}</p>
     <p class="muted small">Post a photo near a stop and it is checked in at the photo&rsquo;s own time; stops passed on the way are marked missed or rerouted.</p>{{end}}
     {{if and .StartMode $.SimAllowed}}<fieldset class="milestone"><legend>Position for this drive</legend>
       <label class="form-check"><input class="form-check-input" type="radio" name="start_source" value="sim" checked>

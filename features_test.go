@@ -17,6 +17,7 @@ func TestFeatures(t *testing.T) {
 				sim := initSimScenarios(t, sc)
 				initEtaScenarios(t, sc, sim)
 				sw := initPostScenarios(t, sc, sim)
+				initRideNavScenarios(sc, sw.p)
 				initPhysicsScenarios(t, sc, sw)
 				initArrivalTimeScenarios(sc, sw)
 				initOldPhotoScenarios(sc, sw)

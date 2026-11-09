@@ -83,6 +83,9 @@ func pageHead(name string, data map[string]any, rideName string) (string, []crum
 		if sm, _ := data["StartMode"].(bool); sm {
 			t = "Start the drive"
 		}
+		if cp, ok := data["CheckinCP"].(*Checkpoint); ok && cp != nil {
+			t = "Check in at " + cp.Name
+		}
 		return t, []crumb{ride, {"Driver", "/driver"}, {t, ""}}
 	case "post_edit.html":
 		return "Edit post", []crumb{ride, {"Driver", "/driver"}, {"Edit post", ""}}

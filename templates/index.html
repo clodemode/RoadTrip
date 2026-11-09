@@ -34,11 +34,47 @@
 
 <div id="map" data-mode="ride"></div>
 
+{{/* The day's end: the trip-keeper's first navigation target, with Add a stop.
+     Signed-in only (DayEnd is built for a driver alone); a visitor's page has
+     no navigator link and no place search. */}}
+{{with .DayEnd}}{{if $.Driver}}
+<section class="dayend card" aria-labelledby="dayend-h">
+  <div class="card-body">
+  <h2 id="dayend-h" class="dayend-h">Day's end{{if .Multi}} &middot; d{{.LegOrd}}{{end}}: {{.Name}}</h2>
+  {{if .ViaFirst}}<p class="dayend-via">Waze and Apple Maps go to {{.ViaFirst}} first and move on once you pass it. Google Maps carries {{if gt (len .Via) 1}}every stop ahead{{else}}it{{end}} on the way to {{.Name}}.</p>{{end}}
+  <p class="dayend-nav">
+    <a class="btn btn-primary" href="{{.Waze}}" rel="noopener">Navigate in Waze</a>
+    <a class="btn btn-outline-dark" href="{{.Google}}" rel="noopener">Google Maps</a>
+    <a class="btn btn-outline-dark" href="{{.Apple}}" rel="noopener">Apple Maps</a>
+  </p>
+  {{if .CanAdd}}<details class="dayend-add"{{if or .Found .FindErr}} open{{end}}>
+    <summary class="tap">Add a stop</summary>
+    <form method="get" action="/" class="hud-dest">
+      <input class="form-control" type="search" name="stop" maxlength="120" value="{{.Query}}" placeholder="Town, place or address" aria-label="A place to drive through" autocomplete="off">
+      <button class="btn btn-outline-dark">Find</button>
+    </form>
+    {{with .FindErr}}<p class="muted small" role="status">{{.}}</p>{{end}}
+    {{with .Found}}<form method="post" action="/driver/routing" class="dayend-found">
+      <input type="hidden" name="leg" value="{{$.DayEnd.LegSlug}}">
+      <input type="hidden" name="after" value="{{$.DayEnd.After}}">
+      <input type="hidden" name="name" value="{{.Label}}">
+      <input type="hidden" name="lat" value="{{.Lat}}">
+      <input type="hidden" name="lng" value="{{.Lng}}">
+      <p class="mb-1">Found <b>{{.Label}}</b>.</p>
+      <button class="btn btn-primary btn-sm">Add it to the day's drive</button>
+      <span class="muted small">A place to drive through, not a check-in.</span>
+    </form>{{end}}
+    <p class="muted small mb-0">An added stop becomes where Waze and Apple Maps take you next; Google Maps carries it as a stop on the way to {{.Name}}.</p>
+  </details>{{end}}
+  </div>
+</section>
+{{end}}{{end}}
+
 <section class="checkpoints">
   <h2>Checkpoints</h2>
   <ol class="cp-list">
   {{range $leg := .Legs}}{{range .Checkpoints}}
-    {{template "stop_row" (row . $leg.Ord $.Driver $.ChesterOn $.NextID false)}}
+    {{template "stop_row" (row . $leg.Ord $.Driver $.ChesterOn $.NextID false $.NavLegID $.DriveStarted)}}
   {{end}}{{end}}
   </ol>
 </section>

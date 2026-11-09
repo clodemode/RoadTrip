@@ -143,6 +143,17 @@ h2 { margin: 1.5rem 0 .5rem; }
 .popup-photo { display: block; width: 100%; max-width: 240px; border-radius: 6px; margin-bottom: .4rem; }
 #map[data-mode="plan"] .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 1.4rem; }
 
+/* --- the day's end: first navigation target, with Add a stop ---------------------- */
+.dayend { margin: 0 0 1rem; }
+.dayend-h { font-size: 1.1rem; margin: 0 0 .5rem; overflow-wrap: anywhere; }
+.dayend-via { font-size: .9rem; margin: 0 0 .6rem; }
+.dayend-nav { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
+.dayend-nav .btn-primary { flex: 1 1 100%; font-size: 1.15rem; font-weight: 700; padding: .8rem .5rem; }
+.dayend-add { margin-top: .75rem; }
+.dayend-add .hud-dest { margin-top: .5rem; }
+.dayend-found { margin-top: .6rem; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.dayend-found p { flex: 1 1 100%; }
+
 /* --- checkpoints ---------------------------------------------------------------- */
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .cp-list, .day-list, .cl-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--ds-hairline);

@@ -330,7 +330,20 @@ func (s *freeSvc) q(extra url.Values) string {
 
 // geocode finds a destination by fuzzy search. Cached per user and text.
 func (s *freeSvc) geocode(ctx context.Context, user, text string) (freeState, error) {
+	return s.geocodeNear(ctx, user, text, 0, 0)
+}
+
+// geocodeNear is geocode with the search biased to a point: the day's road,
+// when a stop is added from the Ride page, so "Belleville" on the 401 is the
+// one in Ontario and not the one in Illinois. A zero point is no bias.
+func (s *freeSvc) geocodeNear(ctx context.Context, user, text string, lat, lng float64) (freeState, error) {
 	k := user + "|" + strings.ToLower(text)
+	near := url.Values{"limit": {"1"}, "typeahead": {"false"}}
+	if lat != 0 || lng != 0 {
+		near.Set("lat", strconv.FormatFloat(lat, 'f', 4, 64))
+		near.Set("lon", strconv.FormatFloat(lng, 'f', 4, 64))
+		k += "|" + near.Get("lat") + "," + near.Get("lon")
+	}
 	if st, ok := s.geo.get(k, s.now()); ok {
 		return st, nil
 	}
@@ -343,7 +356,7 @@ func (s *freeSvc) geocode(ctx context.Context, user, text string) (freeState, er
 			Position struct{ Lat, Lon float64 } `json:"position"`
 		} `json:"results"`
 	}
-	u := s.ttBase + "/search/2/search/" + url.PathEscape(text) + ".json?" + s.q(url.Values{"limit": {"1"}, "typeahead": {"false"}})
+	u := s.ttBase + "/search/2/search/" + url.PathEscape(text) + ".json?" + s.q(near)
 	if err := s.call(ctx, http.MethodGet, u, nil, &body); err != nil {
 		return freeState{}, err
 	}

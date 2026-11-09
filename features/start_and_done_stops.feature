@@ -9,7 +9,10 @@ Feature: The start is a departure and a resolved stop is history
   skip is the one hand correction, and it takes no position because it makes
   no claim.
   (Ruled by Kris 2026-11-07: keep a small Undo on settled rows; never offer
-  navigation on the start.)
+  navigation on the start. Amended by Kris 2026-11-09: the next open stop is
+  still the one row marked next, but every open stop on the day being driven
+  offers navigation too, so a navigator can be set to a point ahead without
+  completing a leg; see ride_page_checkin_and_navigate.feature.)
 
   Background:
     Given kris is signed in
@@ -29,12 +32,13 @@ Feature: The start is a departure and a resolved stop is history
     And the row for A offers no navigation
     And no row offers "Arrived"
 
-  Scenario: Only the next open stop is a destination
+  Scenario: The next open stop is marked next, and the day's other open stops are destinations too
     Given the drive has started at A
     When kris opens the trip page
     Then the row for B is marked as next and offers navigation
-    And the row for C offers no navigation
-    And the row for D offers no navigation
+    And the row for C offers navigation
+    And the row for D offers navigation
+    And the row for C is not marked as next
 
   Scenario: An arrived stop is settled and the next moves on
     Given the drive has started at A

@@ -94,8 +94,11 @@ func (a *App) funcs() template.FuncMap {
 			// reaches a template.
 			return postCard{Post: p, Authed: authed, CanUnfuzz: authed && p.PinFuzzed && a.store.CanUnfuzz(p.ID)}
 		},
-		"row": func(c Checkpoint, legOrd int, driver, chesterOn bool, nextID int64, showTZ bool) stopRow {
-			return stopRow{Checkpoint: c, LegOrd: legOrd, Driver: driver, ChesterOn: chesterOn, Next: c.ID == nextID, ShowTZ: showTZ}
+		"row": func(c Checkpoint, legOrd int, driver, chesterOn bool, nextID int64, showTZ bool, navLegID int64, started bool) stopRow {
+			open := !c.IsStart && c.ArrivedAt == "" && c.SkippedAt == ""
+			return stopRow{Checkpoint: c, LegOrd: legOrd, Driver: driver, ChesterOn: chesterOn, Next: c.ID == nextID, ShowTZ: showTZ,
+				Nav:     driver && open && (c.ID == nextID || c.LegID == navLegID),
+				CheckIn: driver && open && started}
 		},
 		"legColor":   legColor,
 		"trimPrefix": func(s, prefix string) string { return strings.TrimPrefix(s, prefix) },
@@ -917,15 +920,27 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	// The hero's terrain follows the car: today's leg, leg 1 before departure,
 	// the last leg once the ride is over — the same rule a new post follows.
 	pageLeg := ""
-	if dl := defaultLeg(rv.Legs, di); dl != nil {
-		pageLeg = dl.Slug
+	var navLegID int64
+	dl := defaultLeg(rv.Legs, di)
+	if dl != nil {
+		pageLeg, navLegID = dl.Slug, dl.ID
 	}
 	bars := a.hoursBars(rv.Ride.Slug, rv.Legs, allIndexes(len(rv.Legs)), len(rv.Legs) > 1)
 	data := map[string]any{
 		"Title": "", "Ride": rv.Ride, "Legs": rv.Legs, "Posts": posts,
 		"Day": di, "PageLeg": pageLeg, "Multi": len(rv.Legs) > 1,
 		"NextID": nextOpenID(rv.Legs), "HoursBars": bars, "DriveStarted": driveStarted(rv.Legs),
-		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
+		"NavLegID": navLegID,
+		"Map":      withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
+	// The day's end and Add a stop: the trip-keeper's, and nobody else's. A
+	// visitor's page carries no navigator link and no place search.
+	if a.isDriver(r) {
+		if de := dayEnd(rv.Legs, dl, len(rv.Legs) > 1); de != nil {
+			de.CanAdd = a.freeSvc().key != ""
+			a.lookupStop(r, de)
+			data["DayEnd"] = de
+		}
+	}
 	// The checklist in one line, n of m done. Counts only.
 	if sum, ok := a.store.ChecklistSummary(rv.Ride.Slug); ok {
 		data["Checklist"] = sum
@@ -963,10 +978,15 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 	}
 	di := dayOf(rv.Ride, rv.Legs, time.Now())
 	bars := a.hoursBars(rv.Ride.Slug, rv.Legs, []int{legIndex(rv.Legs, leg)}, false)
+	var navLegID int64
+	if dl := defaultLeg(rv.Legs, di); dl != nil {
+		navLegID = dl.ID
+	}
 	a.render(w, r, "leg.html", map[string]any{
 		"Title": leg.Name, "Ride": rv.Ride, "Leg": leg, "Prev": prev, "Next": next,
 		"Posts": posts, "Day": di, "Total": len(rv.Legs), "Multi": len(rv.Legs) > 1,
 		"NextID": nextOpenID(rv.Legs), "HoursBars": bars,
+		"NavLegID": navLegID, "DriveStarted": driveStarted(rv.Legs),
 		// The tracks are computed over the whole ride so this leg's own track
 		// still begins where the day before it ended.
 		"Map":     withHours(buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars),
@@ -974,8 +994,12 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // stopRow is what the stop_row template is called with: the checkpoint plus
-// what the row needs from the page. Next is true for the one stop that is a
-// destination; only it offers navigation, and never the start.
+// what the row needs from the page. Next is true for the one stop the car is
+// heading for. Nav says the row offers navigation: the next stop, and (Kris,
+// 2026-11-09) every open stop on the day being driven, so a navigator can be
+// set to a point ahead without completing a leg; never the start, never a
+// settled stop. CheckIn says the row links to its own check-in post: every
+// open stop once the drive has started, in any order.
 type stopRow struct {
 	Checkpoint
 	LegOrd    int
@@ -983,6 +1007,23 @@ type stopRow struct {
 	ChesterOn bool
 	Next      bool
 	ShowTZ    bool
+	Nav       bool
+	CheckIn   bool
+}
+
+// Links are the row's three navigators. A private place is a snapped cell, so
+// its links carry the name and never the cell, as the driver screen's do.
+func (s stopRow) Links() navLinks {
+	if s.Precision == precisionFuzzed {
+		return mapLinks(0, 0, s.Name)
+	}
+	return mapLinks(s.Lat, s.Lng, s.Name)
+}
+
+// isDriver is render's Driver rule, for a handler that must decide before it
+// renders: signed in AND on the ride the site shows.
+func (a *App) isDriver(r *http.Request) bool {
+	return a.auth.IsAuthed(r) && a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
 }
 
 // postCard is what the post_card template is called with: the post, plus
@@ -1704,7 +1745,25 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 	if k := r.PostFormValue("kind"); validKind(k) {
 		kind = k
 	}
+	// A stop's own Check in (the Ride page, ?checkpoint=): the form opens on
+	// that stop, its leg and its zone, once the drive has started and while the
+	// stop is open. Opening it stamps nothing: the photo's position decides.
+	var checkinCP *Checkpoint
+	var checkinID int64
+	if v := r.URL.Query().Get("checkpoint"); v != "" && start == nil {
+		id, _ := strconv.ParseInt(v, 10, 64)
+		for i := range rv.Legs {
+			for j := range rv.Legs[i].Checkpoints {
+				c := &rv.Legs[i].Checkpoints[j]
+				if c.ID == id && !c.IsStart && c.ArrivedAt == "" && c.SkippedAt == "" {
+					checkinCP, checkinID = c, c.ID
+					dl, dlID, tz = &rv.Legs[i], rv.Legs[i].ID, c.TZ
+				}
+			}
+		}
+	}
 	data := map[string]any{
+		"CheckinCP": checkinCP, "CheckinID": checkinID,
 		"Title": "Post", "Ride": rv.Ride, "Legs": rv.Legs, "Kinds": postKinds,
 		// This ride's addresses and no other's: an ord means nothing without its ride.
 		"Private":      pd.forRide(rv.Ride.Slug, a.rideSlug).addressByOrd(),
