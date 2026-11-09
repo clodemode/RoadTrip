@@ -41,6 +41,20 @@ func aboutClock(t time.Time, loc *time.Location) string {
 	return out
 }
 
+// notBeforeRoadLimit is an arrival estimate that cannot be earlier than the
+// miles left allow at the road limit (maxRoadKmh): a plan pace that is
+// optimistic, or a leg whose planned hours are short for its length, cannot
+// promise an arrival no car could make.
+func notBeforeRoadLimit(now, eta time.Time, leftKm float64) time.Time {
+	if leftKm < 0 {
+		leftKm = 0
+	}
+	if floor := now.Add(time.Duration(leftKm / maxRoadKmh * float64(time.Hour))); eta.Before(floor) {
+		return floor
+	}
+	return eta
+}
+
 // RecordETA keeps a prediction unless one for the same ride, stop and driver
 // was written in the last five minutes. It reports whether it wrote.
 func (s *Store) RecordETA(ride string, cp int64, user string, at, arrival time.Time, source string) (bool, error) {

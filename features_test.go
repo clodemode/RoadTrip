@@ -16,8 +16,10 @@ func TestFeatures(t *testing.T) {
 			func() {
 				sim := initSimScenarios(t, sc)
 				initEtaScenarios(t, sc, sim)
-				initPostScenarios(t, sc, sim)
-				initMarksScenarios(t, sc, sim)
+				sw := initPostScenarios(t, sc, sim)
+				initPhysicsScenarios(t, sc, sw)
+				mw := initMarksScenarios(t, sc, sim)
+				initHoursMilestoneScenarios(t, sc, mw)
 				initChesterMusicScenarios(t, sc)
 				initDayBadgeScenarios(sc)
 				initDriveTracksScenarios(t, sc)

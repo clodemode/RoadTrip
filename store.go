@@ -167,6 +167,11 @@ type Post struct {
 	PinSource string
 	AccuracyM *float64
 	PinFuzzed bool
+	// Flag is what the check-in path noticed about the post, as space-separated
+	// words: "out_of_step" (the position could not have been reached in the
+	// time, so nothing was checked in) and "time_from_phone" (the photo's own
+	// time was in the future, so the phone's was used). Empty is the usual case.
+	Flag string
 	// The exact point a fuzzed post had, kept so Unfuzz can restore it. Set
 	// only by resolvePin (via pinResult.apply) for CreatePost and
 	// UpdatePostPin to write. Unexported, so no JSON or template can carry it,
@@ -434,6 +439,7 @@ func (s *Store) migrate() error {
 		// The exact point a post had before Fuzz This. Private: no post read
 		// selects these; see FuzzPost and UnfuzzPost.
 		"exact_lat REAL", "exact_lng REAL", "exact_source TEXT NOT NULL DEFAULT ''",
+		"flag TEXT NOT NULL DEFAULT ''",
 	}); err != nil {
 		return err
 	}
@@ -1256,7 +1262,7 @@ func (s *Store) CanUnfuzz(id int64) bool {
 const postSelect = `SELECT p.id,p.leg_id,COALESCE(p.checkpoint_id,0),p.kind,p.occurred_at,p.tz,
   p.title,p.body,COALESCE(p.photo_id,0),p.hide_location,p.created_at,
   l.slug,l.name,l.ord,COALESCE(c.name,''),
-  p.lat,p.lng,p.pin_source,p.accuracy_m,p.pin_fuzzed,
+  p.lat,p.lng,p.pin_source,p.accuracy_m,p.pin_fuzzed,p.flag,
   ph.path,ph.thumb_path,ph.taken_at,ph.tz,ph.lat,ph.lng,ph.width,ph.height,ph.sha256
   FROM posts p
   JOIN legs l ON l.id=p.leg_id
@@ -1272,7 +1278,7 @@ func scanPost(sc interface{ Scan(...any) error }) (Post, error) {
 	err := sc.Scan(&p.ID, &p.LegID, &p.CheckpointID, &p.Kind, &p.OccurredAt, &p.TZ,
 		&p.Title, &p.Body, &p.PhotoID, &p.HideLocation, &p.CreatedAt,
 		&p.LegSlug, &p.LegName, &p.LegOrd, &p.CheckpointName,
-		&pLat, &pLng, &p.PinSource, &pAcc, &p.PinFuzzed,
+		&pLat, &pLng, &p.PinSource, &pAcc, &p.PinFuzzed, &p.Flag,
 		&phPath, &phThumb, &phTaken, &phTZ, &phLat, &phLng, &phW, &phH, &phSHA)
 	if err != nil {
 		return p, err
@@ -1326,6 +1332,21 @@ func (s *Store) Posts(rideSlug string, legID int64) ([]Post, error) {
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// AddPostFlag notes one flag word on a post, once.
+func (s *Store) AddPostFlag(id int64, word string) error {
+	var cur string
+	if err := s.db.QueryRow(`SELECT flag FROM posts WHERE id=?`, id).Scan(&cur); err != nil {
+		return err
+	}
+	for _, w := range strings.Fields(cur) {
+		if w == word {
+			return nil
+		}
+	}
+	_, err := s.db.Exec(`UPDATE posts SET flag=? WHERE id=?`, strings.TrimSpace(cur+" "+word), id)
+	return err
 }
 
 func (s *Store) Post(id int64) (*Post, error) {

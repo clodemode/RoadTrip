@@ -1254,6 +1254,28 @@ type milestoneChoice struct {
 // checkinRadiusKm is how near a position must be to a stop to vouch for it.
 const checkinRadiusKm = 10
 
+// The words a post's Flag carries.
+const (
+	flagOutOfStep     = "out_of_step"
+	flagTimeFromPhone = "time_from_phone"
+)
+
+// maxRoadKmh is the fastest a car is believed to have gone between two
+// positions (250 km/h, about 155 mph). It is deliberately far above any road
+// limit the trip meets: it exists to turn away a position no car could have
+// reached (a photo's GPS from another city, a stale fix), never to police
+// speed, and a false "out of step" on the road is worse than a missed one.
+const maxRoadKmh = 250.0
+
+// minGapHours is the shortest gap between two positions that is judged as
+// itself: two photos a few seconds apart are judged as two minutes apart, so
+// a fix that moved a little between them cannot read as impossible speed.
+const minGapHours = 2.0 / 60
+
+// futureSlack is how far ahead of the phone's clock a photo's own time may be
+// before it is not believed. A camera a little fast is not a lie.
+const futureSlack = 15 * time.Minute
+
 // missedRadiusKm is how near the way the car came a skipped stop must lie to
 // count as missed rather than rerouted around.
 const missedRadiusKm = 15
@@ -1301,6 +1323,7 @@ func nextOpenID(legs []Leg) int64 {
 type vouch struct {
 	src      string // "sim", "photo" or "phone"
 	lat, lng float64
+	accM     float64 // the phone's own reported radius in metres; 0 when it gave none
 }
 
 // vouchFor resolves the position a post is made at: the simulated car first
@@ -1309,13 +1332,17 @@ type vouch struct {
 // is none.
 func (a *App) vouchFor(r *http.Request, exLat, exLng *float64) *vouch {
 	if la, ln := a.simFix(r); la != nil {
-		return &vouch{"sim", *la, *ln}
+		return &vouch{src: "sim", lat: *la, lng: *ln}
 	}
 	if exLat != nil && exLng != nil {
-		return &vouch{"photo", *exLat, *exLng}
+		return &vouch{src: "photo", lat: *exLat, lng: *exLng}
 	}
 	if la, ln := formCoord(r, "lat", 90), formCoord(r, "lng", 180); la != nil && ln != nil {
-		return &vouch{"phone", *la, *ln}
+		v := &vouch{src: "phone", lat: *la, lng: *ln}
+		if acc, err := strconv.ParseFloat(strings.TrimSpace(r.PostFormValue("accuracy")), 64); err == nil && acc > 0 && acc < 1e6 {
+			v.accM = acc
+		}
+		return v
 	}
 	return nil
 }
@@ -1415,15 +1442,34 @@ func legIndexOf(legs []Leg, id int64) int {
 }
 
 // arrivalAt is the photo's own time read as wall-clock time in the stop's
-// zone, else now. loc is the zone the form read the photo's clock in.
-func arrivalAt(photo *Photo, loc *time.Location, stopTZ string) time.Time {
+// zone, else now. loc is the zone the form read the photo's clock in. A time
+// later than now (beyond futureSlack) is not believed: now is used and
+// fromPhone says so.
+func arrivalAt(photo *Photo, loc *time.Location, stopTZ string) (at time.Time, fromPhone bool) {
+	now := time.Now()
 	if photo != nil && photo.TakenAt != "" {
 		if t, ok := parseUTC(photo.TakenAt); ok {
 			lt := t.In(loc)
-			return time.Date(lt.Year(), lt.Month(), lt.Day(), lt.Hour(), lt.Minute(), lt.Second(), 0, loadLoc(stopTZ))
+			at = time.Date(lt.Year(), lt.Month(), lt.Day(), lt.Hour(), lt.Minute(), lt.Second(), 0, loadLoc(stopTZ))
+			if at.After(now.Add(futureSlack)) {
+				return now, true
+			}
+			return at, false
 		}
 	}
-	return time.Now()
+	return now, false
+}
+
+// outOfStep says whether a car at (fromLat, fromLng) at fromAt could not have
+// been at v by at. The reach is the road limit over the gap (never less than
+// minGapHours) plus slack for what the positions do not know: the check-in
+// radius (a stop is only known to within it, and a fuzzed one to its grid) and
+// the fix's own accuracy. km is the distance between the two positions.
+func outOfStep(fromLat, fromLng float64, fromAt, at time.Time, v *vouch) (out bool, km, gapMin float64) {
+	km = haversineKm(fromLat, fromLng, v.lat, v.lng)
+	gapH := math.Max(at.Sub(fromAt).Hours(), minGapHours)
+	reach := maxRoadKmh*gapH + checkinRadiusKm + v.accM/1000
+	return km > reach, km, at.Sub(fromAt).Minutes()
 }
 
 // checkInFromPhoto is what posting a photo does after the drive has started:
@@ -1433,7 +1479,7 @@ func arrivalAt(photo *Photo, loc *time.Location, stopTZ string) time.Time {
 // last resolved point to here, "rerouted" when it does not. Returns the notice
 // for the form, "" when there was nothing to say. The bus gets stops (ordinals)
 // and sources, never a coordinate or a name.
-func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, photo *Photo, loc *time.Location) (string, error) {
+func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, post *Post, photo *Photo, loc *time.Location) (string, error) {
 	open := openStops(legs)
 	if len(open) == 0 {
 		return "", nil
@@ -1457,13 +1503,38 @@ func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, photo *Photo, loc *t
 			int(math.Round(haversineKm(v.lat, v.lng, open[0].Lat, open[0].Lng)))), nil
 	}
 	x := open[best]
-	at := arrivalAt(photo, loc, x.TZ)
+	at, timeFromPhone := arrivalAt(photo, loc, x.TZ)
 	// The last resolved point: the latest arrival, which is the start at worst.
 	var last *Checkpoint
 	all := rideCheckpoints(legs)
 	for i := range all {
 		if all[i].ArrivedAt != "" && (last == nil || all[i].ArrivedAt > last.ArrivedAt) {
 			last = &all[i]
+		}
+	}
+	// A car can only go so far in the time. The simulated car is exempt: it
+	// exists only on a KATE and its posts are tests with library photos, not
+	// the road. Whatever is decided here, the post is already saved and stays.
+	var suffix string
+	if timeFromPhone {
+		suffix = "; the photo's time was ahead of the clock, so the phone's time was used"
+		_ = a.store.AddPostFlag(post.ID, flagTimeFromPhone)
+	}
+	if last != nil && v.src != "sim" {
+		if lt, ok := parseUTC(last.ArrivedAt); ok {
+			if at.Before(lt) {
+				a.melt.Event("checkin_refused", map[string]any{"stop": x.Ord, "reason": "older_than_last_checkin"})
+				return "Posted at its own time; it is older than the last check-in, so the car stays where it was" + suffix, nil
+			}
+			if out, km, gapMin := outOfStep(last.Lat, last.Lng, lt, at, v); out {
+				if err := a.store.AddPostFlag(post.ID, flagOutOfStep); err != nil {
+					return "", err
+				}
+				a.melt.Event("checkin_refused", map[string]any{"stop": x.Ord, "reason": "out_of_step",
+					"km": math.Round(km*10) / 10, "gap_min": math.Round(gapMin)})
+				return fmt.Sprintf("Posted, and kept as out of step: %d km in %d min is further than a car goes, so nothing was checked in%s",
+					int(math.Round(km)), int(math.Round(gapMin)), suffix), nil
+			}
 		}
 	}
 	way := plannedWay(legs, last, &x)
@@ -1498,7 +1569,7 @@ func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, photo *Photo, loc *t
 	if len(rerouted) > 0 {
 		msg += "; rerouted around " + strings.Join(rerouted, ", ")
 	}
-	return msg, nil
+	return msg + suffix, nil
 }
 
 // stepState is the stepping drive of the request's user once the drive has
@@ -2010,7 +2081,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var photo *Photo
-	stepKept := false
+	stepKept, timeFromPhone := false, false
 	if f, _, err := r.FormFile("photo"); err == nil {
 		defer f.Close()
 		photo, err = a.savePhoto(f, loc)
@@ -2097,6 +2168,10 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		post.OccurredAt = utcString(t)
 	case photo != nil && photo.TakenAt != "":
 		post.OccurredAt = photo.TakenAt
+		// A photo time later than the clock is not believed: the phone's is used.
+		if t, ok := parseUTC(photo.TakenAt); ok && t.After(time.Now().Add(futureSlack)) {
+			post.OccurredAt, timeFromPhone = utcString(time.Now()), true
+		}
 	default:
 		post.OccurredAt = utcString(time.Now())
 	}
@@ -2106,11 +2181,14 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stepKept = true
+	if timeFromPhone {
+		_ = a.store.AddPostFlag(post.ID, flagTimeFromPhone)
+	}
 	log.Printf("post %d: pin %s", post.ID, pinNote)
 	a.melt.Event("post_created", map[string]any{"pin_source": post.PinSource, "has_photo": photo != nil,
 		"exif_gps": photo != nil && photo.Lat != nil, "fuzzed": pinFuzzed})
 	if starting {
-		at := arrivalAt(photo, loc, start.TZ)
+		at, _ := arrivalAt(photo, loc, start.TZ)
 		if err := a.arriveCheckpoint(start, at, nil); err != nil {
 			fail("The post is saved, but the drive could not be started: " + err.Error())
 			return
@@ -2129,7 +2207,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if start != nil && start.ArrivedAt != "" && photo != nil {
-		msg, err := a.checkInFromPhoto(r, rv.Legs, photo, loc)
+		msg, err := a.checkInFromPhoto(r, rv.Legs, post, photo, loc)
 		noticeURL := "/driver/post?post=" + strconv.FormatInt(post.ID, 10) + "&notice="
 		if err != nil {
 			fail("The post is saved, but the check-in failed: " + err.Error())
@@ -2361,6 +2439,7 @@ type censusPost struct {
 	CreatedAt    string `json:"created_at"`
 	PinSource    string `json:"pin_source"`
 	PinFuzzed    bool   `json:"pin_fuzzed"`
+	Flag         string `json:"flag,omitempty"`
 	// The PUBLISHED point, which is null for a hidden or unpinned post — the
 	// same value the map and the GeoJSON carry, never the raw fix.
 	Lat   *float64     `json:"lat"`
@@ -2383,7 +2462,7 @@ func (a *App) postsJSON(w http.ResponseWriter, r *http.Request) {
 	for _, p := range posts {
 		c := censusPost{ID: p.ID, Leg: p.LegOrd, CheckpointID: p.CheckpointID, Checkpoint: p.CheckpointName,
 			Kind: p.Kind, OccurredAt: p.OccurredAt, TZ: p.TZ, Title: p.Title, CreatedAt: p.CreatedAt,
-			PinSource: p.PinSource, PinFuzzed: p.PinFuzzed, Lat: p.PinLat, Lng: p.PinLng}
+			PinSource: p.PinSource, PinFuzzed: p.PinFuzzed, Flag: p.Flag, Lat: p.PinLat, Lng: p.PinLng}
 		if p.Photo != nil {
 			c.Photo = &censusPhoto{ID: p.Photo.ID, Path: "/media/" + p.Photo.Path,
 				Thumb: "/media/" + p.Photo.ThumbPath, SHA256: p.Photo.SHA256,

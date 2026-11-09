@@ -32,6 +32,7 @@ type scWorld struct {
 	phone       bool        // the phone reports a position (at B unless phoneAt says where)
 	phoneAt     *[2]float64 // where the phone reports it is, when not at B
 	startSource string      // the start form's position choice; empty sends none
+	phoneAcc    string      // the phone's reported accuracy in metres; empty sends none
 }
 
 const stopsLng = -100.0
@@ -340,6 +341,9 @@ func (s *scWorld) send(i int, withPhoto, withPhone bool) error {
 		}
 		_ = mw.WriteField("lat", strconv.FormatFloat(lat, 'f', 4, 64))
 		_ = mw.WriteField("lng", strconv.FormatFloat(lng, 'f', 4, 64))
+		if s.phoneAcc != "" {
+			_ = mw.WriteField("accuracy", s.phoneAcc)
+		}
 	}
 	if withPhoto && p.photo != nil {
 		fw, _ := mw.CreateFormFile("photo", "p.jpg")

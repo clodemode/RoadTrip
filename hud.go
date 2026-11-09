@@ -185,6 +185,7 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving b
 	if moving && onLine && end != nil && leg.EstHours > 0 && haveLine && totalKm > 0 {
 		leftFrac := math.Max(0, (totalKm-posAlong)/totalKm)
 		eta := now.Add(time.Duration(leg.EstHours * leftFrac * float64(time.Hour)))
+		eta = notBeforeRoadLimit(now, eta, totalKm-posAlong)
 		h.ETA, h.ETAPace = aboutClock(eta, loadLoc(end.TZ)), "plan pace"
 		h.etaCP, h.etaAt = end.ID, eta
 	}

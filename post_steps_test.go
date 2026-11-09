@@ -40,7 +40,7 @@ const (
 	rawPrivateLng = -102.0123
 )
 
-func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) {
+func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) *scWorld {
 	p := &postWorld{t: t, sim: sim}
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		*p = postWorld{t: t, sim: sim}
@@ -65,6 +65,7 @@ func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) {
 	initSimStepsScenarios(sc, p, s)
 	initPostFormByTypeScenarios(sc, p)
 	initTracksTopScenarios(p.t, sc, p)
+	return s
 }
 
 // trip pushes a small trip (the fixture's first leg: Alder, Birch Gate, Cedar
