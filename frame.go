@@ -104,7 +104,7 @@ func shellPage(p string) bool {
 // requests and every non-page path pass through untouched.
 func (a *App) shell(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || a.tracks == nil || embedded(r) || !shellPage(r.URL.Path) || !a.auth.IsAuthed(r) {
+		if r.Method != http.MethodGet || a.shellOff || a.tracks == nil || embedded(r) || !shellPage(r.URL.Path) || !a.auth.IsAuthed(r) {
 			h.ServeHTTP(w, r)
 			return
 		}

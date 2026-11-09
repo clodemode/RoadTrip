@@ -19,6 +19,14 @@
 
   // --- pure parts, exported for node ---------------------------------------
   // The next track after idx that has an address; -1 when there is none.
+  // toggleCard opens or closes the card body under its header, and says which.
+  function toggleCard(btn, body) {
+    var open = !!body.hidden;
+    body.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return open;
+  }
+
   function nextPlayable(tracks, idx) {
     for (var i = idx + 1; i < (tracks || []).length; i++) if (tracks[i] && tracks[i].src) return i;
     return -1;
@@ -141,7 +149,7 @@
       config: function (o) { if (o && o.ceiling) cfg.ceiling = o.ceiling; if (o && o.ahead) cfg.ahead = o.ahead; }
     };
   }
-  var api = { nextPlayable: nextPlayable, metadataFor: metadataFor, stateBody: stateBody, unlockThenLoad: unlockThenLoad, stripEmbed: stripEmbed, createNest: createNest, SILENT: SILENT };
+  var api = { toggleCard: toggleCard, nextPlayable: nextPlayable, metadataFor: metadataFor, stateBody: stateBody, unlockThenLoad: unlockThenLoad, stripEmbed: stripEmbed, createNest: createNest, SILENT: SILENT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
   var root = typeof document !== 'undefined' && document.getElementById('rt-player');
@@ -334,6 +342,8 @@
       return w.RTHud && w.RTHud.fix ? w.RTHud.fix() : null;
     } catch (e) { return null; }
   }
+  var cardToggle = $('rt-toggle'), cardBody = $('rt-card-body');
+  if (cardToggle && cardBody) cardToggle.addEventListener('click', function () { toggleCard(cardToggle, cardBody); });
   var askBtn = $('hud-drivetracks');
   if (askBtn && window.RTDriveTracks) askBtn.addEventListener('click', function () {
     if (askBtn.disabled) return;

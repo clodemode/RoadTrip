@@ -583,6 +583,11 @@ body.rt-shell { margin: 0; display: flex; flex-direction: column; height: 100dvh
 .rt-frame { flex: 1 1 auto; min-height: 0; width: 100%; border: 0; background: #fff; }
 .rt-dock { flex: 0 0 auto; width: 100%; padding: 0 .5rem calc(.5rem + env(safe-area-inset-bottom)); background: #f3f4f6; border-top: 1px solid #d1d5db; box-sizing: border-box; }
 .rt-dock .drive-card { margin-top: .5rem; }
+.rt-toggle { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; flex: 1 1 auto; text-align: left; }
+.rt-charter { width: 28px; height: 28px; }
+.rt-chevron { margin-left: .25rem; transition: transform .15s; }
+.rt-toggle[aria-expanded="false"] .rt-chevron { transform: rotate(-90deg); }
+#rt-card-body[hidden] { display: none; }
 
 /* The RoadTracks card: one full-width block directly under the gauges in every
    mode, the search box taking the whole row, the result box only once it has

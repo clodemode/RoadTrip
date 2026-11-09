@@ -840,6 +840,8 @@ The driver screen makes no arrival promise until the car is moving. The phone sa
 
 A simulated drive is **one position per signed-in driver, held on the server**, so every page and every device signed in as that driver sees the same car at the same instant. Nothing ticks in a tab and nothing is kept in browser storage: the position is computed at request time from the corridor, the seed, the start instant and the compression (`sim.go`, a port of the pure helpers in `static/js/sim.js`), and is only ever consumed server-side or handed to the HUD and Chester the way a phone fix is.
 
+`PLAYER_SHELL=0` (a Fly secret) turns the player frame off and serves the plain pages, so music stops on each page change: the road fall-back, no deploy needed.
+
 It exists only where `SIM_ALLOWED=1` (set it on a KATE, never on Fly); otherwise the start route is a 404. Three routes, all signed-in:
 
 - `POST /driver/sim/start` (form: `corridor` = `kgn-yyz`, `seed` blank for random, `x` compression default 60, `mph` cap, `rung` mile cap) then 303 to `/driver`. The "Simulated drive" block on `/driver` posts it; `/driver?sim=1|10|100|all&corridor=kgn-yyz&seed=N&x=` does too, once, and strips itself from the URL.
