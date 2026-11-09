@@ -33,20 +33,20 @@ Feature: The menu follows the ride's state, Drive Tracks rides along, every page
 
   Scenario: The Active menu
     When the drive is started
-    Then Kris's menu reads "Ride, Post, Chester, Lodging, Photos, Plan, GeoJSON"
+    Then Kris's menu reads "Ride, Driver, Post, Chester, Lodging, Photos, Plan, GeoJSON"
 
   Scenario: The Planning menu keeps Post to start the drive and drops Chester
-    Then Kris's menu reads "Ride, Post, Plan, Lodging, Photos, GeoJSON"
+    Then Kris's menu reads "Ride, Driver, Post, Plan, Lodging, Photos, GeoJSON"
 
   Scenario: The Planning menu after the finish drops Post and Chester
     When the drive is started
     And the finish is reached
-    Then Kris's menu reads "Ride, Plan, Lodging, Photos, GeoJSON"
+    Then Kris's menu reads "Ride, Driver, Plan, Lodging, Photos, GeoJSON"
 
   Scenario: Only an admin's menu carries Users
     When the drive is started
     And an admin opens "/"
-    Then the menu reads "Ride, Post, Chester, Lodging, Photos, Plan, GeoJSON, Users"
+    Then the menu reads "Ride, Driver, Post, Chester, Lodging, Photos, Plan, GeoJSON, Users"
 
   Scenario: The current page is marked
     When Kris opens "/plan"

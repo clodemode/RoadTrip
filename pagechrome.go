@@ -40,9 +40,10 @@ func menuFor(active, started, driver, chesterOn, hasChecklist, admin bool, path 
 			m = append(m, menuItem{Label: label, Href: href, Current: current, Post: label == "Post"})
 		}
 	}
-	ride := path == "/" || path == "/driver" || len(path) > 6 && path[:6] == "/legs/"
+	ride := path == "/" || len(path) > 6 && path[:6] == "/legs/"
 	chester := path == "/chester" || len(path) > 9 && path[:9] == "/chester/" || len(path) > 16 && path[:16] == "/driver/chester/"
 	add("Ride", "/", true, ride)
+	add("Driver", "/driver", driver, cur("/driver"))
 	if active {
 		add("Post", "/driver/post", driver, cur("/driver/post"))
 		add("Chester", "/chester", chesterOn, chester)
