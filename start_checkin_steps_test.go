@@ -123,7 +123,7 @@ func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) *scWorld
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(string(b), "uploadingLabel(") || !strings.Contains(string(b), "addEventListener('submit'") {
+		if !strings.Contains(string(b), "uploadingLabel(") || !strings.Contains(string(b), "paintThenSend(") || !strings.Contains(string(b), "addEventListener('submit'") {
 			return fmt.Errorf("post.js does not show progress on submit")
 		}
 		return nil

@@ -62,6 +62,27 @@ test('ladderChoice offers the best source and never picks No pin itself', () => 
 test('uploadingLabel says what is happening', () => {
   const { uploadingLabel } = createRequire(import.meta.url)('./post.js');
   assert.equal(uploadingLabel(true, true), 'Starting the drive…');
-  assert.equal(uploadingLabel(false, true), 'Uploading your photo…');
+  assert.equal(uploadingLabel(false, true), 'Posting…');
   assert.equal(uploadingLabel(false, false), 'Posting…');
+});
+
+test('paintThenSend waits two frames so the label is drawn, and sends once', () => {
+  const { paintThenSend } = createRequire(import.meta.url)('./post.js');
+  const frames = []; let timer = null; let sent = 0;
+  paintThenSend((f) => frames.push(f), (f) => { timer = f; }, () => { sent++; });
+  assert.equal(sent, 0, 'nothing is sent before the page has painted');
+  frames.shift()();
+  assert.equal(sent, 0, 'one frame is not yet a painted frame');
+  frames.shift()();
+  assert.equal(sent, 1);
+  timer();
+  assert.equal(sent, 1, 'the fallback timer never sends it twice');
+});
+
+test('paintThenSend still sends if the browser never gives a frame', () => {
+  const { paintThenSend } = createRequire(import.meta.url)('./post.js');
+  let timer = null; let sent = 0;
+  paintThenSend(() => {}, (f) => { timer = f; }, () => { sent++; });
+  timer();
+  assert.equal(sent, 1);
 });

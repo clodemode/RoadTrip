@@ -189,7 +189,18 @@
   // as a form that did not work.
   function uploadingLabel(starting, hasPhoto) {
     if (starting) return 'Starting the drive\u2026';
-    return hasPhoto ? 'Uploading your photo\u2026' : 'Posting\u2026';
+    return 'Posting\u2026';
+  }
+
+  // paintThenSend sends the form only once the new label is on the screen.
+  // Safari can stop drawing the moment a form submits, which left the button
+  // unchanged for the whole upload. Two frames guarantee one paint; the timer
+  // covers a page that gets no frames at all.
+  function paintThenSend(raf, later, send) {
+    var sent = false;
+    var go = function () { if (!sent) { sent = true; send(); } };
+    raf(function () { raf(go); });
+    later(go);
   }
 
   // askLocation asks geo (navigator.geolocation) for the phone's position at
@@ -224,7 +235,7 @@
   }
 
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { exifGPS: exifGPS, exifTaken: exifTaken, photoAgeWords: photoAgeWords, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, sectionsFor: sectionsFor, locationReason: locationReason };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { paintThenSend: paintThenSend, exifGPS: exifGPS, exifTaken: exifTaken, photoAgeWords: photoAgeWords, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, sectionsFor: sectionsFor, locationReason: locationReason };
     return;
   }
 
@@ -422,9 +433,13 @@
       var b = e.submitter || postForm.querySelector('button[type=submit]:not([hidden])');
       if (!b) return;
       var hasPhoto = !!(photo.files && photo.files.length);
+      e.preventDefault();
       sentButton = b; sentLabel = b.textContent;
       b.textContent = uploadingLabel(b.id === 'btn-start', hasPhoto);
-      setTimeout(function () { b.disabled = true; }, 0);
+      b.disabled = true;
+      paintThenSend(function (f) { window.requestAnimationFrame(f); },
+        function (f) { setTimeout(f, 200); },
+        function () { postForm.submit(); });
     });
     window.addEventListener('pageshow', function () {
       if (sentButton) { sentButton.disabled = false; sentButton.textContent = sentLabel; sentButton = null; }
