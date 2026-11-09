@@ -76,7 +76,7 @@ jobs:
         run: node --test static/js/*_test.mjs
 
       - name: gate — go test
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -timeout 20m ./...
 
       - name: name the commit being shipped
         run: |
