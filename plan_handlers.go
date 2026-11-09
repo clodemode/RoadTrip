@@ -526,3 +526,38 @@ func (a *App) ridesJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"active": active, "fallback": a.rideSlug, "rides": out})
 }
+
+// routingAdd is the trip-keeper adding a routing point on the road: a place to
+// drive through, on a leg ahead, that the Navigate link goes to before the next
+// stop. It writes one routing_points row through Store.AddRoutingPoint, which
+// holds the same rules as the trip document and refuses a leg already driven.
+// It is not a plan change and goes round no part of the plan guard: it cannot
+// touch a stop, a post or a leg.
+func (a *App) routingAdd(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	after, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("after")))
+	lat, e1 := strconv.ParseFloat(strings.TrimSpace(r.PostFormValue("lat")), 64)
+	lng, e2 := strconv.ParseFloat(strings.TrimSpace(r.PostFormValue("lng")), 64)
+	if err != nil || e1 != nil || e2 != nil {
+		http.Error(w, "after, lat and lng are numbers", http.StatusBadRequest)
+		return
+	}
+	rp, err := a.store.AddRoutingPoint(a.activeSlug(), strings.TrimSpace(r.PostFormValue("leg")), after,
+		r.PostFormValue("name"), lat, lng)
+	switch {
+	case errors.Is(err, ErrRoutingRefused):
+		writeJSON(w, http.StatusConflict, map[string]any{"status": "refused", "error": err.Error()})
+		return
+	case err != nil:
+		log.Printf("routing point: %v", err)
+		http.Error(w, "could not add the routing point", http.StatusInternalServerError)
+		return
+	}
+	// The count, never the place.
+	log.Printf("routing point: added to %s (after stop %d)", a.activeSlug(), rp.AfterOrd)
+	if wantsHTML(r) {
+		http.Redirect(w, r, "/driver", http.StatusSeeOther)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "id": rp.ID, "after": rp.AfterOrd, "name": rp.Name})
+}

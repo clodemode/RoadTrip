@@ -28,6 +28,7 @@ func TestFeatures(t *testing.T) {
 				initRouteMeHereScenarios(t, sc)
 				initChesterRerouteScenarios(t, sc)
 				initChangeTripScenarios(t, sc)
+				initRoutingPointsScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

@@ -142,6 +142,11 @@
     var w = $('hud-waze');
     w.hidden = !nav;
     if (nav && h.waze) w.setAttribute('href', h.waze);
+    var via = $('hud-via');
+    if (via) {
+      setText('hud-via-name', h.via || '');
+      via.hidden = !(nav && h.via);
+    }
     var alt = $('hud-nav-alt');
     alt.hidden = !nav;
     if (nav && h.google) { $('hud-google').setAttribute('href', h.google); $('hud-apple').setAttribute('href', h.apple); }

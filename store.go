@@ -46,6 +46,10 @@ type Leg struct {
 	// Filled by the handlers for page rendering.
 	Checkpoints []Checkpoint `json:"-"`
 	Sights      []Sight      `json:"-"`
+	// RoutingPoints are places to drive through, in order along the leg. A
+	// routing point is never a stop: nothing checks in at it, and it is not
+	// in Checkpoints. It only ever becomes the place Navigate goes to next.
+	RoutingPoints []RoutingPoint `json:"-"`
 }
 
 // Checkpoint is a named point on a leg with its own time zone. The zone is
@@ -228,6 +232,15 @@ CREATE TABLE IF NOT EXISTS sights (
   lat    REAL NOT NULL,
   lng    REAL NOT NULL,
   kind   TEXT NOT NULL DEFAULT 'SIGHT'
+);
+CREATE TABLE IF NOT EXISTS routing_points (
+  id        INTEGER PRIMARY KEY,
+  leg_id    INTEGER NOT NULL REFERENCES legs(id) ON DELETE CASCADE,
+  after_ord INTEGER NOT NULL,
+  name      TEXT NOT NULL,
+  lat       REAL NOT NULL,
+  lng       REAL NOT NULL,
+  source    TEXT NOT NULL DEFAULT 'plan'
 );
 CREATE TABLE IF NOT EXISTS places (
   id        INTEGER PRIMARY KEY,
@@ -945,6 +958,11 @@ func (s *Store) Legs(rideSlug string) ([]Leg, error) {
 			return nil, err
 		}
 		out[i].Sights = sights
+		rps, err := s.RoutingByLeg(out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].RoutingPoints = rps
 	}
 	// The polylines leave through the same seam the checkpoints do: a vertex
 	// inside a private place's zone is replaced by that place's snapped point,
@@ -1400,6 +1418,14 @@ type seedCP struct {
 	Option, Choice               string
 }
 
+// seedRP is a routing point as a trip document gives it: a Point feature with
+// kind "routing", the leg it is on, and the checkpoint order it follows.
+type seedRP struct {
+	LegOrd, After int
+	Name          string
+	Lat, Lng      float64
+}
+
 type seedPlace struct {
 	Name     string
 	Lat, Lng float64
@@ -1419,6 +1445,7 @@ type seedData struct {
 	Legs        []seedLeg
 	Checkpoints []seedCP
 	Sights      []seedSight
+	Routing     []seedRP
 	Places      []seedPlace
 	// Options is what the document offers; Selection is what this parse took,
 	// fully resolved — every option answered and the start date filled in.
@@ -1725,6 +1752,13 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 			if lastCP == nil || cc.Ord > lastCP.Ord {
 				lastCP = &cc
 			}
+		case "routing":
+			name := strings.TrimSpace(pstr(p, "name"))
+			if name == "" {
+				return nil, fmt.Errorf("a routing point on leg %d has no name", legOrd)
+			}
+			sd.Routing = append(sd.Routing, seedRP{LegOrd: legOrd, After: int(pnum(p, "after")),
+				Name: name, Lat: xy[1], Lng: xy[0]})
 		case "candidate":
 			kind := pstr(p, "sight_kind")
 			if kind == "" {
@@ -1811,6 +1845,9 @@ func (s *Store) seedPlan(sd *seedData, after func(*sql.Tx) error) error {
 			legIDs[x.LegOrd], x.Name, x.Why, x.Lat, x.Lng, x.Kind); err != nil {
 			return fmt.Errorf("seed sight %q: %w", x.Name, err)
 		}
+	}
+	if err := insertPlanRouting(tx, legIDs, sd.Routing); err != nil {
+		return err
 	}
 	if err := replacePlaces(tx, r.Slug, sd.Places); err != nil {
 		return err
@@ -1981,7 +2018,11 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 			reasons = append(reasons, fmt.Sprintf("checkpoint %d %s and the new plan would put a different stop at %d", ord, why, ord))
 		}
 	}
-	return reasons, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	return routingConflicts(tx, sd, reasons)
 }
 
 // refreshPlan writes a parsed plan over an existing ride. prune is the
@@ -2146,6 +2187,19 @@ func (s *Store) refreshPlan(sd *seedData, prune bool, after func(*sql.Tx) error)
 			return n, fmt.Errorf("refresh sight %q: %w", x.Name, err)
 		}
 		n.Sights++
+	}
+	if prune {
+		// A trip document owns the routing points it carries, and only those:
+		// one added on the road (source 'road') is the trip-keeper's and a
+		// re-push never takes it away. planConflicts has already refused a
+		// document that would change the routing points of a leg driven.
+		if _, err := tx.Exec(`DELETE FROM routing_points WHERE source='plan'
+		  AND leg_id IN (SELECT id FROM legs WHERE ride_slug=?)`, r.Slug); err != nil {
+			return n, err
+		}
+		if err := insertPlanRouting(tx, legIDs, sd.Routing); err != nil {
+			return n, err
+		}
 	}
 	if err := replacePlaces(tx, r.Slug, sd.Places); err != nil {
 		return n, err
