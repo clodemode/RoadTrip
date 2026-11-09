@@ -105,6 +105,21 @@ func initRoutingPointsScenarios(t *testing.T, sc *godog.ScenarioContext) {
 			"leg": {slug}, "after": {fmt.Sprint(after)}, "name": {name}, "lat": {"42.5"}, "lng": {"-103"},
 		})
 	})
+	// On the ridge road, a place in each gap between stops, by the stop it follows.
+	sc.Step(`^the trip-keeper adds the routing point "([^"]*)" to day 1 after stop (\d) on the ridge road$`, func(name string, after int) {
+		at := map[int][2]string{1: {"40.5", "-100.55"}, 2: {"41.6", "-101.55"}}[after]
+		w.last = postForm(w.t, w.app, "/driver/routing", url.Values{
+			"leg": {"day-1-ridge"}, "after": {fmt.Sprint(after)}, "name": {name}, "lat": {at[0]}, "lng": {at[1]},
+		})
+	})
+	sc.Step(`^day 1 holds no routing point$`, func() error {
+		for _, l := range mustLegs(w.t, w.app, w.slug) {
+			if l.Slug == "day-1-ridge" && len(l.RoutingPoints) != 0 {
+				return fmt.Errorf("day 1 holds %d routing points", len(l.RoutingPoints))
+			}
+		}
+		return nil
+	})
 	sc.Step(`^the routing point is added$`, func() error {
 		if w.last.Code != http.StatusOK && w.last.Code != http.StatusSeeOther {
 			return fmt.Errorf("answered %d: %s", w.last.Code, w.last.Body.String())

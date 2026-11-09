@@ -228,10 +228,23 @@ func routingConflicts(tx *sql.Tx, sd *seedData, reasons []string) ([]string, err
 	return reasons, nil
 }
 
-// AddRoutingPoint is the trip-keeper adding a routing point on the road, to a
-// leg ahead. The same rules as the document: it sits where a routing point may
-// sit, is public, and the leg has not been driven (no post, nothing arrived at
-// or skipped). It adds a routing_points row and touches nothing else: no stop,
+// latestPassedOrd is the order of the last stop on a leg that is arrived at or
+// skipped, 0 when the car has passed none of them.
+func latestPassedOrd(leg *Leg) int {
+	last := 0
+	for _, c := range leg.Checkpoints {
+		if (c.ArrivedAt != "" || c.SkippedAt != "") && c.Ord > last {
+			last = c.Ord
+		}
+	}
+	return last
+}
+
+// AddRoutingPoint is the trip-keeper adding a routing point on the road, to the
+// leg being driven or one ahead. The same rules as the document: it sits where
+// a routing point may sit and is public. On a leg already underway it may not
+// sit behind the latest stop passed, so the road driven stays as it was and a
+// finished leg takes none. It adds a routing_points row and touches nothing else: no stop,
 // no post, no leg.
 func (s *Store) AddRoutingPoint(rideSlug, legSlug string, after int, name string, lat, lng float64) (*RoutingPoint, error) {
 	name = strings.TrimSpace(name)
@@ -265,18 +278,20 @@ func (s *Store) AddRoutingPoint(rideSlug, legSlug string, after int, name string
 	if inPrivateZoneOf(lat, lng, name, fuzzedOf(rideCheckpoints(legs))) {
 		return nil, fmt.Errorf("%w: that is at a private place", ErrRoutingRefused)
 	}
+	// The road already driven does not change: a point may not sit behind the
+	// latest stop the car has passed (arrived at or skipped) on this leg. The
+	// server holds no position here, so the stamps are the only evidence of
+	// progress; a point after the latest passed stop is ahead of the car by the
+	// same rule nextRoutingPoint uses to call a point passed, and a point
+	// anywhere later on the leg is further ahead still.
+	if passed := latestPassedOrd(leg); after < passed {
+		return nil, fmt.Errorf("%w: leg %d has been driven past stop %d and the road already driven does not change", ErrRoutingRefused, leg.Ord, passed)
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	driven, err := drivenLegs(tx, rideSlug)
-	if err != nil {
-		return nil, err
-	}
-	if driven[leg.Ord] {
-		return nil, fmt.Errorf("%w: leg %d has been driven and the road already driven does not change", ErrRoutingRefused, leg.Ord)
-	}
 	res, err := tx.Exec(`INSERT INTO routing_points (leg_id,after_ord,name,lat,lng,source) VALUES (?,?,?,?,?,?)`,
 		leg.ID, after, name, lat, lng, routingFromRoad)
 	if err != nil {

@@ -42,6 +42,55 @@ Feature: Routing points inform navigation
     Then the routing point is refused
     And the trip has 5 stops
 
+  Scenario: On the leg being driven a point ahead of the next open stop is added
+    Given a trip whose document carries no routing points
+    And the trip-keeper is signed in with the plan saved
+    And the car has arrived at "Alder"
+    When the trip-keeper adds the routing point "Pine Fork" to day 1 after stop 2 on the ridge road
+    Then the routing point is added
+    And the trip has 5 stops
+    When the car sits just after Alder on the ridge road
+    Then Navigate in Waze goes to "Birch Gate"
+    When the car sits past Birch Gate
+    Then Navigate in Waze goes to "Pine Fork"
+
+  Scenario: On the leg being driven a point between the car and the next open stop is the next target
+    Given a trip whose document carries no routing points
+    And the trip-keeper is signed in with the plan saved
+    And the car has arrived at "Alder"
+    When the trip-keeper adds the routing point "Pine Fork" to day 1 after stop 1 on the ridge road
+    Then the routing point is added
+    When the car sits just after Alder on the ridge road
+    Then Navigate in Waze goes to "Pine Fork"
+
+  Scenario: A point behind a stop the car is already past is refused and nothing changes
+    Given a trip whose document carries no routing points
+    And the trip-keeper is signed in with the plan saved
+    And the car has arrived at "Alder"
+    And the car has arrived at "Birch Gate"
+    When the trip-keeper adds the routing point "Pine Fork" to day 1 after stop 1 on the ridge road
+    Then the routing point is refused
+    And day 1 holds no routing point
+    And the trip has 5 stops
+
+  Scenario: A leg already finished takes no routing point
+    Given a trip whose document carries no routing points
+    And the trip-keeper is signed in with the plan saved
+    And the car has arrived at "Alder"
+    And the car has arrived at "Birch Gate"
+    And the car has arrived at "Cedar Camp"
+    When the trip-keeper adds the routing point "Pine Fork" to day 1 after stop 2 on the ridge road
+    Then the routing point is refused
+    And day 1 holds no routing point
+
+  Scenario: A point added on the road to a driven leg does not open the document's points to a rewrite
+    Given a trip whose document carries routing points
+    And the car has arrived at "Alder"
+    When the trip-keeper adds the routing point "Pine Fork" to day 1 after stop 2 on the ridge road
+    Then the routing point is added
+    When the document is pushed again with "Plum Bridge" renamed
+    Then the push is refused whole
+
   Scenario: Pushing the document again cannot rewrite the routing points of a leg already driven
     Given a trip whose document carries routing points
     And the car has arrived at "Birch Gate"
