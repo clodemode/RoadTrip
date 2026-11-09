@@ -142,7 +142,10 @@ func checkPlan(sd *seedData) error {
 			return fmt.Errorf("checkpoint %d is not at a [lng, lat]", c.Ord)
 		}
 	}
-	return checkLineEnds(sd, lineEnds)
+	if err := checkLineEnds(sd, lineEnds); err != nil {
+		return err
+	}
+	return checkRouting(sd)
 }
 
 // checkLineEnds holds every leg line to the checkpoints at its two ends. A

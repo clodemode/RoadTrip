@@ -208,6 +208,7 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/ride/active", a.requireAuth(a.rideActivate))
 	mux.Handle("GET /driver/rides.json", a.requireAuth(a.ridesJSON))
 	mux.Handle("POST /driver/plan", a.requireRide(a.planSave))
+	mux.Handle("POST /driver/routing", a.requireRide(a.routingAdd))
 	// The checklist carriage, its signed-in census, and the check-off.
 	mux.Handle("POST /driver/checklist", a.requireAuth(a.checklistPush))
 	mux.Handle("GET /driver/checklist.json", a.requireRide(a.checklistCensus))

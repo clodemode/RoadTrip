@@ -118,6 +118,7 @@
     <h1 class="hud-next" id="hud-next">{{if not .H.DriveStarted}}Start &middot; {{.H.StartName}}{{else if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</h1>
     {{if and .Driver (not .H.DriveStarted)}}<a class="btn btn-primary btn-lg start-drive" href="/driver/post">Start the drive</a>{{end}}
     <p class="hud-dist"{{if not .H.DriveStarted}} hidden{{end}}><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
+    <p class="hud-s" id="hud-via"{{if not (and $nav .H.Via)}} hidden{{end}}>Drive through <b id="hud-via-name">{{.H.Via}}</b> first</p>
     <a class="btn btn-primary hud-waze" id="hud-waze" href="{{if $nav}}{{.H.Waze}}{{else}}#{{end}}" rel="noopener"{{if not $nav}} hidden{{end}}>Navigate in Waze</a>
     <p class="nav-alt" id="hud-nav-alt"{{if not $nav}} hidden{{end}}><a class="btn btn-sm btn-outline-dark" id="hud-google" href="{{if $nav}}{{.H.Google}}{{else}}#{{end}}" rel="noopener">Google Maps</a> <a class="btn btn-sm btn-outline-dark" id="hud-apple" href="{{if $nav}}{{.H.Apple}}{{else}}#{{end}}" rel="noopener">Apple Maps</a></p>
     <ul class="hud-chips" id="hud-chips" aria-label="Hazards on this leg" aria-live="polite">

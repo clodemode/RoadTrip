@@ -63,6 +63,11 @@ type hudView struct {
 	Waze    string   `json:"waze"`
 	Google  string   `json:"google"`
 	Apple   string   `json:"apple"`
+	// Via is the routing point the links above go to when one lies ahead of the
+	// next stop: a place to drive through, never a stop. Empty when the links
+	// go to the stop itself. A Waze link holds one destination, so a routing
+	// point works by being the next one.
+	Via string `json:"via,omitempty"`
 
 	Hazards []hazardChip `json:"hazards,omitempty"`
 
@@ -218,6 +223,15 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving b
 			h.Waze, h.Google, h.Apple = nav.Waze, nav.Google, nav.Apple
 			la, ln := c.Lat, c.Lng
 			h.NextLat, h.NextLng = &la, &ln
+		}
+		// A routing point ahead of the stop is where the links go first. Its
+		// coordinate is the one the store holds; passing it moves them on.
+		if rp := nextRoutingPoint(leg, c.Ord, func(r RoutingPoint) (float64, bool) {
+			a, _, _, ok := alongLine(leg.Line, r.Lat, r.Lng)
+			return a, ok
+		}, posAlong, haveLine && haveBase); rp != nil {
+			nav := mapLinks(rp.Lat, rp.Lng, rp.Name)
+			h.Waze, h.Google, h.Apple, h.Via = nav.Waze, nav.Google, nav.Apple, rp.Name
 		}
 		// Do the clocks change somewhere ahead on this leg?
 		here := now.In(loadLoc(curTZ)).Format("MST")
