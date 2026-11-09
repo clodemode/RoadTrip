@@ -686,10 +686,26 @@ func dayOf(ride *Ride, legs []Leg, now time.Time) dayInfo {
 	}
 	if now.In(termLoc).Format("2006-01-02") > ride.EndDate {
 		d.Badge = "Arrived"
+		if driveUnfinished(legs) { // a date alone never says the car got there
+			d.Badge = "Still driving"
+		}
 		return d
 	}
 	d.Badge = "Day off"
 	return d
+}
+
+// driveUnfinished says the drive began and its last stop is still open.
+func driveUnfinished(legs []Leg) bool {
+	var last *Checkpoint
+	started := false
+	for i := range legs {
+		for j := range legs[i].Checkpoints {
+			last = &legs[i].Checkpoints[j]
+			started = started || last.ArrivedAt != "" || last.SkippedAt != ""
+		}
+	}
+	return started && last.ArrivedAt == "" && last.SkippedAt == ""
 }
 
 // defaultLeg is where a new post lands: today's leg, else the first before
@@ -701,7 +717,7 @@ func defaultLeg(legs []Leg, di dayInfo) *Leg {
 	if len(legs) == 0 {
 		return nil
 	}
-	if di.Badge == "Arrived" || di.Badge == "Day off" {
+	if di.Badge == "Arrived" || di.Badge == "Still driving" || di.Badge == "Day off" {
 		return &legs[len(legs)-1]
 	}
 	return &legs[0]
