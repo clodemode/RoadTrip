@@ -1441,13 +1441,16 @@ func legIndexOf(legs []Leg, id int64) int {
 	return -1
 }
 
-// arrivalAt is the photo's own time read as wall-clock time in the stop's
-// zone, else now. loc is the zone the form read the photo's clock in. A time
-// later than now (beyond futureSlack) is not believed: now is used and
-// fromPhone says so.
-func arrivalAt(photo *Photo, loc *time.Location, stopTZ string) (at time.Time, fromPhone bool) {
+// arrivalAt is when an arrival is stamped, by what vouched for it. Only a
+// photo-vouched arrival (the photo's own GPS said the car was there) takes the
+// photo's own time, read as wall-clock time in the stop's zone: loc is the zone
+// the form read the photo's clock in. A phone vouches at the moment it speaks
+// and the simulated car arrives now, so for them the photo's clock, which may
+// be hours old, never dates the arrival. A photo time later than now (beyond
+// futureSlack) is not believed: now is used and fromPhone says so.
+func arrivalAt(photo *Photo, loc *time.Location, stopTZ, vouchedBy string) (at time.Time, fromPhone bool) {
 	now := time.Now()
-	if photo != nil && photo.TakenAt != "" {
+	if vouchedBy == "photo" && photo != nil && photo.TakenAt != "" {
 		if t, ok := parseUTC(photo.TakenAt); ok {
 			lt := t.In(loc)
 			at = time.Date(lt.Year(), lt.Month(), lt.Day(), lt.Hour(), lt.Minute(), lt.Second(), 0, loadLoc(stopTZ))
@@ -1503,7 +1506,7 @@ func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, post *Post, photo *P
 			int(math.Round(haversineKm(v.lat, v.lng, open[0].Lat, open[0].Lng)))), nil
 	}
 	x := open[best]
-	at, timeFromPhone := arrivalAt(photo, loc, x.TZ)
+	at, timeFromPhone := arrivalAt(photo, loc, x.TZ, v.src)
 	// The last resolved point: the latest arrival, which is the start at worst.
 	var last *Checkpoint
 	all := rideCheckpoints(legs)
@@ -1512,21 +1515,23 @@ func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, post *Post, photo *P
 			last = &all[i]
 		}
 	}
-	// A car can only go so far in the time. The simulated car is exempt: it
-	// exists only on a KATE and its posts are tests with library photos, not
-	// the road. Whatever is decided here, the post is already saved and stays.
+	// No arrival is earlier than the latest stamp on the ride, the start
+	// included, whoever vouched, the simulated car too. A car can also only go
+	// so far in the time; the simulated car is exempt from that alone, as it
+	// exists only on a KATE and its posts are tests with library photos, not the
+	// road. Whatever is decided here, the post is already saved and stays.
 	var suffix string
 	if timeFromPhone {
 		suffix = "; the photo's time was ahead of the clock, so the phone's time was used"
 		_ = a.store.AddPostFlag(post.ID, flagTimeFromPhone)
 	}
-	if last != nil && v.src != "sim" {
+	if last != nil {
 		if lt, ok := parseUTC(last.ArrivedAt); ok {
 			if at.Before(lt) {
-				a.melt.Event("checkin_refused", map[string]any{"stop": x.Ord, "reason": "older_than_last_checkin"})
+				a.melt.Event("checkin_refused", map[string]any{"stop": x.Ord, "reason": "older_than_last_checkin", "vouched_by": v.src})
 				return "Posted at its own time; it is older than the last check-in, so the car stays where it was" + suffix, nil
 			}
-			if out, km, gapMin := outOfStep(last.Lat, last.Lng, lt, at, v); out {
+			if out, km, gapMin := outOfStep(last.Lat, last.Lng, lt, at, v); out && v.src != "sim" {
 				if err := a.store.AddPostFlag(post.ID, flagOutOfStep); err != nil {
 					return "", err
 				}
@@ -2188,7 +2193,8 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	a.melt.Event("post_created", map[string]any{"pin_source": post.PinSource, "has_photo": photo != nil,
 		"exif_gps": photo != nil && photo.Lat != nil, "fuzzed": pinFuzzed})
 	if starting {
-		at, _ := arrivalAt(photo, loc, start.TZ)
+		// Start keeps the photo's clock: it is a departure, not a check-in.
+		at, _ := arrivalAt(photo, loc, start.TZ, "photo")
 		if err := a.arriveCheckpoint(start, at, nil); err != nil {
 			fail("The post is saved, but the drive could not be started: " + err.Error())
 			return
