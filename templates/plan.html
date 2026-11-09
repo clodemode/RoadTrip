@@ -1,7 +1,5 @@
 {{template "head" .}}
 <section class="page-head plan-head">
-  <p class="crumb"><a href="/">&larr; {{.Ride.Name}}</a></p>
-  <h1>Plan</h1>
   <p class="plan-totals figure" id="plan-totals">
     <b id="plan-miles">{{.Sum.TotalMilesShown}} mi</b>
     over <b id="plan-daycount">{{.Sum.DayCount}} {{if eq .Sum.DayCount 1}}day{{else}}days{{end}}</b>

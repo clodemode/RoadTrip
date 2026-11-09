@@ -36,23 +36,15 @@
            alt="{{.CreatureAlt}}">
       <span class="mast-words">
         <span class="mast-title">{{.Ride.Name}}</span>
+        <span class="ride-state" data-state="{{.RideState}}">{{.RideStateLabel}}</span>
         <span class="mast-tag"><b>{{.CreatureName}}</b>{{trimPrefix .CreatureTag .CreatureName}}</span>
       </span>
     </a>
     <nav class="mast-nav" aria-label="Site">
       <span class="mast-links">
-        <a href="/">Ride</a>
-        <a href="/plan">Plan</a>
-        {{if and .Driver .HasChecklist}}<a href="/checklist">Checklist</a>{{end}}
-        <a href="/photos">Photos</a>
-        {{if .Driver}}<a href="/route.geojson">GeoJSON</a>{{end}}
-        {{if .Authed}}
-          {{if .Driver}}<a href="/driver/post" class="post-link">Post</a>{{end}}
-          {{if .ChesterOn}}<a href="/chester">Chester</a>{{end}}
-          {{if .Driver}}<a href="/driver/lodging">Lodging</a>{{end}}
-          <form method="post" action="/driver/logout"><button class="linkish">Sign out</button></form>
-        {{else}}
-          <a href="/driver/login">Sign in</a>
+        {{range .Menu}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}{{if .Post}} class="post-link"{{end}}>{{.Label}}</a>
+        {{end}}{{if .Authed}}<form method="post" action="/driver/logout"><button class="linkish">Sign out</button></form>
+        {{else}}<a href="/driver/login">Sign in</a>
         {{end}}
       </span>
     </nav>
@@ -63,21 +55,20 @@
     </a>
   </div>
 </header>
-{{if and .Authed (not .HUD)}}
-<nav class="driver-bar" aria-label="Driver tools">
-  {{if .Driver}}<a href="/driver/post">Post photo</a>{{end}}
-  {{if .ChesterOn}}<a href="/chester">Ask Chester</a>{{end}}
-  <a href="/plan">Plan</a>
-  {{if .Driver}}<a href="/checklist">Checklist</a>{{end}}
-  {{if .IsAdmin}}<a href="/driver/users">Users</a>{{end}}
-</nav>
-{{end}}
+{{template "drive_strip" .}}
+<div class="pagehead">
+  <nav class="crumbs" aria-label="Breadcrumb">
+    {{range $i, $c := .Crumbs}}{{if $i}}<span class="sep" aria-hidden="true">›</span>{{end}}{{if $c.Href}}<a href="{{$c.Href}}">{{$c.Label}}</a>{{else}}<span aria-current="page">{{$c.Label}}</span>{{end}}{{end}}
+  </nav>
+  <h1>{{.PageTitle}}</h1>
+</div>
 
 <main>
 {{end}}
 
 {{define "foot"}}
 </main>
+{{template "drive_strip_scripts" .}}
 <footer>
   <p>Route coordinates are planning-grade: town centroids, about a kilometre.
      Times are shown in the zone where they happened.</p>
@@ -172,3 +163,30 @@
   </details>
 </form>
 {{end}}
+
+{{/* drive_strip: Drive Tracks on every page while the ride is Active, for a
+     signed-in user only (the music routes are auth-gated). One copy: /driver
+     uses it too, so the ids exist once. These are full page loads: audio stops
+     when the page changes, and the phone will not start sound again without a
+     tap, so the saved place is offered as a one-tap Resume. */}}
+{{define "drive_strip"}}{{if .StripOn}}<section class="drive-strip" aria-label="Drive Tracks">
+  <button type="button" class="btn btn-sm btn-dark" id="hud-drivetracks"><span aria-hidden="true">&#127925;</span> Drive Tracks</button>
+  <div class="hud-player" id="rt-player" aria-label="RoadTracks player"{{if not .Resume}} hidden{{end}}>
+    <audio id="rt-audio" preload="none"></audio>
+    <img class="rt-art" id="rt-art" alt="" width="48" height="48" hidden>
+    <div class="rt-meta">
+      <b id="rt-title">{{with .Resume}}{{.Album}}{{end}}</b>
+      <span class="hud-s" id="rt-artist">{{with .Resume}}{{.Artist}}{{end}}</span>
+      <span class="hud-s" id="rt-track"></span>
+    </div>
+    <div class="rt-controls">
+      <button type="button" class="btn btn-dark rt-big" id="rt-play">Play</button>
+      <button type="button" class="btn btn-outline-dark rt-next" id="rt-next">Next</button>
+      {{with .Resume}}<button type="button" class="btn btn-primary rt-resume" id="rt-resume" data-album-id="{{.AlbumID}}" data-album="{{.Album}}" data-artist="{{.Artist}}" data-idx="{{.TrackIdx}}" data-pos="{{.PositionS}}">Resume {{.Album}}</button>{{end}}
+    </div>
+    <p class="hud-s" id="rt-status" role="status" aria-live="polite"></p>
+  </div>
+</section>{{end}}{{end}}
+
+{{define "drive_strip_scripts"}}{{if .StripOn}}{{if not .HUD}}<script defer src="/static/js/hud.js?v={{.V}}"></script>{{end}}
+<script defer src="/static/js/player.js?v={{.V}}"></script>{{end}}{{end}}

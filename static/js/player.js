@@ -216,5 +216,15 @@
     if (opening) return;
     asking = false; audio.pause(); show(); status(msg); playBtn();
   }
+  // Drive Tracks on a page that is not the driver screen: the same tap, the same
+  // function (hud.js exports it), no position of its own (a page with no GPS
+  // sends none; the server fills in a simulated drive's).
+  var dtStrip = $('hud-drivetracks');
+  if (dtStrip && !$('hud') && window.RTDriveTracks) dtStrip.addEventListener('click', function () {
+    if (dtStrip.disabled) return;
+    dtStrip.disabled = true;
+    window.RTDriveTracks({ fetch: window.fetch.bind(window), player: window.RTPlayer, body: 'source=drivetracks' })
+      .then(function () { dtStrip.disabled = false; });
+  });
   window.RTPlayer = { asking: ask, say: say, start: function (a) { open(a.album_id, { album: a.album, albumartist: a.albumartist, idx: 0 }, 0); } };
 })();

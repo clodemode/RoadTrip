@@ -2,7 +2,7 @@
 <section class="hero hero-sky">
   {{template "terrain" .PageLeg}}
   <div class="hero-top">
-    <h1>{{.Ride.Name}}</h1>
+    <p class="hero-name">{{.Ride.Name}}</p>
     <span class="badge day-badge">{{.Day.Badge}}</span>
   </div>
   {{if and .Driver (not .DriveStarted)}}<a class="btn btn-primary btn-lg start-drive" href="/driver/post">Start the drive</a>{{end}}

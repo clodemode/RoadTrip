@@ -463,6 +463,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 			data["Ride"] = &Ride{Name: "Roadtrip"}
 		}
 	}
+	a.chrome(r, name, data, authed, data["Driver"] == true)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if s, ok := data["Status"].(int); ok {
 		w.WriteHeader(s) // after the headers above, which a WriteHeader would freeze out

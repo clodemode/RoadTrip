@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -211,32 +210,21 @@ func initRoadtracksPlayerScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		do(kris, "POST", "/driver/freelance/mode", url.Values{"mode": {mode}})
 		return nil
 	})
-	tagRe := regexp.MustCompile(`<(/?)section\b[^>]*>`)
 	sc.Step(`^the player is on the driver page outside every mode section$`, func() error {
 		page := doAs(t, app, kris, "GET", "/driver", nil).Body.String()
 		at := strings.Index(page, `id="rt-player"`)
 		if at < 0 {
 			return fmt.Errorf("no player on the page")
 		}
+		// Since 2026-11-09 the player lives in the Drive Tracks strip under the
+		// banner, one copy for every page, so a mode change cannot move it: it
+		// is before the driver screen, outside every mode section.
 		hud := strings.Index(page, `<section class="hud" id="hud"`)
-		if hud < 0 || hud > at {
-			return fmt.Errorf("player is not inside the hud")
+		if hud < 0 || at > hud {
+			return fmt.Errorf("the player is not in the strip above the driver screen")
 		}
-		depth, roads := 0, 0
-		for _, m := range tagRe.FindAllStringSubmatchIndex(page[hud:at], -1) {
-			tag := page[hud+m[0] : hud+m[1]]
-			if page[hud+m[2]:hud+m[3]] == "/" {
-				depth--
-			} else {
-				depth++
-				if strings.Contains(tag, "hud-road") {
-					roads++
-				}
-			}
-		}
-		// The enclosing #hud is depth 1; the player's own tag opens at the same level, and it now sits above the road section.
-		if depth != 1 || roads != 0 {
-			return fmt.Errorf("player is nested inside a mode section (depth %d, mode sections before it %d)", depth, roads)
+		if n := strings.Count(page, `id="rt-player"`); n != 1 {
+			return fmt.Errorf("%d players on the page", n)
 		}
 		return nil
 	})

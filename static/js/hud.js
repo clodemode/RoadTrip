@@ -86,6 +86,8 @@
       .catch(function () { if (!started) d.player.say(DT_DOWN); });
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody, isMoving: isMoving, navTapBody: navTapBody, navResultBody: navResultBody, driveTracks: driveTracks };
+  // The other pages' Drive Tracks strip (player.js) reuses this one function.
+  if (typeof window !== 'undefined') window.RTDriveTracks = driveTracks;
   function sendBody(b) {
     if (b === null) return;
     try { if (navigator.sendBeacon) navigator.sendBeacon('/driver/telemetry', b); } catch (e) { /* telemetry never breaks the page */ }
