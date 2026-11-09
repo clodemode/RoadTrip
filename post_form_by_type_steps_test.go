@@ -38,6 +38,38 @@ func initPostFormByTypeScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		}
 		return nil
 	})
+	postJS := func() (string, error) {
+		js, err := os.ReadFile("static/js/post.js")
+		return string(js), err
+	}
+	sc.Step(`^a photo with no GPS is explained as normal for a camera shot$`, func() error {
+		js, err := postJS()
+		if err != nil {
+			return err
+		}
+		if strings.Contains(js, "none in this file") {
+			return fmt.Errorf("post.js still reports a camera shot as none in this file")
+		}
+		if !strings.Contains(js, "normal for a camera shot") {
+			return fmt.Errorf("post.js does not say a camera shot normally has no GPS")
+		}
+		return nil
+	})
+	sc.Step(`^that line says whether the phone's location will pin the post$`, func() error {
+		js, err := postJS()
+		if err != nil {
+			return err
+		}
+		for _, want := range []string{"location will pin it", "has not shared its location"} {
+			if !strings.Contains(js, want) {
+				return fmt.Errorf("post.js does not say %q", want)
+			}
+		}
+		if n := strings.Count(js, "sayNoExif();"); n < 3 {
+			return fmt.Errorf("the line is refreshed in %d places, want the photo read and both location answers", n)
+		}
+		return nil
+	})
 	sc.Step(`^the form has a "kind" radio for every post kind$`, func() error {
 		for _, k := range postKinds {
 			if !regexp.MustCompile(`<input[^>]*type="radio"[^>]*name="kind"[^>]*value="` + k.Value + `"[^>]*>`).MatchString(p.body) {
