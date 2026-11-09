@@ -1,0 +1,118 @@
+entries:
+- slug: spec-roadtrip-how-a-road-trip-progresses-start-legs-posts-check-ins-by-time-and-place-the-physics-of-travel-named-hours-and-routing-points-that-feed-the-waze-link
+  title: 'roadtrip: how a road trip, real or synthetic, progresses (Kris 2026-11-08): start, on a leg,
+    posts with or without place and time, check-ins inferred at a waypoint, interim destination or lodging,
+    the physics of how far a car can go, hours cards that name milestones, and routing points added on
+    the road that feed the Waze link'
+  domain: lore
+  lore_type: spec
+  app_scope: roadtrip
+  lair: all
+  character_slug: krispy
+  tags:
+  - gherkin
+  - checkin
+  - driver
+  - routing
+  - waze
+  status: design
+  description: Kris, 2026-11-08, phone-testing on the KATE. Written as if public. This Gherkin is the
+    statement of intent; some scenarios already hold (features/start_and_checkin.feature, photo_pin_and_skip_reason.feature,
+    marks_and_hours_bar.feature) and the rest need building. A builder moves each scenario into features/
+    as it binds it, RED first. A Waze link carries one destination and no via points, so a routing point
+    works by being the next place the link goes to.
+  dont: 'DONT check in a stop from a post with no place. DONT let an old photo move the car backward.
+    DONT drop a post for being out of step: keep it and flag it. DONT change an arrived stop, a post or
+    a leg with posts when adding a routing point, and DONT add a path around the plan guard. DONT make
+    a routing point a check-in stop. DONT name a private place on a card.'
+  do_this: |-
+    Feature: A road trip, real or synthetic, progresses the way a car does
+
+      Background:
+        Given a trip of ordered legs, each with stops of kind waypoint, interim destination or lodging
+
+      Rule: Start
+        Scenario: A vouched position at the start begins the drive
+          Given the drive has not started
+          When the traveller starts with a photo or phone position near the first stop
+          Then the first stop is departed at that photo's or phone's time, in that stop's zone
+          And the traveller is on the first leg
+        Scenario: A start far from the first stop is refused and says why
+          When the traveller starts from far away
+          Then the drive does not start and the distance is stated
+
+      Rule: On a leg, the app knows which leg you are on
+        Scenario: A post never asks which leg
+          Given the drive has started
+          When the traveller posts anything
+          Then the post lands on the current leg without being asked
+        Scenario Outline: A post may carry place and time, or not
+          When the traveller posts with place from <place> and time from <time>
+          Then the post is placed by <place> and dated by <time>
+          Examples:
+            | place          | time        |
+            | the photo      | the photo   |
+            | the phone      | the phone   |
+            | the camera now | the phone   |
+            | none           | the phone   |
+        Scenario: A photo without its own data takes the phone's, and says so
+          Given a photo with no location or time
+          When the phone gave both at posting
+          Then the post uses the phone's and records that it did
+
+      Rule: A check-in is inferred from place and time
+        Scenario Outline: Arriving near a stop checks in at it
+          Given the next stop is a <kind>
+          When a post's place is within reach of that stop
+          Then the stop is checked in at the post's own time and zone
+          Examples:
+            | kind                |
+            | waypoint            |
+            | interim destination |
+            | lodging             |
+        Scenario: A post with no place checks in nothing
+          When a post has no place
+          Then no stop is checked in
+        Scenario: A lodging ends the driving day
+          When a lodging is checked in
+          Then the next post that moves on begins the next day's leg
+        Scenario: Stops passed on the way are marked missed in order
+          When a post checks in past an open stop near the way the car came
+          Then that stop is missed, not arrived at
+
+      Rule: Think like a human, a car can only go so far in the time
+        Scenario: A position the car could not have reached does not check in
+          Given the last vouched position and time
+          When a new post implies a speed over the plausible road limit
+          Then no stop is checked in and the post is kept and flagged as out of step
+        Scenario: A photo older than the last check-in does not move the car back
+          When a photo's own time is before the last check-in
+          Then it is posted at its own time and the car's progress does not change
+        Scenario: A time in the future is not believed
+          When a post's time is later than now
+          Then the phone's time is used and the post says so
+        Scenario: Arrival estimates respect the time left
+          Then the arrival estimate is never earlier than the miles left allow at the road limit
+
+      Rule: The hours cards name where you will be
+        Scenario: Each hour names the nearest milestone along the way
+          When the hours timeline is shown
+          Then each hour names the nearest stop or routing point at that distance
+          And a private place is never named
+
+      Rule: Routing points inform navigation
+        Scenario: A routing point can be added on the road
+          When the trip-keeper adds a routing point to a leg ahead
+          Then it joins that leg in order, as a point to drive through and not a stop to check in at
+          And the road already driven does not change
+        Scenario: The Waze link goes to the next routing point or stop
+          Given a routing point lies ahead of the next stop
+          Then Navigate in Waze goes to that routing point
+          And passing it moves the link on to the next one
+        Scenario: Chester can propose a routing point, the trip-keeper taps to add it
+          When Chester proposes a routing point
+          Then it is added only when the trip-keeper taps Add
+  effort: L
+  impact: critical
+  triaged_at: '2026-11-09T01:01:17.117823+00:00'
+  triaged_by: krispy
