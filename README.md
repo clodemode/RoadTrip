@@ -490,6 +490,18 @@ day are two `LineString`s with the same `leg` and different choices. A choice
 may add a day and a checkpoint — then the checkpoints after it are written once
 per choice, with the `order` each has under that choice.
 
+A fork can change more than one thing at once: where the first night is spent
+changes the road of day 1 *and* which day-2 roads make sense. So a feature may
+carry `"when": {"day1": "pawilds", "night1": "charleston"}` and belong to the
+plans where every option named holds that choice (`option` + `choice` is the
+one-pair spelling of the same thing). An option may carry a `"when"` too:
+`{"id": "day2", "when": {"night1": "greensburg"}, …}` is **in force** only
+while Night 1 is Greensburg, and otherwise it is off the plan page and every
+feature that names it is off the plan. An option may only name options
+declared before it. A push checks the document under every combination of
+choices (at most 64), so no combination the page can offer is a plan that
+fails its checks.
+
 A leg may carry `"day": N` instead of a date. It is then dated from the ride's
 start date, and **the start date is part of the stored selection** — so a
 departure that slips a day is one saved field, not an edit to every leg. With
@@ -515,10 +527,15 @@ the plan for everyone. `GET /plan.json?opt-<option>=<choice>` answers "what
 would that cost" without saving anything.
 
 **A saved change never reaches what the road has made real.** It is refused
-whole — and says why — if the new plan would drop or re-route a leg that holds
-posts, or drop, renumber or replace a checkpoint that is arrived or holds
-posts. Moving the start date is never refused: it moves dates and nothing else.
-A re-pushed document is held to the same rule.
+whole — and says why — if the new plan would drop a leg that holds posts,
+re-route one that holds posts and has been driven to its last stop (or onto a
+road that misses a stop the car has already reached), or drop, renumber or
+replace a checkpoint that is arrived or holds posts. So a fork settled on the
+road — Night 1 moved from Greensburg to Charleston at the border — is taken
+with the day's posts and arrivals kept, because the leg row is refreshed in
+place; a different road for a day already driven is not. Moving the start date
+is never refused: it moves dates and nothing else. A re-pushed document is held
+to the same rule.
 
 **What a page says about a save is a fixed sentence.** After **Save this
 plan** the page comes back to the line under the button: `Saved.`, or

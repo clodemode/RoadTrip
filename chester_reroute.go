@@ -77,11 +77,13 @@ func (a *App) routeChoices(cx *chesterContext, legs []Leg, di dayInfo) string {
 	cx.plan, cx.choices, cx.start = st, saved, start
 	cx.locked, cx.started = map[string]string{}, map[string]bool{}
 
-	// A drive under way: the option whose road holds today's leg.
+	// A drive under way: every option whose choice holds today's leg.
 	if s := tripStart(legs); s != nil && s.ArrivedAt != "" && di.Today != nil {
 		for _, l := range st.Doc.Legs {
-			if l.Option != "" && l.Slug == di.Today.Slug {
-				cx.started[l.Option] = true
+			if l.Slug == di.Today.Slug {
+				for k := range l.When {
+					cx.started[k] = true
+				}
 			}
 		}
 	}
@@ -89,7 +91,11 @@ func (a *App) routeChoices(cx *chesterContext, legs []Leg, di dayInfo) string {
 	var b strings.Builder
 	b.WriteString("\n\nROUTE CHOICES. Switching one is proposed with propose_route_choice and decided by the trip-keeper's tap. " +
 		"Figures are the plan's own estimate, not traffic.")
+	force := st.Doc.inForce(saved)
 	for _, o := range st.Doc.Options {
+		if !force[o.ID] {
+			continue // tied to a choice not selected: not on this plan
+		}
 		fmt.Fprintf(&b, "\nOption [%s] %s", o.ID, o.Title)
 		if cx.started[o.ID] {
 			b.WriteString(" - IN PROGRESS: the car is on this leg now.")
@@ -155,6 +161,10 @@ func (cx *chesterContext) checkProposal(raw string) (*chesterProposalCard, strin
 	if !st.Doc.hasChoice(in.Option, in.Choice) {
 		return nil, fmt.Sprintf("no such choice %q for option %q", in.Choice, in.Option),
 			"There is no such choice. Use an option id and a choice id exactly as listed under ROUTE CHOICES."
+	}
+	if !st.Doc.inForce(cx.choices)[in.Option] {
+		return nil, fmt.Sprintf("option %q is not on the plan under the current choices", in.Option),
+			"That option is not on the plan under the current choices, so it was not listed. Propose only an option listed under ROUTE CHOICES."
 	}
 	if cx.choices[in.Option] == in.Choice {
 		return nil, "that choice is already selected", "That choice is already selected, so nothing changes. Say so in the answer."

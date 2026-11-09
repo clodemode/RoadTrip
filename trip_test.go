@@ -772,7 +772,7 @@ func TestPlanDataNeverCarriesAPrivateCoordinate(t *testing.T) {
 		for _, p := range pts {
 			vertices++
 			if leaked(p[1], p[0]) {
-				t.Errorf("leg %s (%s/%s) draws [%v, %v], inside a private place's mask", l.Slug, l.Option, l.Choice, p[0], p[1])
+				t.Errorf("leg %s (%v) draws [%v, %v], inside a private place's mask", l.Slug, l.When, p[0], p[1])
 			}
 		}
 	}
@@ -797,7 +797,7 @@ func TestPlanDataNeverCarriesAPrivateCoordinate(t *testing.T) {
 	fuzzed := 0
 	for _, c := range plan.Doc.Checkpoints {
 		if leaked(c.Lat, c.Lng) {
-			t.Errorf("checkpoint %d %s (%s/%s) is at [%v, %v], a raw private point", c.Ord, c.Name, c.Option, c.Choice, c.Lng, c.Lat)
+			t.Errorf("checkpoint %d %s (%v) is at [%v, %v], a raw private point", c.Ord, c.Name, c.When, c.Lng, c.Lat)
 		}
 		if c.Precision == precisionFuzzed {
 			fuzzed++
@@ -1070,12 +1070,17 @@ func TestSelectionGuardRefusesOnceTheCheckpointIsArrived(t *testing.T) {
 	}
 }
 
-// Once a leg holds a post, the road for that leg is spent — and a post is
-// never deleted by a plan change.
+// Once a leg holds a post and has been driven to its last stop, the road for
+// that leg is spent — and a post is never deleted by a plan change. (While
+// the leg is still being driven its road ahead may change: see
+// features/night_one_fork_settled_on_the_road.feature.)
 func TestSelectionGuardRefusesOnceTheLegHoldsAPost(t *testing.T) {
 	app := activeTripApp(t)
 	legs := mustLegs(t, app, fixtureSlug)
 	post := mustCreate(t, app, &Post{LegID: legs[0].ID, Kind: "note", TZ: "America/Chicago", Title: "on the ridge"})
+	if err := app.store.SetArrived(cpByOrd(t, app, 3).ID, time.Now(), nil); err != nil {
+		t.Fatal(err)
+	}
 
 	w := postForm(t, app, "/driver/plan", url.Values{"opt-day1": {"valley"}})
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "leg 1 holds 1 post") {
@@ -1170,6 +1175,10 @@ func TestTripRePushIsGuardedToo(t *testing.T) {
 	app := activeTripApp(t)
 	legs := mustLegs(t, app, fixtureSlug)
 	post := mustCreate(t, app, &Post{LegID: legs[1].ID, Kind: "note", TZ: "America/Chicago", Title: "day two"})
+	// Day 2 has been driven to its last stop: its road is spent.
+	if err := app.store.SetArrived(cpByOrd(t, app, 4).ID, time.Now(), nil); err != nil {
+		t.Fatal(err)
+	}
 	original, _ := os.ReadFile(tripPath(app.dataDir, fixtureSlug))
 	// The new document gives day 2 a different road.
 	changed := bytes.Replace(fixtureTrip(t), []byte(`"slug": "day-2"`), []byte(`"slug": "day-2-detour"`), 1)

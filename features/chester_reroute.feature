@@ -45,6 +45,7 @@ Feature: Chester proposes a switch among the trip's planned route choices
   Scenario: Chester is told a choice is locked and a proposal for it is dropped
     Given the trip has route choices
     And a post is already made on leg 1
+    And day 1 has been driven to its last stop
     And Chester will propose switching "day1" to "valley" because "It is shorter."
     And Chester will then say "That road is already driven."
     When the trip-keeper asks Chester about the road "Can I switch day one?"
@@ -84,6 +85,7 @@ Feature: Chester proposes a switch among the trip's planned route choices
     And Chester will then say "Tap Save to switch."
     When the trip-keeper asks Chester about the road "Which road should I take on day one?"
     And a post is made on leg 1 before the trip-keeper taps Save
+    And day 1 has been driven to its last stop
     And the trip-keeper taps Save on the proposal
     Then the plan save answers "refused" with a reason
     And the saved plan takes "ridge" for "day1"
@@ -104,6 +106,7 @@ Feature: Chester proposes a switch among the trip's planned route choices
     And Chester will then say "Tap Save to switch."
     When the trip-keeper asks Chester about the road "Which road should I take on day one?"
     And a post is made on leg 1 before the trip-keeper taps Save
+    And day 1 has been driven to its last stop
     And the trip-keeper taps Save on the proposal
     Then the plan save answers "refused" with a reason
     And the log row's proposal outcome is "refused" with a reason

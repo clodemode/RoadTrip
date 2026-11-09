@@ -1,9 +1,11 @@
 /* roadtrip — the planner.
  *
  * window.PLAN is {doc, choices, start, saved} from the server. doc carries
- * every road the plan could take: a leg with no option is part of every plan,
- * a leg with option + choice belongs to that choice only. Checkpoints work the
- * same way. Every coordinate in doc has already been through the store's fuzz
+ * every road the plan could take: a leg with no "when" is part of every plan,
+ * a leg with one belongs to the plans where every option it names holds the
+ * choice named. Checkpoints work the same way. An option may itself carry a
+ * "when": it is in force, and its fieldset shown, only while the choice it
+ * names is selected. Every coordinate in doc has already been through the store's fuzz
  * seam — a private place is its snapped cell and no line runs to its door —
  * so nothing here needs to, or may, know a real one.
  *
@@ -27,7 +29,24 @@
   var allBtn = document.getElementById('plan-all');
   var mapEl = document.getElementById('map');
 
-  function taken(f) { return !f.option || state.choices[f.option] === f.choice; }
+  /* Which options are in force under the current choices: one with a "when"
+     only while every option it names is in force and holds the choice named.
+     Options are declared in order and name only earlier ones. Recomputed at
+     each render, read by taken(). */
+  var force = {};
+  function refreshForce() {
+    force = {};
+    (doc.options || []).forEach(function (o) {
+      var on = true;
+      Object.keys(o.when || {}).forEach(function (k) { if (!force[k] || state.choices[k] !== o.when[k]) on = false; });
+      force[o.id] = on;
+    });
+  }
+  function taken(f) {
+    var w = f.when;
+    if (!w) return true;
+    return Object.keys(w).every(function (k) { return force[k] && state.choices[k] === w[k]; });
+  }
   function round1(v) { return Math.round(v * 10) / 10; }
   function fixed1(v) { return round1(v).toFixed(1); }
   function thousands(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
@@ -100,7 +119,7 @@
          chosen from the map. */
       var hit = L.polyline(pts, { weight: 26, opacity: 0.01, color: '#000' }).addTo(map);
       hit.on('click', function () {
-        if (leg.option && !taken(leg)) { choose(leg.option, leg.choice); }
+        if (leg.when && !taken(leg)) { chooseAll(leg.when); }
         else { zoomDay(leg.day); }
       });
       lines.push({ leg: leg, line: line, hit: hit, pts: pts });
@@ -212,6 +231,8 @@
   }
 
   function render() {
+    refreshForce();
+    showOptions();
     var sum = summarize();
     /* A day that the new selection no longer has cannot stay in focus. */
     if (focusDay && !sum.days.some(function (d) { return d.day === focusDay; })) { focusDay = 0; }
@@ -221,17 +242,35 @@
     if (allBtn) allBtn.hidden = !focusDay;
   }
 
-  function choose(option, choice) {
-    state.choices[option] = choice;
+  /* chooseAll takes every choice in pairs at once: a road on the map may be
+     tied to two options, and switching to it means switching both. */
+  function chooseAll(pairs) {
+    Object.keys(pairs).forEach(function (k) { state.choices[k] = pairs[k]; });
     if (form) {
       Array.prototype.forEach.call(form.querySelectorAll('input[type=radio]'), function (r) {
-        if (r.name === 'opt-' + option) r.checked = r.value === choice;
+        var k = r.name.slice(4);
+        if (Object.prototype.hasOwnProperty.call(pairs, k)) r.checked = r.value === pairs[k];
       });
     }
     /* A message from the last save is about a plan this is no longer. */
     Array.prototype.forEach.call(document.querySelectorAll('.plan-msg'), function (m) { m.hidden = true; });
     syncURL();
     render();
+  }
+
+  function choose(option, choice) {
+    var pairs = {};
+    pairs[option] = choice;
+    chooseAll(pairs);
+  }
+
+  /* An option not in force leaves the form; its radios keep their value, so
+     switching back brings the same choice with it. */
+  function showOptions() {
+    Array.prototype.forEach.call(document.querySelectorAll('.plan-opt'), function (fs) {
+      var id = (fs.id || '').replace(/^opt-/, '');
+      if (id && Object.prototype.hasOwnProperty.call(force, id)) fs.hidden = !force[id];
+    });
   }
 
   if (form) {

@@ -12,7 +12,7 @@
 
 <form id="plan-form" class="plan-form" method="get" action="/plan">
   {{range $o := .Opts}}
-  <fieldset class="plan-opt">
+  <fieldset class="plan-opt" id="opt-{{$o.ID}}"{{if not $o.InForce}} hidden{{end}}>
     <legend>{{$o.Title}}</legend>
     <div class="plan-choices">
       {{range $o.Choices}}
