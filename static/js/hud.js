@@ -46,7 +46,46 @@
   // The two nav telemetry bodies: the tap, sent at once, and its outcome.
   function navTapBody(app, mode) { return telemetryBody('nav_tap', { app: app, mode: mode }); }
   function navResultBody(app, mode, hidden) { return telemetryBody('nav_result', { app: app, mode: mode, hidden: !!hidden }); }
-  if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody, isMoving: isMoving, navTapBody: navTapBody, navResultBody: navResultBody };
+  // Drive Tracks. One tap asks Chester for one album and the card player plays
+  // it; the page never leaves and opens no tab. The sentences below are what the
+  // card says when there is no album. Pure but for the deps, so node can run it.
+  var DT_NONE = 'Chester found no album; search below', DT_DOWN = 'Music library unavailable';
+  function readLines(resp, onLine) {
+    var rd = resp.body && resp.body.getReader ? resp.body.getReader() : null;
+    if (!rd) return resp.text().then(function (t) { t.split('\n').forEach(onLine); });
+    var dec = new TextDecoder(), buf = '';
+    function pump() {
+      return rd.read().then(function (x) {
+        if (x.done) { if (buf) onLine(buf); return; }
+        buf += dec.decode(x.value, { stream: true });
+        var i;
+        while ((i = buf.indexOf('\n')) >= 0) { onLine(buf.slice(0, i)); buf = buf.slice(i + 1); }
+        return pump();
+      });
+    }
+    return pump();
+  }
+  function driveTracks(d) {
+    d.player.asking('Asking Chester\u2026');
+    var started = false, err = '';
+    function line(l) {
+      if (!l || !l.trim()) return;
+      var ev;
+      try { ev = JSON.parse(l); } catch (e) { return; }
+      if (ev.t === 'music' && !started) {
+        var c = (ev.music || [])[0];
+        if (c && c.album_id > 0) { started = true; d.player.start({ album_id: c.album_id, album: c.album, albumartist: c.artist }); }
+      } else if (ev.t === 'error' && ev.d) err = ev.d;
+    }
+    return d.fetch('/chester/ask', { method: 'POST', credentials: 'same-origin',
+      headers: { 'Accept': 'application/x-ndjson', 'Content-Type': 'application/x-www-form-urlencoded' }, body: d.body })
+      .then(function (r) {
+        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (o) { d.player.say((o && o.error) || DT_DOWN); });
+        return readLines(r, line).then(function () { if (!started) d.player.say(err || DT_NONE); });
+      })
+      .catch(function () { if (!started) d.player.say(DT_DOWN); });
+  }
+  if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody, isMoving: isMoving, navTapBody: navTapBody, navResultBody: navResultBody, driveTracks: driveTracks };
   function sendBody(b) {
     if (b === null) return;
     try { if (navigator.sendBeacon) navigator.sendBeacon('/driver/telemetry', b); } catch (e) { /* telemetry never breaks the page */ }
@@ -318,6 +357,20 @@
         .catch(function () { setText('rt-msg', 'Music library unavailable'); });
     });
   }
+
+  // --- Drive Tracks: one tap, Chester picks, the card plays ----------------------
+  // The tap calls asking() first, in the gesture, so the phone allows the sound
+  // that follows. The position goes the way Find picks sends it; a simulated drive
+  // sends none and the server fills it in.
+  var dtBtn = $('hud-drivetracks');
+  if (dtBtn) dtBtn.addEventListener('click', function () {
+    if (!window.RTPlayer || dtBtn.disabled) return;
+    var body = new URLSearchParams({ source: 'drivetracks' });
+    if (fix) { body.set('lat', fix.latitude.toFixed(4)); body.set('lng', fix.longitude.toFixed(4)); }
+    dtBtn.disabled = true;
+    driveTracks({ fetch: window.fetch.bind(window), player: window.RTPlayer, body: body.toString() })
+      .then(function () { dtBtn.disabled = false; });
+  });
 
   // --- telemetry: nav taps, script errors, the page view -------------------------
   // The tap is sent at once (a beacon survives the page going away); how it

@@ -105,3 +105,32 @@ test('the nav tap and its outcome are two shapes, and the tap no longer carries 
   assert.deepEqual(JSON.parse(navResultBody('apple', 'destined', true)), { event: 'nav_result', fields: { app: 'apple', mode: 'destined', hidden: true } });
   assert.equal(JSON.parse(navResultBody('google', 'trip', false)).fields.hidden, false);
 });
+
+test('the Drive Tracks tap unlocks the card first, then posts source=drivetracks with the fix and starts the album', async () => {
+  const order = []; let click = null, geoOk = null;
+  const btn = fakeEl(); btn.addEventListener = (ev, f) => { if (ev === 'click') click = f; };
+  const ctx = {
+    document: { getElementById: (id) => (id === 'hud-drivetracks' ? btn : fakeEl()), createElement: () => fakeEl(), hidden: false, addEventListener() {} },
+    navigator: { onLine: true, geolocation: { watchPosition(ok) { geoOk = ok; return 1; } } },
+    window: { addEventListener() {}, location: { search: '', pathname: '/driver' },
+      RTPlayer: { asking: () => order.push('asking'), say: (m) => order.push('say:' + m), start: (a) => order.push('start:' + a.album_id) } },
+    setInterval() { return 1; }, setTimeout() { return 1; },
+    fetch(url, opts) {
+      if (url === '/chester/ask') {
+        order.push('post:' + opts.body);
+        const body = '{"t":"music","music":[{"album_id":42,"album":"A","artist":"B"}]}\n{"t":"done"}\n';
+        return Promise.resolve({ ok: true, text: async () => body });
+      }
+      return new Promise(() => {});
+    },
+    encodeURIComponent, Date, Math, JSON, Promise, URLSearchParams, TextDecoder, console,
+  };
+  ctx.window.fetch = ctx.fetch; ctx.window.document = ctx.document;
+  vm.runInNewContext(readFileSync(new URL('./hud.js', import.meta.url), 'utf8'), ctx);
+  geoOk({ coords: { latitude: 30.2672, longitude: -97.7431, accuracy: 10 } });
+  click();
+  assert.equal(order[0], 'asking', 'the card is unlocked inside the tap, before any request');
+  await settle(); await settle(); await settle();
+  assert.equal(order[1], 'post:source=drivetracks&lat=30.2672&lng=-97.7431');
+  assert.equal(order[2], 'start:42');
+});

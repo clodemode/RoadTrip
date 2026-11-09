@@ -1030,6 +1030,8 @@ type chesterResult struct {
 	Synth  bool
 	Places []chesterPlace
 	Music  []chesterMusicCard // albums recommended from the library, built by the server
+	// MusicDown is true when a library search could not reach the library.
+	MusicDown bool
 	// Proposal is the one route switch Chester proposed that the plan checks
 	// out; nil when none, or when every one was dropped (Notes says why).
 	Proposal *chesterProposalCard
@@ -1367,6 +1369,7 @@ rounds:
 	}
 	if tunes != nil {
 		res.Music = tunes.cards
+		res.MusicDown = tunes.down
 		if len(tunes.cards) > 0 {
 			res.Notes = append(res.Notes, "showed "+strconv.Itoa(len(tunes.cards))+" album card(s) from the music library")
 		}
@@ -1508,6 +1511,8 @@ type ChesterQuery struct {
 	UsageJSON json.RawMessage `json:"usage_json"`
 	Partial   string          `json:"partial,omitempty"`
 	Places    []chesterPlace  `json:"places"`
+	// Music is the album cards the question showed, as the page got them.
+	Music []chesterMusicCard `json:"music"`
 	// Proposal is the route switch Chester proposed on this question, as
 	// {option, choice, why, outcome}; absent when it proposed none.
 	Proposal     json.RawMessage `json:"proposal,omitempty"`
@@ -1572,6 +1577,10 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 	if err != nil || q.Places == nil {
 		places = []byte("[]")
 	}
+	music, err := json.Marshal(q.Music)
+	if err != nil || q.Music == nil {
+		music = []byte("[]")
+	}
 	usage := q.UsageJSON
 	if len(usage) == 0 || !json.Valid(usage) {
 		usage = json.RawMessage("[]")
@@ -1579,12 +1588,12 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 	res, err := s.db.Exec(`INSERT INTO chester_queries
 	  (ride_slug,asked_at,tz,mode,preset,question,prompt_version,model,served_model,effort,first_ms,total_ms,
 	   tokens_in,tokens_out,cache_read,cache_write,searches,usd,answer,places,stop_reason,error,note,
-	   pos_lat,pos_lng,pos_source,pos_label,partial,usd_estimated,answer_synth,usage_json,user,proposal)
-	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	   pos_lat,pos_lng,pos_source,pos_label,partial,usd_estimated,answer_synth,usage_json,user,proposal,music)
+	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		q.Ride, q.AskedAt, q.TZ, q.Mode, q.Preset, q.Question, q.PromptVersion, q.Model, q.ServedModel, q.Effort,
 		q.FirstMS, q.TotalMS, q.TokensIn, q.TokensOut, q.CacheRead, q.CacheWrite, q.Searches, q.USD,
 		q.Answer, string(places), q.StopReason, q.Error, q.Note, q.PosLat, q.PosLng, q.PosSource, q.PosLabel,
-		q.Partial, q.USDEstimated, q.AnswerSynth, string(usage), q.User, string(q.Proposal))
+		q.Partial, q.USDEstimated, q.AnswerSynth, string(usage), q.User, string(q.Proposal), string(music))
 	if err != nil {
 		return err
 	}
@@ -1595,18 +1604,18 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 const chesterCols = `id,ride_slug,asked_at,tz,mode,preset,question,prompt_version,model,served_model,effort,
   first_ms,total_ms,tokens_in,tokens_out,cache_read,cache_write,searches,usd,answer,places,stop_reason,error,note,
   pos_lat,pos_lng,pos_source,pos_label,verdict,checked_against,verdict_note,chester_value,reference_value,
-  value_unit,verdict_at,partial,usd_estimated,answer_synth,usage_json,user,proposal`
+  value_unit,verdict_at,partial,usd_estimated,answer_synth,usage_json,user,proposal,COALESCE(music,'[]')`
 
 func scanChester(sc interface{ Scan(...any) error }) (ChesterQuery, error) {
 	var q ChesterQuery
-	var places, usage, proposal string
+	var places, usage, proposal, music string
 	var first sql.NullInt64
 	var lat, lng, cv, rv sql.NullFloat64
 	err := sc.Scan(&q.ID, &q.Ride, &q.AskedAt, &q.TZ, &q.Mode, &q.Preset, &q.Question, &q.PromptVersion,
 		&q.Model, &q.ServedModel, &q.Effort, &first, &q.TotalMS, &q.TokensIn, &q.TokensOut, &q.CacheRead,
 		&q.CacheWrite, &q.Searches, &q.USD, &q.Answer, &places, &q.StopReason, &q.Error, &q.Note,
 		&lat, &lng, &q.PosSource, &q.PosLabel, &q.Verdict, &q.Checked, &q.VerdictNote, &cv, &rv, &q.Unit, &q.VerdictAt,
-		&q.Partial, &q.USDEstimated, &q.AnswerSynth, &usage, &q.User, &proposal)
+		&q.Partial, &q.USDEstimated, &q.AnswerSynth, &usage, &q.User, &proposal, &music)
 	if err != nil {
 		return q, err
 	}
@@ -1631,6 +1640,9 @@ func scanChester(sc interface{ Scan(...any) error }) (ChesterQuery, error) {
 	}
 	if err := json.Unmarshal([]byte(places), &q.Places); err != nil || q.Places == nil {
 		q.Places = []chesterPlace{}
+	}
+	if err := json.Unmarshal([]byte(music), &q.Music); err != nil || q.Music == nil {
+		q.Music = []chesterMusicCard{}
 	}
 	return q, nil
 }

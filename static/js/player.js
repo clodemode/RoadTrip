@@ -48,6 +48,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var audio = $('rt-audio');
   var album = null, tracks = [], cur = 0, lastPos = 0, fails = 0, refetched = false, opening = false, waitTimer = null, startAt = 0;
+  // asking: Drive Tracks has unlocked the element with the silent clip and is waiting for Chester's album.
+  var asking = false;
 
   function setText(id, v) { var el = $(id); if (el) el.textContent = v; }
   function status(v) { setText('rt-status', v); }
@@ -124,7 +126,7 @@
 
   function open(id, from, at) {
     if (opening) return;
-    opening = true; fails = 0; refetched = false;
+    opening = true; asking = false; fails = 0; refetched = false;
     show(); status('Loading…');
     setText('rt-title', from && from.album || ''); setText('rt-artist', from && from.albumartist || ''); setText('rt-track', '');
     waitTimer = setTimeout(function () { if (opening) status('Waking the music library…'); }, 2000);
@@ -176,14 +178,14 @@
     if (a) marks();
   }, true);
 
-  audio.addEventListener('ended', function () { if (!opening) next(); });
-  audio.addEventListener('error', onError);
+  audio.addEventListener('ended', function () { if (!opening && !asking) next(); });
+  audio.addEventListener('error', function () { if (!asking) onError(); });
   audio.addEventListener('timeupdate', function () { if (!opening) lastPos = audio.currentTime || 0; });
   audio.addEventListener('loadedmetadata', function () {
     if (startAt > 0 && !opening) { try { audio.currentTime = startAt; } catch (e) { /* seek is best effort */ } startAt = 0; }
   });
-  audio.addEventListener('playing', function () { if (opening) return; fails = 0; refetched = false; status(''); playBtn(); marks(); });
-  audio.addEventListener('pause', function () { if (opening) return; playBtn(); marks(); sendState(); });
+  audio.addEventListener('playing', function () { if (opening || asking) return; fails = 0; refetched = false; status(''); playBtn(); marks(); });
+  audio.addEventListener('pause', function () { if (opening || asking) return; playBtn(); marks(); sendState(); });
 
   var pb = $('rt-play');
   if (pb) pb.addEventListener('click', function () {
@@ -200,5 +202,19 @@
     rb.hidden = true;
   });
 
-  window.RTPlayer = { start: function (a) { open(a.album_id, { album: a.album, albumartist: a.albumartist, idx: 0 }, 0); } };
+  // Drive Tracks. asking() is called inside the tap: it unlocks sound for the
+  // page and shows the card with a line; the album comes later, from start().
+  // say() ends the wait with a plain sentence when there is no album.
+  function ask(msg) {
+    if (opening) return;
+    asking = true; show(); status(msg || '');
+    setText('rt-title', ''); setText('rt-artist', ''); setText('rt-track', '');
+    audio.src = SILENT;
+    try { var p = audio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) { /* start() reports */ }
+  }
+  function say(msg) {
+    if (opening) return;
+    asking = false; audio.pause(); show(); status(msg); playBtn();
+  }
+  window.RTPlayer = { asking: ask, say: say, start: function (a) { open(a.album_id, { album: a.album, albumartist: a.albumartist, idx: 0 }, 0); } };
 })();

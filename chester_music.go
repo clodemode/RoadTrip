@@ -41,17 +41,22 @@ Music. When the traveller asks for music, call search_music with an artist or an
 type chesterMusicLib struct {
 	svc  *roadtracksSvc
 	melt *meltSink
+	// one caps the cards at a single album: Drive Tracks asks for exactly one.
+	one bool
 }
 
 // chesterMusicCard is an album as the page gets it. Href is built here from
 // the library's own answer; Label is always "Play".
 type chesterMusicCard struct {
-	Album  string `json:"album"`
-	Artist string `json:"artist"`
-	Year   int    `json:"year,omitempty"`
-	Why    string `json:"why"`
-	Href   string `json:"href"`
-	Label  string `json:"label"`
+	// AlbumID is the library's own number for the album. It is what the card
+	// player is started with; it carries no address and no key.
+	AlbumID int64  `json:"album_id,omitempty"`
+	Album   string `json:"album"`
+	Artist  string `json:"artist"`
+	Year    int    `json:"year,omitempty"`
+	Why     string `json:"why"`
+	Href    string `json:"href"`
+	Label   string `json:"label"`
 }
 
 // chesterMusicRun is one question's music state. Nothing outlives the question.
@@ -62,10 +67,19 @@ type chesterMusicRun struct {
 	cards []chesterMusicCard
 	shown map[string]bool
 	drops int
+	// down is set when a search could not reach the library.
+	down bool
 }
 
 func newChesterMusicRun(lib *chesterMusicLib) *chesterMusicRun {
 	return &chesterMusicRun{lib: lib, refs: map[string]trackAlbum{}, byURL: map[string]string{}, shown: map[string]bool{}}
+}
+
+func (m *chesterMusicRun) limit() int {
+	if m.lib.one {
+		return 1
+	}
+	return chesterMusicCards
 }
 
 // chesterMusicTools are the two tools offered when the library is on.
@@ -115,14 +129,24 @@ func (m *chesterMusicRun) search(ctx context.Context, raw string) (string, bool)
 	albums, err := m.lib.svc.search(ctx, q)
 	if err != nil {
 		m.lib.melt.Event("chester_music_search", map[string]any{"qlen": len(q), "count": 0, "status": 502})
+		m.down = true
 		return chesterMusicDown, true
 	}
+	// An album the library says it cannot play is never offered: it is dropped
+	// before any reference is numbered, so the model cannot pick it.
+	playable := albums[:0:0]
+	for _, a := range albums {
+		if a.Playable {
+			playable = append(playable, a)
+		}
+	}
+	albums = playable
 	if len(albums) > chesterMusicResults {
 		albums = albums[:chesterMusicResults]
 	}
 	m.lib.melt.Event("chester_music_search", map[string]any{"qlen": len(q), "count": len(albums), "status": 200})
 	if len(albums) == 0 {
-		return "No album in the library matched. Say so, or try one different search.", false
+		return "No playable album in the library matched. Say so, or try one different search.", false
 	}
 	var b strings.Builder
 	for _, a := range albums {
@@ -156,14 +180,14 @@ func (m *chesterMusicRun) show(raw string) string {
 	}
 	for _, it := range in.Albums {
 		a, ok := m.refs[strings.TrimSpace(it.Ref)]
-		if !ok || m.shown[a.URL] || len(m.cards) >= chesterMusicCards {
+		if !ok || m.shown[a.URL] || len(m.cards) >= m.limit() {
 			if !ok {
 				m.drops++
 			}
 			continue
 		}
 		m.shown[a.URL] = true
-		m.cards = append(m.cards, chesterMusicCard{Album: cleanLine(a.Album, 120), Artist: cleanLine(a.Albumartist, 120),
+		m.cards = append(m.cards, chesterMusicCard{AlbumID: a.ID, Album: cleanLine(a.Album, 120), Artist: cleanLine(a.Albumartist, 120),
 			Year: a.Year, Why: cleanLine(it.Why, 300), Href: a.URL, Label: "Play"})
 	}
 	if len(m.cards) == 0 {

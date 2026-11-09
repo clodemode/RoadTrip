@@ -48,7 +48,7 @@
   <nav class="hud-tools hud-left" aria-label="Driver tools, left">
     {{if .Driver}}<a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>{{if or .DriveStarted .Aimless .Destined}}Post photo{{else}}Start the drive{{end}}</a>{{end}}
     {{if .ChesterOn}}<a class="hud-tool" href="/chester"><span class="hud-ico" aria-hidden="true">&#128172;</span>Ask Chester</a>{{end}}
-    {{if .TracksOn}}<a class="hud-tool" id="hud-drivetracks" href="{{.TracksURL}}" target="_blank" rel="noopener"><span class="hud-ico" aria-hidden="true">&#127925;</span>Drive Tracks</a>{{end}}
+    {{if .TracksOn}}<button type="button" class="hud-tool" id="hud-drivetracks"><span class="hud-ico" aria-hidden="true">&#127925;</span>Drive Tracks</button>{{end}}
   </nav>
 
   {{if .Aimless}}<section class="hud-road hud-free" id="hud-aimless" aria-label="FreeLance drive, no destination">
