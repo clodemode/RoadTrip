@@ -373,6 +373,7 @@ func TestChesterRefusesAnonymous(t *testing.T) {
 	if strings.Contains(send(t, app, "GET", "/", "", "", nil).Body.String(), `href="/chester"`) {
 		t.Error("an anonymous page links to Chester")
 	}
+	startTheDrive(t, app) // Planning leaves Chester out of the menu; an Active ride has it
 	if !strings.Contains(send(t, app, "GET", "/", testToken, "", nil).Body.String(), `href="/chester"`) {
 		t.Error("the signed-in masthead has no link to Chester while it is on")
 	}

@@ -1,7 +1,6 @@
 {{template "head" .}}
 <section class="card narrow">
   <div class="card-body">
-    <h1>Sign in</h1>
     <p class="muted">Posting is for the driver.{{if .SitePrivate}} The whole site is private for now &mdash; sign in to see the map and the timeline.{{else}} The map and the timeline are public.{{end}}</p>
     {{with .Error}}<p class="error">{{.}}</p>{{end}}
     <form method="post" action="/driver/login" class="d-flex flex-column gap-3">

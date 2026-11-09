@@ -78,15 +78,16 @@ h2 { margin: 1.5rem 0 .5rem; }
 /* --- hero ------------------------------------------------------------------- */
 .hero { padding: 1.2rem 0 .8rem; }
 .hero-top { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
-.hero h1 { margin: 0; font-size: 1.45rem; line-height: 1.15; }
+.hero h1, .hero .hero-name { margin: 0; font-size: 1.45rem; line-height: 1.15; font-weight: 700; letter-spacing: -.01em; }
 .hero-line { margin: .5rem 0 .2rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .hero-line b { font-size: 1.05rem; }
 .cast { margin: .1rem 0 .8rem; font-size: .875rem; color: var(--bs-secondary-color); }
 .crumb { margin: 0 0 .4rem; font-size: .9rem; }
-.crumb a { display: inline-flex; align-items: center; min-height: 44px; }
+.crumb a, .leg-nav a { display: inline-flex; align-items: center; min-height: 44px; }
+.leg-nav { margin: 0 0 .4rem; font-size: .9rem; display: flex; flex-wrap: wrap; gap: 0 1rem; }
 .page-head { padding: 1rem 0 .5rem; }
 .page-head h1 { margin: 0 0 .25rem; }
-@media (min-width: 576px) { .hero h1 { font-size: 1.8rem; } }
+@media (min-width: 576px) { .hero h1, .hero .hero-name { font-size: 1.8rem; } }
 
 .leg-strip { list-style: none; margin: .6rem 0 0; padding: 0 0 .3rem; display: flex; gap: .6rem;
   overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -349,7 +350,8 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
    Stages of steps, then questions, then sources. Phone first: one column,
    every control at least 44px, long words and web addresses wrap. The edit
    controls open in place, under the step they belong to. */
-.cl-head h1 { overflow-wrap: anywhere; }
+.cl-head h1, .cl-head .cl-title { overflow-wrap: anywhere; }
+.cl-head .cl-title { font-size: 1.2rem; margin: .2rem 0; }
 .cl-head .crumb { margin: 0; }
 .cl-intro { margin: .3rem 0 .6rem; }
 .cl-disclaimer { margin: .6rem 0; padding: .6rem .8rem; border: 1px solid var(--ds-hairline);
@@ -479,8 +481,6 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 .ch-vb.on { background: var(--ds-primary); color: #fff; border-color: var(--ds-primary); }
 
 /* Signed-in tool bar: one compact row under the masthead, never shown to visitors. */
-.driver-bar { display: flex; flex-wrap: wrap; gap: .25rem .5rem; padding: .35rem 16px; background: #f3f4f6; border-bottom: 1px solid #d1d5db; font-size: .9rem; }
-.driver-bar a { padding: .25rem .6rem; border-radius: .4rem; background: #fff; border: 1px solid #d1d5db; text-decoration: none; }
 
 /* --- the driver screen (HUD) ---------------------------------------------
    Portrait, one light theme. Gauges across the top, thumb tools down both
@@ -574,3 +574,22 @@ button.hud-tool { width: 100%; font-family: inherit; cursor: pointer; }
 .hud-tracks { grid-area: tracks; background: #fff; border: 3px solid #111827; border-radius: 1rem; padding: .6rem .7rem; }
 .hud-tracks .hud-dest .form-control { flex: 1 1 auto; width: auto; }
 .rt-list:empty { display: none; }
+
+/* --- the state, the strip, the breadcrumb (Kris 2026-11-09) ------------------
+   One light theme. The menu wraps in tidy rows at phone width; the Drive
+   Tracks strip is a compact band under the banner, shown only while Active. */
+.ride-state { align-self: flex-start; padding: 0 .5rem; border-radius: 1rem; font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; background: rgba(255,255,255,.16); color: var(--rt-mast-ink); border: 1px solid rgba(255,255,255,.35); }
+.ride-state[data-state="active"] { background: #fff; color: #14532d; border-color: #fff; }
+.mast-links a[aria-current="page"] { color: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: .3rem; }
+@media (max-width: 575px) { .mast-links { font-size: .88rem; } .mast-links a, .mast-links .linkish { padding: 0 .4rem; } }
+.pagehead { max-width: 1000px; margin: 0 auto; padding: .5rem 16px 0; }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0 .4rem; font-size: .9rem; color: #4b5563; }
+.crumbs a { display: inline-flex; align-items: center; min-height: 44px; }
+.crumbs .sep { color: #9ca3af; }
+.crumbs [aria-current="page"] { font-weight: 600; color: #111827; }
+.pagehead h1 { margin: 0 0 .25rem; }
+.drive-strip { max-width: 1000px; margin: .4rem auto 0; padding: .45rem 16px; background: #f3f4f6; border-bottom: 1px solid #d1d5db; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .8rem; }
+.drive-strip .hud-player { grid-area: auto; flex: 1 1 14rem; border-width: 2px; border-radius: .7rem; padding: .4rem .6rem; }
+.drive-strip .rt-big { font-size: 1.1rem; padding: .5rem; }
+.drive-strip .rt-next { font-size: 1rem; padding: .5rem .9rem; }

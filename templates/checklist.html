@@ -1,8 +1,7 @@
 {{template "head" .}}
 <section class="page-head cl-head">
-  <p class="crumb"><a href="/">&larr; {{.Ride.Name}}</a></p>
   {{if .CL}}
-  <h1>{{.CL.Title}}</h1>
+  <h2 class="cl-title">{{.CL.Title}}</h2>
   {{with .CL.Intro}}<p class="cl-intro">{{.}}</p>{{end}}
   <p class="cl-disclaimer" role="note">{{.CL.Disclaimer}}</p>
   <p class="cl-progress figure">
@@ -10,7 +9,6 @@
     {{if .CL.Summary.Questions}}<span class="muted">&middot; {{.CL.Summary.Answered}} of {{.CL.Summary.Questions}} questions answered</span>{{end}}
   </p>
   {{else}}
-  <h1>Checklist</h1>
   <p class="muted">This trip has no checklist.</p>
   {{end}}
   {{if .Error}}<p class="error" role="alert">Not saved: {{.Error}}.</p>{{end}}

@@ -1,7 +1,6 @@
 {{template "head" .}}
 <section class="card narrow admin">
   <div class="card-body">
-  <h1>Users</h1>
   {{with .Error}}<p class="error">{{.}}</p>{{end}}
   {{if .ShownPassword}}
   <div class="notice">

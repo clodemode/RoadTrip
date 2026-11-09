@@ -29,26 +29,9 @@
     <ul class="rt-list" id="rt-list"></ul>
   </section>{{end}}
 
-  {{if .TracksOn}}<section class="hud-player" id="rt-player" aria-label="RoadTracks player"{{if not .Resume}} hidden{{end}}>
-    <audio id="rt-audio" preload="none"></audio>
-    <img class="rt-art" id="rt-art" alt="" width="64" height="64" hidden>
-    <div class="rt-meta">
-      <b id="rt-title">{{with .Resume}}{{.Album}}{{end}}</b>
-      <span class="hud-s" id="rt-artist">{{with .Resume}}{{.Artist}}{{end}}</span>
-      <span class="hud-s" id="rt-track"></span>
-    </div>
-    <div class="rt-controls">
-      <button type="button" class="btn btn-dark rt-big" id="rt-play">Play</button>
-      <button type="button" class="btn btn-outline-dark rt-next" id="rt-next">Next</button>
-      {{with .Resume}}<button type="button" class="btn btn-primary rt-resume" id="rt-resume" data-album-id="{{.AlbumID}}" data-album="{{.Album}}" data-artist="{{.Artist}}" data-idx="{{.TrackIdx}}" data-pos="{{.PositionS}}">Resume {{.Album}}</button>{{end}}
-    </div>
-    <p class="hud-s" id="rt-status" role="status" aria-live="polite"></p>
-  </section>{{end}}
-
   <nav class="hud-tools hud-left" aria-label="Driver tools, left">
     {{if .Driver}}<a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>{{if or .DriveStarted .Aimless .Destined}}Post photo{{else}}Start the drive{{end}}</a>{{end}}
     {{if .ChesterOn}}<a class="hud-tool" href="/chester"><span class="hud-ico" aria-hidden="true">&#128172;</span>Ask Chester</a>{{end}}
-    {{if .TracksOn}}<button type="button" class="hud-tool" id="hud-drivetracks"><span class="hud-ico" aria-hidden="true">&#127925;</span>Drive Tracks</button>{{end}}
   </nav>
 
   {{if .Aimless}}<section class="hud-road hud-free" id="hud-aimless" aria-label="FreeLance drive, no destination">
@@ -58,7 +41,7 @@
       <button class="btn btn-sm btn-dark" name="mode" value="aimless" aria-current="true">FreeLance: Aimless</button>
     </form>
     <p class="hud-k">Aimless</p>
-    <h1 class="hud-next">Just driving</h1>
+    <p class="hud-next">Just driving</p>
     <p class="hud-dist"><b id="aim-clock">—</b> <span class="hud-s" id="aim-tz"></span></p>
     <p class="hud-dist"><b id="free-miles">0 mi</b> driven this session <span class="hud-s">(counted from GPS, forgotten when you leave this mode)</span></p>
     <p class="hud-free-msg" id="free-msg" role="status" aria-live="polite"></p>
@@ -88,7 +71,7 @@
     {{if .FreeErr}}<p class="hud-free-err" role="status">{{.FreeErr}}</p>{{end}}
     {{if .FreeHave}}<p class="hud-s" role="status">Detour in force: the plan is unchanged. Tap Trip to go back to it; a restart forgets the detour.</p>{{end}}
     <p class="hud-k">Destination</p>
-    <h1 class="hud-next" id="free-dest">{{if .FreeHave}}{{.FreeLabel}}{{else}}Not set{{end}}</h1>
+    <p class="hud-next" id="free-dest">{{if .FreeHave}}{{.FreeLabel}}{{else}}Not set{{end}}</p>
     <p class="hud-dist"><b id="free-miles">—</b> to go &middot; arrive <b id="free-eta">—</b> <span class="hud-s">(traffic-aware, destination clock)</span></p>
     <p class="hud-s" id="free-delay" hidden></p>
     <p class="hud-free-msg" id="free-msg" role="status" aria-live="polite"></p>
@@ -115,7 +98,7 @@
     </form>
     {{$nav := and .H.HasNext .H.DriveStarted}}
     <p class="hud-k" id="hud-k">{{if .H.DriveStarted}}Next{{else}}Drive{{end}}</p>
-    <h1 class="hud-next" id="hud-next">{{if not .H.DriveStarted}}Start &middot; {{.H.StartName}}{{else if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</h1>
+    <p class="hud-next" id="hud-next">{{if not .H.DriveStarted}}Start &middot; {{.H.StartName}}{{else if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</p>
     {{if and .Driver (not .H.DriveStarted)}}<a class="btn btn-primary btn-lg start-drive" href="/driver/post">Start the drive</a>{{end}}
     <p class="hud-dist"{{if not .H.DriveStarted}} hidden{{end}}><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
     <p class="hud-s" id="hud-via"{{if not (and $nav .H.Via)}} hidden{{end}}>Drive through <b id="hud-via-name">{{.H.Via}}</b> first</p>
@@ -151,5 +134,4 @@
 </section>
 <script defer src="/static/js/sim.js?v={{.V}}"></script>
 <script defer src="/static/js/hud.js?v={{.V}}"></script>
-<script defer src="/static/js/player.js?v={{.V}}"></script>
 {{template "foot" .}}

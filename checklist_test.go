@@ -958,8 +958,8 @@ func TestFrontPageSummarisesTheChecklist(t *testing.T) {
 	if !strings.Contains(home, `<a href="/checklist">Checklist</a>: 0 of 5 done &middot; 0 of 3 questions answered`) {
 		t.Error("/ does not summarise the checklist as 0 of 5 done")
 	}
-	if strings.Count(home, `href="/checklist"`) != 3 {
-		t.Errorf("/ has %d links to the checklist; want the masthead's, the driver bar's and the summary's", strings.Count(home, `href="/checklist"`))
+	if strings.Count(home, `href="/checklist"`) != 2 {
+		t.Errorf("/ has %d links to the checklist; want the masthead's and the summary's", strings.Count(home, `href="/checklist"`))
 	}
 	markOK(t, app, clStep, "call-ahead", url.Values{})
 	markOK(t, app, clStep, "inspect", url.Values{})

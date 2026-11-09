@@ -69,6 +69,7 @@ func TestPagesAndMapDataUseTheMarks(t *testing.T) {
 func TestSignedInToolsAreSignedInOnly(t *testing.T) {
 	app := chesterApp(t, newAPIStub(t))
 	pat := asUser(t, app, "pat", roleEditor)
+	startTheDrive(t, app) // Chester is in the menu while the ride is Active
 	for _, p := range []string{"/", "/plan", "/checklist", "/photos"} {
 		anon := doAs(t, app, nil, "GET", p, nil).Body.String()
 		for _, bad := range []string{"driver-bar", "waze.com", "/chester?q="} {
@@ -77,7 +78,7 @@ func TestSignedInToolsAreSignedInOnly(t *testing.T) {
 			}
 		}
 		in := doAs(t, app, pat, "GET", p, nil).Body.String()
-		for _, want := range []string{`class="driver-bar"`, `href="/driver/post"`, `href="/chester"`, `href="/plan"`, `href="/checklist"`} {
+		for _, want := range []string{`aria-label="Site"`, `href="/driver/post"`, `href="/chester"`, `href="/plan"`} {
 			if !strings.Contains(in, want) {
 				t.Errorf("%s: signed-in bar lacks %s", p, want)
 			}

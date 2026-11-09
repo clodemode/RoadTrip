@@ -33,6 +33,7 @@ func TestFeatures(t *testing.T) {
 				initChesterRerouteScenarios(t, sc)
 				initChangeTripScenarios(t, sc)
 				initRoutingPointsScenarios(t, sc)
+				initMenuStateScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

@@ -1,12 +1,12 @@
 {{template "head" .}}
 <div class="terrain-band">{{template "terrain" .PageLeg}}</div>
 <section class="hero leg-hero" style="--leg:{{legColor .Leg.Ord}}">
-  <p class="crumb"><a href="/">&larr; {{.Ride.Name}}</a>
-    {{with .Prev}}&middot; <a href="/legs/{{.Slug}}">&larr; Previous: d{{.Ord}}</a>{{end}}
-    {{with .Next}}&middot; <a href="/legs/{{.Slug}}">Next: d{{.Ord}} &rarr;</a>{{end}}
+  <p class="leg-nav">
+    {{with .Prev}}<a href="/legs/{{.Slug}}">&larr; Previous: d{{.Ord}}</a>{{end}}
+    {{with .Next}}<a href="/legs/{{.Slug}}">Next: d{{.Ord}} &rarr;</a>{{end}}
   </p>
   <div class="hero-top">
-    <h1>{{if .Multi}}<span class="leg-n big">d{{.Leg.Ord}}</span> {{end}}{{.Leg.Name}}</h1>
+    {{if .Multi}}<p class="hero-name"><span class="leg-n big">d{{.Leg.Ord}}</span></p>{{end}}
     {{if and .Day.Today (eq .Day.Today.ID .Leg.ID)}}<span class="badge day-badge">Today</span>{{end}}
   </div>
   <p class="hero-line">
