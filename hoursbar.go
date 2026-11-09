@@ -191,7 +191,22 @@ func nearestName(p [2]float64, known []namedPoint) string {
 // knownPlaces is every point an hour may be named after: the ride's checkpoints
 // that are not private, its sights, and its places.
 func knownPlaces(legs []Leg, places []Place) []namedPoint {
+	return knownMilestones(legs, places, nil)
+}
+
+// knownMilestones is knownPlaces with the ride's routing points too: an hour is
+// named for the nearest stop or routing point, whichever is nearer. A routing
+// point is a place to drive through, never a stop, and it is only a name here.
+// Nothing sitting in a private place's zone, or carrying a private place's
+// name, names an hour, whatever kind of place it is: a routing point is
+// checked when it is written, and again here on the way out.
+func knownMilestones(legs []Leg, places []Place, routing []RoutingPoint) []namedPoint {
 	var out []namedPoint
+	for _, r := range routing {
+		if strings.TrimSpace(r.Name) != "" {
+			out = append(out, namedPoint{r.Name, r.Lat, r.Lng})
+		}
+	}
 	for _, l := range legs {
 		for _, c := range l.Checkpoints {
 			if c.Precision != precisionFuzzed && strings.TrimSpace(c.Name) != "" {
@@ -207,7 +222,14 @@ func knownPlaces(legs []Leg, places []Place) []namedPoint {
 	for _, p := range places {
 		out = append(out, namedPoint{p.Name, p.Lat, p.Lng})
 	}
-	return out
+	privates := fuzzedOf(rideCheckpoints(legs))
+	kept := out[:0]
+	for _, k := range out {
+		if !inPrivateZoneOf(k.Lat, k.Lng, k.Name, privates) {
+			kept = append(kept, k)
+		}
+	}
+	return kept
 }
 
 // legBar is one leg's hours bar as a page draws it.
@@ -246,7 +268,11 @@ func latestArrived(legs []Leg, i int) *Checkpoint {
 // forward from the latest arrived stop on it, or from its origin.
 func (a *App) hoursBars(slug string, all []Leg, which []int, multi bool) hoursView {
 	places, _ := a.store.Places(slug)
-	known := knownPlaces(all, places)
+	var routing []RoutingPoint
+	for _, l := range all {
+		routing = append(routing, l.RoutingPoints...)
+	}
+	known := knownMilestones(all, places, routing)
 	mph := a.avgMPH(slug)
 	out := hoursView{Multi: multi}
 	for _, i := range which {

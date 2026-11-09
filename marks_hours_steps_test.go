@@ -40,7 +40,7 @@ var mhTowns = map[string][2]float64{
 	"Toronto":    {43.6532, -79.3832},
 }
 
-func initMarksScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) {
+func initMarksScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) *marksWorld {
 	m := &marksWorld{t: t, sim: sim}
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		*m = marksWorld{t: t, sim: sim}
@@ -72,6 +72,7 @@ func initMarksScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) 
 	sc.Step(`^the stop 60 miles from Kingston is skipped$`, m.skippedAtSixty)
 	sc.Step(`^the hours bar reads "h0" at that stop first$`, m.barFirstAtStop)
 	sc.Step(`^its h1 tick lies 60 miles further along the planned line$`, m.h1SixtyFurther)
+	return m
 }
 
 // mhLine is the planned line from Kingston to Toronto the hours scenarios
