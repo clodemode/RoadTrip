@@ -1917,6 +1917,12 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if leg == nil {
+		// A form opened before the active trip changed carries a leg that is
+		// not in this ride: the post lands where a new post lands by default
+		// (the leg the form pre-selects), never a refusal the driver cannot act on.
+		leg = defaultLeg(rv.Legs, dayOf(rv.Ride, rv.Legs, time.Now()))
+	}
+	if leg == nil {
 		fail("Pick a leg.")
 		return
 	}

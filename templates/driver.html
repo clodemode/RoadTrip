@@ -19,6 +19,32 @@
     <p class="hud-cross" id="hud-offroute" role="status"{{if not .H.OffRoute}} hidden{{end}}>{{if .H.OffRoute}}Off route, {{.H.OffRouteMiles}} mi from the plan{{end}}</p>
   </header>{{end}}
 
+  {{if .TracksOn}}<section class="hud-tracks" id="rt-card" aria-label="RoadTracks">
+    <h2 class="hud-k">RoadTracks</h2>
+    <form class="hud-dest" id="rt-form" role="search" aria-label="RoadTracks">
+      <input class="form-control" id="rt-q" type="search" placeholder="Album or artist" autocomplete="off" aria-label="Search the music library">
+      <button class="btn btn-outline-dark" type="submit">Search</button>
+    </form>
+    <p class="hud-s" id="rt-msg" role="status" aria-live="polite"></p>
+    <ul class="rt-list" id="rt-list"></ul>
+  </section>{{end}}
+
+  {{if .TracksOn}}<section class="hud-player" id="rt-player" aria-label="RoadTracks player"{{if not .Resume}} hidden{{end}}>
+    <audio id="rt-audio" preload="none"></audio>
+    <img class="rt-art" id="rt-art" alt="" width="64" height="64" hidden>
+    <div class="rt-meta">
+      <b id="rt-title">{{with .Resume}}{{.Album}}{{end}}</b>
+      <span class="hud-s" id="rt-artist">{{with .Resume}}{{.Artist}}{{end}}</span>
+      <span class="hud-s" id="rt-track"></span>
+    </div>
+    <div class="rt-controls">
+      <button type="button" class="btn btn-dark rt-big" id="rt-play">Play</button>
+      <button type="button" class="btn btn-outline-dark rt-next" id="rt-next">Next</button>
+      {{with .Resume}}<button type="button" class="btn btn-primary rt-resume" id="rt-resume" data-album-id="{{.AlbumID}}" data-album="{{.Album}}" data-artist="{{.Artist}}" data-idx="{{.TrackIdx}}" data-pos="{{.PositionS}}">Resume {{.Album}}</button>{{end}}
+    </div>
+    <p class="hud-s" id="rt-status" role="status" aria-live="polite"></p>
+  </section>{{end}}
+
   <nav class="hud-tools hud-left" aria-label="Driver tools, left">
     {{if .Driver}}<a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>{{if or .DriveStarted .Aimless .Destined}}Post photo{{else}}Start the drive{{end}}</a>{{end}}
     {{if .ChesterOn}}<a class="hud-tool" href="/chester"><span class="hud-ico" aria-hidden="true">&#128172;</span>Ask Chester</a>{{end}}
@@ -48,13 +74,6 @@
       <button type="submit" class="btn btn-outline-dark" id="free-reask-go">Re-ask Chester</button>
     </form>
     <div id="free-picks"></div>
-    {{if .TracksOn}}<h2 class="hud-k">RoadTracks</h2>
-    <form class="hud-dest" id="rt-form" role="search" aria-label="RoadTracks">
-      <input class="form-control" id="rt-q" type="search" placeholder="Album or artist" autocomplete="off" aria-label="Search the music library">
-      <button class="btn btn-outline-dark" type="submit">Search</button>
-    </form>
-    <p class="hud-s" id="rt-msg" role="status" aria-live="polite"></p>
-    <ul class="rt-list" id="rt-list"></ul>{{end}}
     {{if .ChesterOn}}<p class="hud-s"><a href="/driver/chester/memory">What Chester remembers about you</a></p>{{end}}
   </section>{{else if .Destined}}<section class="hud-road hud-free" id="hud-free" aria-label="FreeLance drive">
     <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
@@ -87,13 +106,6 @@
       <button type="submit" class="btn btn-outline-dark" id="free-reask-go">Re-ask Chester</button>
     </form>
     <div id="free-picks"></div>
-    {{if .TracksOn}}<h2 class="hud-k">RoadTracks</h2>
-    <form class="hud-dest" id="rt-form" role="search" aria-label="RoadTracks">
-      <input class="form-control" id="rt-q" type="search" placeholder="Album or artist" autocomplete="off" aria-label="Search the music library">
-      <button class="btn btn-outline-dark" type="submit">Search</button>
-    </form>
-    <p class="hud-s" id="rt-msg" role="status" aria-live="polite"></p>
-    <ul class="rt-list" id="rt-list"></ul>{{end}}
     {{if .ChesterOn}}<p class="hud-s"><a href="/driver/chester/memory">What Chester remembers about you</a></p>{{end}}
   </section>{{else}}<section class="hud-road" aria-label="Road ahead">
     <form class="hud-mode" method="post" action="/driver/freelance/mode" aria-label="Drive mode">
@@ -112,29 +124,6 @@
       <li class="hud-chip unknown">Weather: checking&hellip;</li>
       <li class="hud-chip unknown">Traffic: checking&hellip;</li>
     </ul>
-    {{if .TracksOn}}<h2 class="hud-k">RoadTracks</h2>
-    <form class="hud-dest" id="rt-form" role="search" aria-label="RoadTracks">
-      <input class="form-control" id="rt-q" type="search" placeholder="Album or artist" autocomplete="off" aria-label="Search the music library">
-      <button class="btn btn-outline-dark" type="submit">Search</button>
-    </form>
-    <p class="hud-s" id="rt-msg" role="status" aria-live="polite"></p>
-    <ul class="rt-list" id="rt-list"></ul>{{end}}
-  </section>{{end}}
-
-  {{if .TracksOn}}<section class="hud-player" id="rt-player" aria-label="RoadTracks player"{{if not .Resume}} hidden{{end}}>
-    <audio id="rt-audio" preload="none"></audio>
-    <img class="rt-art" id="rt-art" alt="" width="64" height="64" hidden>
-    <div class="rt-meta">
-      <b id="rt-title">{{with .Resume}}{{.Album}}{{end}}</b>
-      <span class="hud-s" id="rt-artist">{{with .Resume}}{{.Artist}}{{end}}</span>
-      <span class="hud-s" id="rt-track"></span>
-    </div>
-    <div class="rt-controls">
-      <button type="button" class="btn btn-dark rt-big" id="rt-play">Play</button>
-      <button type="button" class="btn btn-outline-dark rt-next" id="rt-next">Next</button>
-      {{with .Resume}}<button type="button" class="btn btn-primary rt-resume" id="rt-resume" data-album-id="{{.AlbumID}}" data-album="{{.Album}}" data-artist="{{.Artist}}" data-idx="{{.TrackIdx}}" data-pos="{{.PositionS}}">Resume {{.Album}}</button>{{end}}
-    </div>
-    <p class="hud-s" id="rt-status" role="status" aria-live="polite"></p>
   </section>{{end}}
 
   {{if and .SimAllowed (not .SimOn)}}<details class="hud-sim">

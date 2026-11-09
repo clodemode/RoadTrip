@@ -486,7 +486,7 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
    Portrait, one light theme. Gauges across the top, thumb tools down both
    sides, the next decision in the middle, the phone's telemetry underneath.
    Red is never used here: a number in red reads as a loss. */
-.hud { display: grid; grid-template-columns: 76px 1fr 76px; grid-template-areas: "top top top" "left road right" "player player player" "bottom bottom bottom"; gap: .6rem; padding: .6rem 0 1rem; color: #111827; }
+.hud { display: grid; grid-template-columns: 76px 1fr 76px; grid-template-areas: "top top top" "tracks tracks tracks" "player player player" "left road right" "bottom bottom bottom"; gap: .6rem; padding: .6rem 0 1rem; color: #111827; }
 .hud-top { grid-area: top; display: flex; flex-wrap: wrap; gap: .4rem; }
 .hud-gauge { flex: 1 1 28%; min-width: 92px; background: #fff; border: 2px solid #111827; border-radius: .6rem; padding: .3rem .5rem; display: flex; flex-direction: column; }
 .hud-k { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #374151; margin: 0; }
@@ -566,3 +566,10 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 .rt-next { font-size: 1.1rem; padding: .9rem 1.2rem; border-radius: .8rem; }
 .rt-resume { flex: 1 1 100%; font-weight: 700; }
 .hud-player > #rt-status { flex: 1 1 100%; min-height: 1.4em; margin: 0; font-weight: 600; }
+
+/* The RoadTracks card: one full-width block directly under the gauges in every
+   mode, the search box taking the whole row, the result box only once it has
+   something to show. */
+.hud-tracks { grid-area: tracks; background: #fff; border: 3px solid #111827; border-radius: 1rem; padding: .6rem .7rem; }
+.hud-tracks .hud-dest .form-control { flex: 1 1 auto; width: auto; }
+.rt-list:empty { display: none; }
