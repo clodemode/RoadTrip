@@ -209,6 +209,11 @@ func initContinuousMusicScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	sc.Step(`^the player shell is switched off$`, func() error {
+		build()
+		app.shellOff = true
+		return nil
+	})
 	sc.Step(`^the page has no player shell and no frame$`, func() error {
 		if frameRe.MatchString(page) {
 			return fmt.Errorf("the page is a shell")

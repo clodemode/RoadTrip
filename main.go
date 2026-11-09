@@ -104,6 +104,7 @@ type App struct {
 	free       *freeSvc
 	sim        *simSvc
 	simAllowed bool
+	shellOff   bool // PLAYER_SHELL=0: plain pages, no player frame (the road fall-back)
 	// tracks is the RoadTracks search; nil is the feature off.
 	tracks *roadtracksSvc
 }
@@ -304,6 +305,7 @@ func main() {
 	app.melt = newMelt(os.Getenv("MELT_REDIS_ADDR"), os.Getenv("MELT_VENUE"))
 	app.hazards = newHazardSvc(os.Getenv("TOMTOM_API_KEY"))
 	app.free = newFreeSvc(os.Getenv("TOMTOM_API_KEY"))
+	app.shellOff = os.Getenv("PLAYER_SHELL") == "0"
 	if app.simAllowed = os.Getenv("SIM_ALLOWED") == "1"; app.simAllowed {
 		log.Print("sim: allowed (test venue)")
 	} else {
