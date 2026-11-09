@@ -13,3 +13,13 @@ Feature: A one-day trip's badge reads Today
 
   Scenario: The driver screen's gauge follows the same rule
     Then the driver screen's day gauge says Today on a one-day trip, as drawn and as refreshed
+
+  Scenario: A trip past its last day that has not reached the finish is still driving
+    # Kris on the KATE, 2026-11-09: "It says right now I have Arrived. I only
+    # posted a couple of photos."
+    Given a trip whose last day was yesterday, with its first stop reached and its finish not
+    Then the day badge reads "Still driving"
+
+  Scenario: A trip that reached its finish has arrived
+    Given a trip whose last day was yesterday, with its finish reached
+    Then the day badge reads "Arrived"
