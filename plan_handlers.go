@@ -567,7 +567,8 @@ func (a *App) routingAdd(w http.ResponseWriter, r *http.Request) {
 	// The count, never the place.
 	log.Printf("routing point: added to %s (after stop %d)", a.activeSlug(), rp.AfterOrd)
 	if wantsHTML(r) {
-		http.Redirect(w, r, "/driver", http.StatusSeeOther)
+		// Back to the page the form was on: the Ride page's Add a stop, or the driver screen.
+		http.Redirect(w, r, backTo(r, "/driver"), http.StatusSeeOther)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "id": rp.ID, "after": rp.AfterOrd, "name": rp.Name})

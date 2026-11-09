@@ -62,6 +62,13 @@ func initDoneStopsScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		return d.hasNav(w)
 	})
 	sc.Step(`^the row for ([ABCD]) is marked as next$`, d.isNext)
+	sc.Step(`^the row for ([ABCD]) offers navigation$`, d.hasNav)
+	sc.Step(`^the row for ([ABCD]) is not marked as next$`, func(w string) error {
+		if err := d.isNext(w); err == nil {
+			return fmt.Errorf("the row for %s is marked next", w)
+		}
+		return nil
+	})
 	sc.Step(`^the active trip has two days and the first stop of day two is arrived at$`, d.twoDays)
 	sc.Step(`^the first stop of day two says "Arrived", not "Left"$`, d.dayTwo)
 	sc.Step(`^kris undoes ([ABCD])$`, d.undo)

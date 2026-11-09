@@ -93,10 +93,11 @@
         {{else if .PlannedDepart}}<span class="muted">Plan: depart {{clock .PlannedDepart .TZ}}</span>{{end}}
         {{if .Driver}}
           {{if and .IsStart (not .ArrivedAt)}}<a class="btn btn-sm btn-primary" href="/driver/post">Start the drive</a>{{end}}
-          {{if .Next}}
-          <a class="btn btn-sm btn-outline-primary" href="{{waze .Name .Lat .Lng}}" rel="noopener">Navigate in Waze</a>
-          <a class="btn btn-sm btn-outline-secondary" href="{{gmaps .Name .Lat .Lng}}" rel="noopener">Google Maps</a>
-          <a class="btn btn-sm btn-outline-secondary" href="{{applemaps .Name .Lat .Lng}}" rel="noopener">Apple Maps</a>{{end}}
+          {{if .CheckIn}}<a class="btn btn-sm btn-primary" href="/driver/post?checkpoint={{.ID}}">Check in</a>{{end}}
+          {{if .Nav}}{{$l := .Links}}
+          <a class="btn btn-sm btn-outline-primary" href="{{$l.Waze}}" rel="noopener">Navigate in Waze</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{{$l.Google}}" rel="noopener">Google Maps</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{{$l.Apple}}" rel="noopener">Apple Maps</a>{{end}}
           {{if .ChesterOn}}<a class="btn btn-sm btn-outline-secondary" href="{{askChester .Name}}">Ask Chester about here</a>{{end}}
           {{if or .ArrivedAt .SkippedAt}}<form method="post" action="/driver/checkpoint/{{.ID}}/arrive" class="d-inline">
             <input type="hidden" name="clear" value="1"><button class="undo">Undo</button>

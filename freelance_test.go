@@ -23,6 +23,7 @@ type ttStub struct {
 	nearBody             map[string]string   // poiSearch answers by query word
 	nearReq              []map[string]string // lat, lon, radius of each poiSearch call
 	geoBody, routeStatus string
+	geoReq               []url.Values // the query of each fuzzy-search call
 	routeBody            string
 	alongBody            map[string]string // by query word; "500" is a failure
 	mu                   sync.Mutex
@@ -84,6 +85,9 @@ func newTT(t *testing.T) *ttStub {
 			w.Write([]byte(body))
 		case strings.HasPrefix(p, "/search/2/search/"):
 			s.geo.Add(1)
+			s.mu.Lock()
+			s.geoReq = append(s.geoReq, r.URL.Query())
+			s.mu.Unlock()
 			w.Write([]byte(s.geoBody))
 		case strings.HasPrefix(p, "/routing/1/calculateRoute/"):
 			s.route.Add(1)
