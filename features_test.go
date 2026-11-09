@@ -27,6 +27,7 @@ func TestFeatures(t *testing.T) {
 				initTrafficChipBudgetScenarios(t, sc)
 				initRouteMeHereScenarios(t, sc)
 				initChesterRerouteScenarios(t, sc)
+				initChangeTripScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{
