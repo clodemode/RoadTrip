@@ -274,7 +274,7 @@ func TestSwappedLegLineIsRefused(t *testing.T) {
 	// check runs under every choice, not only the defaults.
 	for slug, wants := range map[string][]string{
 		"day-2":        {"leg 2"},
-		"day-1-valley": {"leg 1", `option "day1" choice "valley"`},
+		"day-1-valley": {"leg 1", `day1=valley`},
 	} {
 		bad := shiftedFixture(t, slug)
 		w := pushTrip(t, app, bad, "?activate=1")

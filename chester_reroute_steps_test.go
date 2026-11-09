@@ -68,6 +68,7 @@ func initChesterRerouteScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the trip has no route choices$`, func() error { w.noOpts = true; w.build(); return nil })
 	sc.Step(`^a post is already made on leg 1$`, func() error { w.build(); return w.postOnLeg1() })
 	sc.Step(`^a post is made on leg 1 before the trip-keeper taps Save$`, func() error { return w.postOnLeg1() })
+	sc.Step(`^day 1 has been driven to its last stop$`, w.day1Driven)
 	sc.Step(`^the drive has started on day 1$`, w.driveStarted)
 	sc.Step(`^Chester will propose switching "([^"]*)" to "([^"]*)" because "([^"]*)"$`, w.willPropose)
 	sc.Step(`^Chester will (?:then )?say "([^"]*)"$`, w.willWrite)
@@ -157,6 +158,17 @@ func (w *rerouteWorld) postOnLeg1() error {
 	}
 	return w.app.store.CreatePost(&Post{LegID: legs[0].ID, Kind: "note", OccurredAt: utcString(time.Now()),
 		TZ: "America/Chicago", Title: "on the road"})
+}
+
+// day1Driven stamps day 1's last stop arrived: a road driven to its end is
+// spent, posts or not, and that is what locks it.
+func (w *rerouteWorld) day1Driven() error {
+	legs, err := w.app.store.Legs(w.app.activeSlug())
+	if err != nil || len(legs) == 0 || len(legs[0].Checkpoints) == 0 {
+		return fmt.Errorf("legs: %v", err)
+	}
+	last := legs[0].Checkpoints[len(legs[0].Checkpoints)-1]
+	return w.app.store.SetArrived(last.ID, time.Now(), nil)
 }
 
 func (w *rerouteWorld) driveStarted() error {

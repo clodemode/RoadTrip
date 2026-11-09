@@ -193,8 +193,43 @@ func checkLineEnds(sd *seedData, lineEnds map[int][2][]float64) error {
 	return nil
 }
 
+// maxPlanCombos caps the combinations of choices a document may offer. Every
+// one is parsed and checked whole on a push, so the cap is what keeps a push
+// bounded; a real week of driving has a handful of forks, not a dozen.
+const maxPlanCombos = 64
+
+// allSelections is every combination of choices a document offers, one map
+// per plan, every option answered. The combinations a dependent option does
+// not take part in come out as duplicate plans, which is harmless: each is
+// checked like any other and published once.
+func allSelections(opts []tripOption) ([]map[string]string, error) {
+	n := 1
+	for _, o := range opts {
+		n *= len(o.Choices)
+		if n > maxPlanCombos {
+			return nil, fmt.Errorf("the trip offers more than %d combinations of choices", maxPlanCombos)
+		}
+	}
+	out := []map[string]string{{}}
+	for _, o := range opts {
+		var next []map[string]string
+		for _, s := range out {
+			for _, c := range o.Choices {
+				m := make(map[string]string, len(s)+1)
+				for k, v := range s {
+					m[k] = v
+				}
+				m[o.ID] = c.ID
+				next = append(next, m)
+			}
+		}
+		out = next
+	}
+	return out, nil
+}
+
 // checkTrip parses a pushed document completely — under its defaults and
-// under every choice of every option — before a byte of it is written. It
+// under every combination of choices — before a byte of it is written. It
 // returns the document's slug.
 func checkTrip(raw []byte) (string, error) {
 	sd, err := parseSeedBytes(raw, "", nil)
@@ -215,15 +250,17 @@ func checkTrip(raw []byte) (string, error) {
 			return "", fmt.Errorf("leg %d has no date and none can be derived", l.Ord)
 		}
 	}
-	for _, o := range sd.Options {
-		for _, c := range o.Choices {
-			alt, err := parseSeedBytes(raw, "", &Selection{Choices: map[string]string{o.ID: c.ID}})
-			if err == nil {
-				err = checkPlan(alt)
-			}
-			if err != nil {
-				return "", fmt.Errorf("option %q choice %q: %w", o.ID, c.ID, err)
-			}
+	sels, err := allSelections(sd.Options)
+	if err != nil {
+		return "", err
+	}
+	for _, s := range sels {
+		alt, err := parseSeedBytes(raw, "", &Selection{Choices: s})
+		if err == nil {
+			err = checkPlan(alt)
+		}
+		if err != nil {
+			return "", fmt.Errorf("under %s: %w", whenText(s), err)
 		}
 	}
 	if _, err := publishPlan(raw); err != nil {
@@ -333,34 +370,33 @@ func loadVolumeTrips(store *Store, dataDir string) (loaded, failed int) {
 // planLeg is one road the plan could take: a fixed leg, or one alternative of
 // an option. Line has been through maskLine.
 type planLeg struct {
-	Ord    int             `json:"ord"`
-	Day    int             `json:"day"`
-	Slug   string          `json:"slug"`
-	Name   string          `json:"name"`
-	Hint   string          `json:"hint,omitempty"`
-	Miles  float64         `json:"miles"`
-	Hours  float64         `json:"hours"`
-	Date   string          `json:"date,omitempty"` // only when the leg carries its own
-	Option string          `json:"option,omitempty"`
-	Choice string          `json:"choice,omitempty"`
-	Color  string          `json:"color"`
-	Line   json.RawMessage `json:"line"`
+	Ord   int     `json:"ord"`
+	Day   int     `json:"day"`
+	Slug  string  `json:"slug"`
+	Name  string  `json:"name"`
+	Hint  string  `json:"hint,omitempty"`
+	Miles float64 `json:"miles"`
+	Hours float64 `json:"hours"`
+	Date  string  `json:"date,omitempty"` // only when the leg carries its own
+	// When is the set of choices this road belongs to; absent, it is on every plan.
+	When  map[string]string `json:"when,omitempty"`
+	Color string            `json:"color"`
+	Line  json.RawMessage   `json:"line"`
 }
 
 // planCP is one checkpoint the plan could have. Lat/Lng are the published
 // point: a private place is its snapped cell.
 type planCP struct {
-	Ord       int     `json:"ord"`
-	Leg       int     `json:"leg"`
-	Name      string  `json:"name"`
-	Label     string  `json:"label"`
-	Lat       float64 `json:"lat"`
-	Lng       float64 `json:"lng"`
-	TZ        string  `json:"tz"`
-	Precision string  `json:"precision"`
-	Terminal  bool    `json:"is_terminal"`
-	Option    string  `json:"option,omitempty"`
-	Choice    string  `json:"choice,omitempty"`
+	Ord       int               `json:"ord"`
+	Leg       int               `json:"leg"`
+	Name      string            `json:"name"`
+	Label     string            `json:"label"`
+	Lat       float64           `json:"lat"`
+	Lng       float64           `json:"lng"`
+	TZ        string            `json:"tz"`
+	Precision string            `json:"precision"`
+	Terminal  bool              `json:"is_terminal"`
+	When      map[string]string `json:"when,omitempty"`
 }
 
 // planDoc is a whole trip with every alternative in it, already published.
@@ -392,32 +428,40 @@ func publishPlan(raw []byte) (*planDoc, error) {
 	if doc.Options == nil {
 		doc.Options = []tripOption{}
 	}
+	// Every road and every stop of every plan, each once: the defaults first,
+	// then whatever each other combination of choices adds. A feature is the
+	// same feature across plans when its place in the order, its name and the
+	// choices it is tied to agree.
 	var legs []seedLeg
 	var cps []seedCP
-	legs = append(legs, base.Legs...)
-	cps = append(cps, base.Checkpoints...)
-	// The defaults carry every fixed feature and each option's default choice.
-	// Each other choice contributes exactly the features tagged with it.
-	for _, o := range base.Options {
-		for _, c := range o.Choices {
-			if c.ID == o.Default {
-				continue
-			}
-			alt, err := parseSeedBytes(raw, "", &Selection{Choices: map[string]string{o.ID: c.ID}})
-			if err != nil {
-				return nil, fmt.Errorf("option %q choice %q: %w", o.ID, c.ID, err)
-			}
-			for _, l := range alt.Legs {
-				if l.Option == o.ID && l.Choice == c.ID {
-					legs = append(legs, l)
-				}
-			}
-			for _, cp := range alt.Checkpoints {
-				if cp.Option == o.ID && cp.Choice == c.ID {
-					cps = append(cps, cp)
-				}
+	seen := map[string]bool{}
+	add := func(ls []seedLeg, cs []seedCP) {
+		for _, l := range ls {
+			k := "L|" + strconv.Itoa(l.Ord) + "|" + l.Slug + "|" + whenText(l.When)
+			if !seen[k] {
+				seen[k] = true
+				legs = append(legs, l)
 			}
 		}
+		for _, c := range cs {
+			k := "C|" + strconv.Itoa(c.Ord) + "|" + strconv.Itoa(c.LegOrd) + "|" + c.Name + "|" + whenText(c.When)
+			if !seen[k] {
+				seen[k] = true
+				cps = append(cps, c)
+			}
+		}
+	}
+	add(base.Legs, base.Checkpoints)
+	sels, err := allSelections(base.Options)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range sels {
+		alt, err := parseSeedBytes(raw, "", &Selection{Choices: s})
+		if err != nil {
+			return nil, fmt.Errorf("under %s: %w", whenText(s), err)
+		}
+		add(alt.Legs, alt.Checkpoints)
 	}
 	var all []Checkpoint
 	for _, c := range cps {
@@ -427,7 +471,7 @@ func publishPlan(raw []byte) (*planDoc, error) {
 		all = append(all, pub)
 		doc.Checkpoints = append(doc.Checkpoints, planCP{Ord: pub.Ord, Leg: c.LegOrd, Name: pub.Name,
 			Label: pub.Label, Lat: pub.Lat, Lng: pub.Lng, TZ: pub.TZ, Precision: pub.Precision,
-			Terminal: pub.IsTerminal, Option: c.Option, Choice: c.Choice})
+			Terminal: pub.IsTerminal, When: c.When})
 	}
 	fuzzed := fuzzedOf(all)
 	for _, l := range legs {
@@ -438,7 +482,7 @@ func publishPlan(raw []byte) (*planDoc, error) {
 			return nil, fmt.Errorf("leg %d has no line", l.Ord)
 		}
 		pl := planLeg{Ord: l.Ord, Day: l.Day, Slug: l.Slug, Name: l.Name, Hint: l.RouteHint,
-			Miles: l.EstMiles, Hours: l.EstHours, Option: l.Option, Choice: l.Choice,
+			Miles: l.EstMiles, Hours: l.EstHours, When: l.When,
 			Color: legColor(l.Ord), Line: maskLine(g.Coordinates, fuzzed)}
 		if l.DateFixed {
 			pl.Date = l.Date
@@ -500,8 +544,20 @@ func (d *planDoc) hasChoice(option, choice string) bool {
 	return false
 }
 
-func (d *planDoc) in(option, choice string, choices map[string]string) bool {
-	return option == "" || choices[option] == choice
+// inForce is which of the document's options are in force under a selection.
+func (d *planDoc) inForce(choices map[string]string) map[string]bool {
+	return optionsInForce(d.Options, choices)
+}
+
+// in reports whether a feature tied to the choices in when is on the plan
+// under a selection: every option it names in force and holding that choice.
+func (d *planDoc) in(when map[string]string, choices map[string]string, force map[string]bool) bool {
+	for k, v := range when {
+		if !force[k] || choices[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 type planDay struct {
@@ -549,10 +605,11 @@ func (d *planDoc) summarize(choices map[string]string, start string) planSummary
 	rawHours := map[int]float64{}
 	var order []int
 	total := 0.0
+	force := d.inForce(choices)
 	legs := append([]planLeg(nil), d.Legs...)
 	sort.SliceStable(legs, func(i, j int) bool { return legs[i].Ord < legs[j].Ord })
 	for _, l := range legs {
-		if !d.in(l.Option, l.Choice, choices) {
+		if !d.in(l.When, choices, force) {
 			continue
 		}
 		pd := byDay[l.Day]
@@ -598,7 +655,7 @@ func (d *planDoc) summarize(choices map[string]string, start string) planSummary
 	s.TotalMilesShown = thousands(int(math.Round(s.TotalMiles)))
 	s.TotalHours = round1(hours)
 	for _, c := range d.Checkpoints {
-		if d.in(c.Option, c.Choice, choices) {
+		if d.in(c.When, choices, force) {
 			s.Checkpoints = append(s.Checkpoints, c)
 		}
 	}

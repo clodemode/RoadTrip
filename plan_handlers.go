@@ -187,7 +187,10 @@ func (st *planState) requested(v url.Values, strict bool) (map[string]string, st
 // planOptView is one option group as the page's form draws it.
 type planOptView struct {
 	ID, Title string
-	Choices   []planChoiceView
+	// InForce is false for an option tied to a choice that is not selected:
+	// the page carries it hidden, so a switch in the browser can bring it back.
+	InForce bool
+	Choices []planChoiceView
 }
 
 type planChoiceView struct {
@@ -200,12 +203,20 @@ type planChoiceView struct {
 
 func (st *planState) optViews(choices map[string]string) []planOptView {
 	var out []planOptView
+	force := st.Doc.inForce(choices)
 	for _, o := range st.Doc.Options {
-		ov := planOptView{ID: o.ID, Title: o.Title}
+		ov := planOptView{ID: o.ID, Title: o.Title, InForce: force[o.ID]}
 		for _, c := range o.Choices {
+			// The road this choice puts on the plan, the other options as they are.
+			with := map[string]string{}
+			for k, v := range choices {
+				with[k] = v
+			}
+			with[o.ID] = c.ID
+			withForce := st.Doc.inForce(with)
 			var parts []string
 			for _, l := range st.Doc.Legs {
-				if l.Option == o.ID && l.Choice == c.ID {
+				if l.When[o.ID] == c.ID && st.Doc.in(l.When, with, withForce) {
 					parts = append(parts, fmtMiles(l.Miles))
 				}
 			}

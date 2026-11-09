@@ -1401,6 +1401,10 @@ type tripOption struct {
 	Title   string       `json:"title"`
 	Default string       `json:"default"`
 	Choices []tripChoice `json:"choices"`
+	// When ties the option to another's choice: it is in force only while
+	// every option named here holds the choice given, and off the plan page
+	// otherwise. An option may only name options declared before it.
+	When map[string]string `json:"when,omitempty"`
 }
 
 type tripChoice struct {
@@ -1424,7 +1428,8 @@ type seedLeg struct {
 	Slug, Name, Date   string
 	EstMiles, EstHours float64
 	RouteHint, Line    string
-	Option, Choice     string
+	// When is the set of choices this road belongs to, nil for every plan.
+	When map[string]string
 	// DateFixed: the feature carried its own date. Otherwise Date was derived
 	// from the start date and the leg's day, and moves when the start does.
 	DateFixed bool
@@ -1437,7 +1442,7 @@ type seedCP struct {
 	TZ, Precision                string
 	IsTerminal                   bool
 	PlannedArrive, PlannedDepart string
-	Option, Choice               string
+	When                         map[string]string
 }
 
 // seedRP is a routing point as a trip document gives it: a Point feature with
@@ -1553,9 +1558,91 @@ func checkOptions(opts []tripOption) (map[string]map[string]bool, error) {
 		if !ids[o.Default] {
 			return nil, fmt.Errorf("option %q: default %q is not one of its choices", o.ID, o.Default)
 		}
+		for _, k := range sortedKeys(o.When) {
+			if valid[k] == nil {
+				return nil, fmt.Errorf("option %q depends on option %q, which the document does not declare before it", o.ID, k)
+			}
+			if !valid[k][o.When[k]] {
+				return nil, fmt.Errorf("option %q depends on choice %q, which option %q does not have", o.ID, o.When[k], k)
+			}
+		}
 		valid[o.ID] = ids
 	}
 	return valid, nil
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// optionsInForce says which options are in force under a selection: one with
+// no "when" always is; one with a "when" only while every option it names is
+// itself in force and holds the choice named. Options may only name options
+// declared before them, so one pass in declared order settles it.
+func optionsInForce(opts []tripOption, choices map[string]string) map[string]bool {
+	force := map[string]bool{}
+	for _, o := range opts {
+		in := true
+		for k, v := range o.When {
+			if !force[k] || choices[k] != v {
+				in = false
+			}
+		}
+		force[o.ID] = in
+	}
+	return force
+}
+
+// featureWhen reads the choices a feature is tied to: its "when" map, with
+// the one-pair form ("option" and "choice") folded in. Nil means every plan.
+func featureWhen(p map[string]any) (map[string]string, error) {
+	name := pstr(p, "name")
+	var when map[string]string
+	if raw, ok := p["when"]; ok && raw != nil {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("feature %q: \"when\" must map option ids to choice ids", name)
+		}
+		when = map[string]string{}
+		for k, v := range m {
+			s, _ := v.(string)
+			if s == "" {
+				return nil, fmt.Errorf("feature %q: \"when\" names option %q with no choice", name, k)
+			}
+			when[k] = s
+		}
+	}
+	if opt, ch := pstr(p, "option"), pstr(p, "choice"); opt != "" || ch != "" {
+		if when == nil {
+			when = map[string]string{}
+		}
+		if prev, ok := when[opt]; ok && prev != ch {
+			return nil, fmt.Errorf("feature %q names option %q twice, with choices %q and %q", name, opt, prev, ch)
+		}
+		when[opt] = ch
+	}
+	if len(when) == 0 {
+		return nil, nil
+	}
+	return when, nil
+}
+
+// whenText writes a selection or a feature's "when" as "a=x, b=y", sorted,
+// for a message. Empty is "the defaults".
+func whenText(m map[string]string) string {
+	if len(m) == 0 {
+		return "the defaults"
+	}
+	parts := make([]string, 0, len(m))
+	for _, k := range sortedKeys(m) {
+		parts = append(parts, k+"="+m[k])
+	}
+	return strings.Join(parts, ", ")
 }
 
 func parseSeed(path, defaultSlug string) (*seedData, error) {
@@ -1622,21 +1709,32 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 			return nil, fmt.Errorf("start date %q is not YYYY-MM-DD", sd.Ride.StartDate)
 		}
 	}
+	// Which options are in force under this selection: an option tied to
+	// another's choice is off the plan, with every feature that names it,
+	// while that choice is not the one selected.
+	force := optionsInForce(sf.Options, sd.Selection.Choices)
 	// taken reports whether a feature is part of this plan, and refuses one
 	// that names an option or choice the document never declared — a typo
 	// there would otherwise drop a road off every plan in silence.
-	taken := func(p map[string]any) (bool, string, string, error) {
-		opt, ch := pstr(p, "option"), pstr(p, "choice")
-		if opt == "" && ch == "" {
-			return true, "", "", nil
+	taken := func(p map[string]any) (bool, map[string]string, error) {
+		when, err := featureWhen(p)
+		if err != nil {
+			return false, nil, err
 		}
-		if valid[opt] == nil {
-			return false, "", "", fmt.Errorf("feature %q names option %q, which the document does not declare", pstr(p, "name"), opt)
+		in := true
+		for _, opt := range sortedKeys(when) {
+			ch := when[opt]
+			if valid[opt] == nil {
+				return false, nil, fmt.Errorf("feature %q names option %q, which the document does not declare", pstr(p, "name"), opt)
+			}
+			if !valid[opt][ch] {
+				return false, nil, fmt.Errorf("feature %q names choice %q, which option %q does not have", pstr(p, "name"), ch, opt)
+			}
+			if !force[opt] || sd.Selection.Choices[opt] != ch {
+				in = false
+			}
 		}
-		if !valid[opt][ch] {
-			return false, "", "", fmt.Errorf("feature %q names choice %q, which option %q does not have", pstr(p, "name"), ch, opt)
-		}
-		return sd.Selection.Choices[opt] == ch, opt, ch, nil
+		return in, when, nil
 	}
 
 	legOrds := map[int]bool{}
@@ -1647,7 +1745,7 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 			continue
 		}
 		p := f.Properties
-		in, opt, ch, err := taken(p)
+		in, when, err := taken(p)
 		if err != nil {
 			return nil, err
 		}
@@ -1664,10 +1762,10 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 		slug := pstr(p, "slug")
 		if slug == "" {
 			slug = "leg-" + strconv.Itoa(ord)
-			if ch != "" {
-				// Two alternatives for one leg must not share a slug: the slug is
-				// how the store tells which road a leg row currently holds.
-				slug += "-" + ch
+			// Two alternatives for one leg must not share a slug: the slug is
+			// how the store tells which road a leg row currently holds.
+			for _, k := range sortedKeys(when) {
+				slug += "-" + when[k]
 			}
 		}
 		day := int(pnum(p, "day"))
@@ -1691,7 +1789,7 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 		line, _ := json.Marshal(map[string]any{"type": "LineString", "coordinates": f.Geometry.Coordinates})
 		sd.Legs = append(sd.Legs, seedLeg{Ord: ord, Day: day, Slug: slug, Name: pstr(p, "name"), Date: date,
 			EstMiles: miles, EstHours: hours,
-			RouteHint: pstr(p, "route_hint"), Line: string(line), Option: opt, Choice: ch, DateFixed: fixed})
+			RouteHint: pstr(p, "route_hint"), Line: string(line), When: when, DateFixed: fixed})
 		legOrds[ord] = true
 	}
 	if len(sd.Legs) == 0 {
@@ -1724,7 +1822,7 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 			continue
 		}
 		p := f.Properties
-		in, opt, ch, err := taken(p)
+		in, when, err := taken(p)
 		if err != nil {
 			return nil, err
 		}
@@ -1752,7 +1850,7 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 				Label: pstr(p, "label"), Lat: xy[1], Lng: xy[0], TZ: pstr(p, "tz"),
 				Precision: pstr(p, "precision"), IsTerminal: pbool(p, "is_terminal"),
 				PlannedArrive: toUTC(pstr(p, "planned_arrive")), PlannedDepart: toUTC(pstr(p, "planned_depart")),
-				Option: opt, Choice: ch}
+				When: when}
 			if c.Precision == "" {
 				c.Precision = precisionApprox
 			}
@@ -1983,15 +2081,24 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 	for _, c := range sd.Checkpoints {
 		planCPs[c.Ord] = c
 	}
-	rows, err := tx.Query(`SELECT l.ord, l.slug, (SELECT COUNT(*) FROM posts p WHERE p.leg_id=l.id)
+	rows, err := tx.Query(`SELECT l.id, l.ord, l.slug, (SELECT COUNT(*) FROM posts p WHERE p.leg_id=l.id)
 	  FROM legs l WHERE l.ride_slug=? ORDER BY l.ord`, sd.Ride.Slug)
 	if err != nil {
 		return nil, err
 	}
+	// Legs that hold posts and whose road the new plan changes, judged after
+	// the rows are closed: the judgement reads the leg's stops on the same tx.
+	type roadChange struct {
+		legID      int64
+		ord, posts int
+		line       string
+	}
+	var changes []roadChange
 	for rows.Next() {
+		var legID int64
 		var ord, posts int
 		var slug string
-		if err := rows.Scan(&ord, &slug, &posts); err != nil {
+		if err := rows.Scan(&legID, &ord, &slug, &posts); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -2003,12 +2110,21 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 		case !ok:
 			reasons = append(reasons, fmt.Sprintf("leg %d holds %d post(s) and the new plan has no leg %d", ord, posts, ord))
 		case pl.Slug != slug:
-			reasons = append(reasons, fmt.Sprintf("leg %d holds %d post(s) and the new plan takes a different road for it", ord, posts))
+			changes = append(changes, roadChange{legID, ord, posts, pl.Line})
 		}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	for _, c := range changes {
+		why, err := roadChangeRefused(tx, c.legID, c.ord, c.posts, c.line)
+		if err != nil {
+			return nil, err
+		}
+		if why != "" {
+			reasons = append(reasons, why)
+		}
 	}
 	rows, err = tx.Query(`SELECT c.ord, c.name, l.ord, c.arrived_at, c.skipped_at,
 	    (SELECT COUNT(*) FROM posts p WHERE p.checkpoint_id=c.id)
@@ -2045,6 +2161,58 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 	}
 	rows.Close()
 	return routingConflicts(tx, sd, reasons)
+}
+
+// roadChangeRefused judges a new road for a leg that holds posts. The road
+// already driven does not change: a leg driven to its last stop keeps its
+// road, and while the leg is still being driven the new road must pass every
+// stop on it the car has reached (arrived at or skipped), within
+// maxLineEndKm. So a fork that changes where the day ends, or the road ahead
+// of the car, is taken with the day's posts kept (a leg row is refreshed in
+// place, so its posts stay with it); a different road for a day already
+// driven is not. The reason names the leg and a stop's number, never a place.
+func roadChangeRefused(tx *sql.Tx, legID int64, ord, posts int, line string) (string, error) {
+	rows, err := tx.Query(`SELECT ord, lat, lng, arrived_at, skipped_at FROM checkpoints WHERE leg_id=? ORDER BY ord`, legID)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	type stop struct {
+		ord      int
+		lat, lng float64
+		passed   bool
+	}
+	var stops []stop
+	for rows.Next() {
+		var s stop
+		var arrived, skipped string
+		if err := rows.Scan(&s.ord, &s.lat, &s.lng, &arrived, &skipped); err != nil {
+			return "", err
+		}
+		s.passed = arrived != "" || skipped != ""
+		stops = append(stops, s)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	if len(stops) > 0 && stops[len(stops)-1].passed {
+		return fmt.Sprintf("leg %d holds %d post(s) and has been driven to its last stop, so its road does not change", ord, posts), nil
+	}
+	var g struct {
+		Coordinates json.RawMessage `json:"coordinates"`
+	}
+	if err := json.Unmarshal([]byte(line), &g); err != nil {
+		return fmt.Sprintf("leg %d holds %d post(s) and the new plan's road for it has no line", ord, posts), nil
+	}
+	for _, s := range stops {
+		if !s.passed {
+			continue
+		}
+		if _, _, off, ok := alongLine(g.Coordinates, s.lat, s.lng); !ok || off > maxLineEndKm {
+			return fmt.Sprintf("leg %d holds %d post(s) and the new road does not pass stop %d, which the car has reached", ord, posts, s.ord), nil
+		}
+	}
+	return "", nil
 }
 
 // refreshPlan writes a parsed plan over an existing ride. prune is the
