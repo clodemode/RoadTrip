@@ -280,12 +280,18 @@ func (m *marksWorld) chips() error {
 	return nil
 }
 
+// planPage is where the hours bar lives: the Plan page, signed in.
+func (m *marksWorld) planPage() string {
+	c := asUser(m.t, m.sim.app, "kris", roleAdmin)
+	return doAs(m.t, m.sim.app, c, "GET", "/plan?embed=1", nil).Body.String()
+}
+
 // bar returns the first hours bar's entries as a reader sees them: tags gone,
 // whitespace collapsed.
 func (m *marksWorld) bar() ([]string, error) {
-	g := reBar.FindStringSubmatch(m.page)
+	g := reBar.FindStringSubmatch(m.planPage())
 	if g == nil {
-		return nil, fmt.Errorf("the home page has no hours bar: %.1500s", m.page)
+		return nil, fmt.Errorf("the signed-in Plan page has no hours bar")
 	}
 	var out []string
 	for _, li := range submatches(reLi, g[1]) {
@@ -355,9 +361,9 @@ func (m *marksWorld) h1Alone(h string) error {
 }
 
 func (m *marksWorld) h1NoPrivate(h string) error {
-	g := reBar.FindStringSubmatch(m.page)
+	g := reBar.FindStringSubmatch(m.planPage())
 	if g == nil {
-		return fmt.Errorf("the home page has no hours bar")
+		return fmt.Errorf("the signed-in Plan page has no hours bar")
 	}
 	if strings.Contains(g[1], "Home Base") {
 		return fmt.Errorf("the hours bar names the private stop")

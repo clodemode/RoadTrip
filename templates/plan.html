@@ -46,6 +46,8 @@
   {{else if .Notice}}<p class="plan-saved plan-msg" id="plan-result" role="status">{{.Notice}}</p>{{end}}
 </form>
 
+{{with .HoursBars}}{{template "hours_bar" .}}{{end}}
+
 <section class="plan-days">
   <div class="section-head">
     <h2>Days</h2>
