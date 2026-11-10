@@ -36,6 +36,7 @@ func TestFeatures(t *testing.T) {
 				initRoutingPointsScenarios(t, sc)
 				initNightForkScenarios(t, sc)
 				initMenuStateScenarios(t, sc)
+				initTestDriveSwitchScenarios(t, sc)
 				initContinuousMusicScenarios(t, sc)
 			}()
 		},

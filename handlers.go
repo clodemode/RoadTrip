@@ -415,6 +415,9 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	// Driver: signed in AND on the ride the site shows. The ride's tools (post,
 	// lodging, checklist, GeoJSON, plan controls) are drawn only for these.
 	data["Driver"] = authed && a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
+	if data["Driver"] == true {
+		data["TripSwitch"] = a.tripSwitch()
+	}
 	if authed {
 		// Every page goes through here, and this is where the session is known.
 		// A signed-in page is served on the SAME address a visitor uses and can
@@ -929,7 +932,7 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
 		"Title": "", "Ride": rv.Ride, "Legs": rv.Legs, "Posts": posts,
 		"Day": di, "PageLeg": pageLeg, "Multi": len(rv.Legs) > 1,
-		"NextID": nextOpenID(rv.Legs), "HoursBars": bars, "DriveStarted": driveStarted(rv.Legs),
+		"NextID": nextOpenID(rv.Legs), "DriveStarted": driveStarted(rv.Legs),
 		"NavLegID": navLegID,
 		"Map":      withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
 	// The day's end and Add a stop: the trip-keeper's, and nobody else's. A
@@ -985,7 +988,7 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "leg.html", map[string]any{
 		"Title": leg.Name, "Ride": rv.Ride, "Leg": leg, "Prev": prev, "Next": next,
 		"Posts": posts, "Day": di, "Total": len(rv.Legs), "Multi": len(rv.Legs) > 1,
-		"NextID": nextOpenID(rv.Legs), "HoursBars": bars,
+		"NextID":   nextOpenID(rv.Legs),
 		"NavLegID": navLegID, "DriveStarted": driveStarted(rv.Legs),
 		// The tracks are computed over the whole ride so this leg's own track
 		// still begins where the day before it ended.

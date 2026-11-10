@@ -60,6 +60,9 @@
   <nav class="crumbs" aria-label="Breadcrumb">
     {{range $i, $c := .Crumbs}}{{if $i}}<span class="sep" aria-hidden="true">›</span>{{end}}{{if $c.Href}}<a href="{{$c.Href}}">{{$c.Label}}</a>{{else}}<span aria-current="page">{{$c.Label}}</span>{{end}}{{end}}
   </nav>
+  {{with .TripSwitch}}<form class="trip-switch" method="post" action="/driver/ride/active" target="_top" aria-label="Switch trip">
+    {{range .}}<button type="submit" name="slug" value="{{.Slug}}" class="btn btn-sm {{if .Active}}btn-primary{{else}}btn-outline-secondary{{end}}"{{if .Active}} aria-current="true" disabled{{end}}>{{.Name}}</button>
+    {{end}}</form>{{end}}
   <h1>{{.PageTitle}}</h1>
 </div>
 
