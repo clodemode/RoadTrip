@@ -403,6 +403,20 @@ CREATE TABLE IF NOT EXISTS player_state (
   position_s REAL NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS track_marks (
+  id         INTEGER PRIMARY KEY,
+  user       TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  album_id   INTEGER NOT NULL,
+  album      TEXT NOT NULL DEFAULT '',
+  artist     TEXT NOT NULL DEFAULT '',
+  track_idx  INTEGER NOT NULL DEFAULT 0,
+  title      TEXT NOT NULL DEFAULT '',
+  position_s REAL NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS track_marks_favourite
+  ON track_marks(user, album_id, track_idx) WHERE kind = 'favourite';
 `
 
 type Store struct{ db *sql.DB }

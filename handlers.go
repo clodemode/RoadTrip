@@ -182,6 +182,8 @@ func (a *App) routes() http.Handler {
 	mux.Handle("GET /driver/roadtracks/search", a.requireAuth(a.roadtracksSearch))
 	mux.Handle("GET /driver/roadtracks/album/{id}", a.requireAuth(a.roadtracksAlbum))
 	mux.Handle("POST /driver/roadtracks/state", a.requireAuth(a.roadtracksState))
+	mux.Handle("POST /driver/roadtracks/mark", a.requireAuth(a.trackMarkAdd))
+	mux.Handle("POST /driver/roadtracks/mark/{id}/delete", a.requireAuth(a.trackMarkDelete))
 	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
 	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))
@@ -415,7 +417,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	// Driver: signed in AND on the ride the site shows. The ride's tools (post,
 	// lodging, checklist, GeoJSON, plan controls) are drawn only for these.
 	data["Driver"] = authed && a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
-	if data["Driver"] == true {
+	if data["Driver"] == true && (name == "index.html" || name == "plan.html") {
 		data["TripSwitch"] = a.tripSwitch()
 	}
 	if authed {
@@ -2234,10 +2236,13 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 
 	// On a KATE the stepping car moves one step per post, BEFORE the pin and the
 	// vouch read it, so the post is pinned at, and checks in at, the new spot.
-	// A note with no photo is not a check-in and does not move it.
+	// A photo, or a note sent with the phone's position, moves it; a note with
+	// neither does not.
 	// A post that does not get saved must not have moved the car: the step is
 	// put back unless CreatePost succeeds.
-	if st, ok := a.stepState(r, start); ok && photo != nil {
+	stepped := false
+	if st, ok := a.stepState(r, start); ok && (photo != nil || r.PostFormValue("lat") != "") {
+		stepped = true
 		prev, user := st.StepPos, a.userOf(r)
 		to := nextSimStep(rv.Legs, LatLng{prev[0], prev[1]})
 		a.sim.StepTo(user, to.Lat, to.Lng)
@@ -2371,7 +2376,7 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/driver/post?post="+strconv.FormatInt(post.ID, 10)+"&notice="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
 	}
-	if start != nil && start.ArrivedAt != "" && photo != nil {
+	if start != nil && start.ArrivedAt != "" && (photo != nil || stepped) {
 		msg, err := a.checkInFromPhoto(r, rv.Legs, post, photo, loc)
 		noticeURL := "/driver/post?post=" + strconv.FormatInt(post.ID, 10) + "&notice="
 		if err != nil {

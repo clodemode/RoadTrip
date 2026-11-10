@@ -263,8 +263,12 @@ func (a *App) planPage(w http.ResponseWriter, r *http.Request) {
 		v := a.hoursBars(st.Ride.Slug, legs, allIndexes(len(legs)), len(legs) > 1)
 		bars = &v
 	}
+	var marks []TrackMark
+	if a.isDriver(r) {
+		marks, _ = a.store.TrackMarks(a.userOf(r))
+	}
 	a.render(w, r, "plan.html", map[string]any{
-		"Title": "Plan", "HoursBars": bars, "Ride": st.Ride, "Sum": sum, "Opts": st.optViews(choices),
+		"Title": "Plan", "HoursBars": bars, "Marks": marks, "Ride": st.Ride, "Sum": sum, "Opts": st.optViews(choices),
 		"Start": start, "HasFile": st.HasFile, "Plan": page, "PageLeg": pageLeg,
 		// Codes in, fixed sentences out; an unknown code is the empty string.
 		"Error": planRefusals[r.URL.Query().Get("error")], "Notice": planNotices[r.URL.Query().Get("ok")],

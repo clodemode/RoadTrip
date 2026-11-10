@@ -187,6 +187,8 @@
   <div class="rt-controls">
     <button type="button" class="btn btn-dark rt-big" id="rt-play">Play</button>
     <button type="button" class="btn btn-outline-dark rt-next" id="rt-next">Next</button>
+    <button type="button" class="btn btn-outline-dark rt-mark" id="rt-fav" aria-label="Favourite this track">&#9825; Favourite</button>
+    <button type="button" class="btn btn-outline-dark rt-mark" id="rt-bookmark" aria-label="Bookmark this point in the song">&#127919;&#9834; Mark</button>
     <button type="button" class="btn btn-outline-dark rt-ask" id="hud-drivetracks"><span class="rt-ico" aria-hidden="true">&#127925;</span> Ask Chester for an album</button>
   </div>
   {{with .Resume}}<button type="button" class="btn btn-primary rt-resume" id="rt-resume" data-album-id="{{.AlbumID}}" data-album="{{.Album}}" data-artist="{{.Artist}}" data-idx="{{.TrackIdx}}" data-pos="{{.PositionS}}">Resume {{.Album}}</button>{{end}}
