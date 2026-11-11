@@ -156,7 +156,7 @@
     var refit = function () {
       map.invalidateSize();
       if (userMoved || focusDay) return;
-      map.fitBounds(allBounds, { padding: [24, 24] });
+      map.fitBounds(allBounds, { padding: [44, 44] });
     };
     refit();
     if (window.ResizeObserver) { new ResizeObserver(refit).observe(mapEl); }
@@ -194,7 +194,7 @@
         (c.precision === 'fuzzed' ? '<p class="muted">approximate position</p>' : '');
       if (isEnd) {
         L.marker([c.lat, c.lng], {
-          icon: L.divIcon({ className: 'day-pin', iconSize: null, iconAnchor: [15, 13],
+          icon: L.divIcon({ className: 'day-pin', iconSize: [0, 0], iconAnchor: [0, 0],
             html: '<span class="day-pin-b" style="background:' + esc(colorOf[day]) + '">d' + day + '</span>' +
               '<span class="day-pin-n">' + esc(c.name) + '</span>' }),
           keyboard: false, zIndexOffset: 600
@@ -222,7 +222,7 @@
   function zoomAll() {
     focusDay = 0;
     userMoved = false;
-    if (map) map.fitBounds(allBounds, { padding: [24, 24] });
+    if (map) map.fitBounds(allBounds, { padding: [44, 44] });
     if (allBtn) allBtn.hidden = true;
     markDay();
   }

@@ -66,6 +66,7 @@
      screen space and redrawn on zoomend, so it stays 8 px off the road at any
      zoom. Grey and faint on purpose: a ruler, not a second route. */
   var HOURS_OFFSET_PX = 8;
+  var HOURS_LABEL_ZOOM = 8;
   var hoursLayer = L.layerGroup().addTo(map);
 
   function unit(a, b) {
@@ -104,6 +105,9 @@
         var n = segN[best];
         L.polyline([off(p, n, HOURS_OFFSET_PX - 5), off(p, n, HOURS_OFFSET_PX + 5)],
           { color: '#6b7280', weight: 2, opacity: 0.5, interactive: false }).addTo(hoursLayer);
+        /* Zoomed out, a whole trip's hour names pile on top of each other and
+           of the pins: the ticks stay, the names wait for a closer look. */
+        if (map.getZoom() < HOURS_LABEL_ZOOM) return;
         L.marker(off(p, n, HOURS_OFFSET_PX + 12), { interactive: false, keyboard: false,
           icon: L.divIcon({ className: 'hours-lbl', iconSize: null,
             html: '<span>' + esc(h.label + (h.name ? ' ' + h.name : '')) + '</span>' }) }).addTo(hoursLayer);
@@ -148,15 +152,22 @@
   (data.checkpoints || []).forEach(function (c) {
     /* A night's end is marked d1, d2 ...: it wears its day's badge in the day's
        colour with the town beside it. Every other place stays a small pin. */
-    var isDayEnd = /^d\d+$/.test(c.mark || '');
-    var icon = isDayEnd
-      ? L.divIcon({ className: 'day-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
-          iconSize: null, iconAnchor: [15, 13],
-          html: '<span class="day-pin-b" style="background:' + esc(colorBySlug[c.leg_slug] || '#0d6efd') + '">' +
-            esc(c.mark) + '</span><span class="day-pin-n">' + esc(c.name) + '</span>' })
-      : L.divIcon({ className: 'cp-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
-          iconSize: [26, 26], iconAnchor: [13, 13], html: '<span>' + esc(c.mark || c.ord) + '</span>' });
-    var m = L.marker([c.lat, c.lng], { icon: icon, keyboard: false, zIndexOffset: isDayEnd ? 600 : 500 }).addTo(cpLayer);
+    var dayMark = /^d\d+$/.test(c.mark || '');
+    var isDayEnd = dayMark && !c.is_start;
+    var m;
+    if (c.is_start && dayMark) {
+      /* The start is a small plain dot, like a place passed on the way. */
+      m = L.circleMarker([c.lat, c.lng], { radius: 5, color: '#374151', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(cpLayer);
+    } else {
+      var icon = isDayEnd
+        ? L.divIcon({ className: 'day-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
+            iconSize: [0, 0], iconAnchor: [0, 0],
+            html: '<span class="day-pin-b" style="background:' + esc(colorBySlug[c.leg_slug] || '#0d6efd') + '">' +
+              esc(c.mark) + '</span><span class="day-pin-n">' + esc(c.name) + '</span>' })
+        : L.divIcon({ className: 'cp-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
+            iconSize: [26, 26], iconAnchor: [13, 13], html: '<span>' + esc(c.mark || c.ord) + '</span>' });
+      m = L.marker([c.lat, c.lng], { icon: icon, keyboard: false, zIndexOffset: isDayEnd ? 600 : 500 }).addTo(cpLayer);
+    }
     var bits = ['<div class="popup"><h3>' + esc(c.mark || c.ord) + '. ' + esc(c.name) + '</h3>'];
     if (c.label) bits.push('<p>' + esc(c.label) + '</p>');
     if (c.precision === 'fuzzed') bits.push('<p class="muted">approximate position</p>');
