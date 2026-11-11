@@ -71,9 +71,23 @@
     if (fix) { b.set('lat', fix.latitude.toFixed(4)); b.set('lng', fix.longitude.toFixed(4)); }
     return b.toString();
   }
+  // Chester gets a limit (45 s): past it the card says so and the button is
+  // free again; a late answer is dropped, never shown on top.
+  var DT_SLOW = 'Chester did not answer. Tap to ask again.';
   function driveTracks(d) {
     d.player.asking('Asking Chester\u2026');
-    var started = false, err = '';
+    var started = false, err = '', over = false, ms = d.askMs || 45000, timer = null;
+    var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    function say(m) { if (over) return; over = true; d.player.say(m); }
+    var hasTimer = typeof setTimeout !== 'undefined' && typeof clearTimeout !== 'undefined';
+    var limit = !hasTimer ? new Promise(function () {}) : new Promise(function (res) {
+      timer = setTimeout(function () {
+        if (!started && !over) { say(DT_SLOW); if (d.player.report) d.player.report('ask_timeout', { ms: ms }); }
+        over = true;
+        try { if (ctl) ctl.abort(); } catch (e) { /* gone */ }
+        res();
+      }, ms);
+    });
     function line(l) {
       if (!l || !l.trim()) return;
       var ev;
@@ -83,13 +97,17 @@
         if (c && c.album_id > 0) { started = true; d.player.start({ album_id: c.album_id, album: c.album, albumartist: c.artist }); }
       } else if (ev.t === 'error' && ev.d) err = ev.d;
     }
-    return d.fetch('/chester/ask', { method: 'POST', credentials: 'same-origin',
-      headers: { 'Accept': 'application/x-ndjson', 'Content-Type': 'application/x-www-form-urlencoded' }, body: d.body })
+    var opts = { method: 'POST', credentials: 'same-origin',
+      headers: { 'Accept': 'application/x-ndjson', 'Content-Type': 'application/x-www-form-urlencoded' }, body: d.body };
+    if (ctl) opts.signal = ctl.signal;
+    var work = Promise.resolve().then(function () { return d.fetch('/chester/ask', opts); })
       .then(function (r) {
-        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (o) { d.player.say((o && o.error) || DT_DOWN); });
-        return readLines(r, line).then(function () { if (!started) d.player.say(err || DT_NONE); });
+        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (o) { say((o && o.error) || DT_DOWN); });
+        return readLines(r, line).then(function () { if (!started) say(err || DT_NONE); });
       })
-      .catch(function () { if (!started) d.player.say(DT_DOWN); });
+      .catch(function () { if (!started) say(DT_DOWN); })
+      .then(function () { if (hasTimer) clearTimeout(timer); });
+    return Promise.race([work, limit]);
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody, isMoving: isMoving, navTapBody: navTapBody, navResultBody: navResultBody, driveTracks: driveTracks, driveBody: driveBody };
   // The shell's card (player.js) reuses this one function for its Ask Chester button.

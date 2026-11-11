@@ -65,3 +65,38 @@ test('toggleCard opens and closes the card body and says so', async () => {
   assert.equal(body.hidden, true);
   assert.equal(attrs['aria-expanded'], 'false');
 });
+
+// The watchdog with a hand-driven clock: a tap always ends in sound or a sentence.
+function clock() {
+  const q = []; let t = 0, id = 0;
+  return { setTimeout: (f, ms) => { q.push({ id: ++id, at: t + ms, f }); return id; }, clearTimeout: (i) => { const k = q.findIndex((x) => x.id === i); if (k >= 0) q.splice(k, 1); },
+    run(to) { for (;;) { q.sort((a, b) => a.at - b.at); if (!q.length || q[0].at > to) break; const x = q.shift(); t = x.at; x.f(); } t = to; } };
+}
+test('the watchdog says it is still trying at 8 s, tries once more at 20 s, gives up 15 s after that', () => {
+  const c = clock(), log = [];
+  const w = P.createWatch({ setTimeout: c.setTimeout, clearTimeout: c.clearTimeout, ms: { stall: 8000, retry: 20000, giveUp: 15000 },
+    onStall: (p) => log.push('stall:' + p), onRetry: (p) => log.push('retry:' + p), onGiveUp: (p) => log.push('giveup:' + p) });
+  w.arm('stream');
+  c.run(7999); assert.deepEqual(log, []);
+  c.run(8000); assert.deepEqual(log, ['stall:stream']);
+  c.run(20000); assert.deepEqual(log, ['stall:stream', 'retry:stream']);
+  c.run(35000); assert.deepEqual(log, ['stall:stream', 'retry:stream', 'stall:stream', 'giveup:stream']);
+  assert.equal(w.armed(), false);
+});
+test('the first sound stands the watchdog down, and a later start gets its own retry', () => {
+  const c = clock(), log = [];
+  const w = P.createWatch({ setTimeout: c.setTimeout, clearTimeout: c.clearTimeout, ms: { stall: 8, retry: 20, giveUp: 15 },
+    onStall: () => log.push('stall'), onRetry: () => log.push('retry'), onGiveUp: () => log.push('giveup') });
+  w.arm('stream'); c.run(5); w.ok(); c.run(100);
+  assert.deepEqual(log, []);
+  w.arm('stream'); c.run(200);
+  assert.deepEqual(log, ['stall', 'retry', 'stall', 'giveup']);
+});
+test('a failure report carries an event word and numbers only, never a place, a title or an address', () => {
+  assert.equal(P.reportBody('first_sound', { ms: 1234.4, album_id: 42, track_idx: 2, lat: 30.1, title: 'Song', src: 'https://x.example.test/a' }),
+    'event=first_sound&ms=1234&album_id=42&track_idx=2');
+  assert.equal(P.reportBody('play_timeout', { code: 'Stream Phase!' }), 'event=play_timeout&code=stream_phase_');
+  assert.equal(P.reportBody('stream_error', { code: 'media_' + 'x'.repeat(40) }).length, 'event=stream_error&code='.length + 24);
+  assert.equal(P.reportBody('Bad Event', {}), '');
+  assert.equal(P.reportBody('ask_timeout', { ms: 'soon' }), 'event=ask_timeout');
+});

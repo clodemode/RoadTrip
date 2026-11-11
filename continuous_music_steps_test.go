@@ -92,6 +92,12 @@ func initContinuousMusicScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		open(kris0(build, &kris), p, map[string]string{"Sec-Fetch-Dest": "iframe"})
 		return nil
 	})
+	sc.Step(`^Kris loads "([^"]*)" as a whole page$`, func(p string) error {
+		build()
+		rec = get(kris, "GET", p, map[string]string{"Sec-Fetch-Dest": "document"}, nil)
+		page = rec.Body.String()
+		return nil
+	})
 	sc.Step(`^a visitor opens the page "([^"]*)"$`, func(p string) error {
 		build()
 		rec = get(nil, "GET", p, nil, nil)
