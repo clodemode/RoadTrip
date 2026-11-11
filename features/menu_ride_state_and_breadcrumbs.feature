@@ -21,15 +21,15 @@ Feature: The menu follows the ride's state, Drive Tracks rides along, every page
     When the drive is started by the simulated car
     Then the ride state reads "Active, simulation"
 
-  Scenario: Planning again once the finish is reached
+  Scenario: Finished once the finish is reached
     When the drive is started
     And the finish is reached
-    Then the ride state reads "Planning"
+    Then the ride state reads "Finished"
 
-  Scenario: Planning again once the finish is skipped
+  Scenario: Finished once the finish is skipped
     When the drive is started
     And the finish is skipped
-    Then the ride state reads "Planning"
+    Then the ride state reads "Finished"
 
   Scenario: The Active menu
     When the drive is started

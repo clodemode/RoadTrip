@@ -612,7 +612,7 @@ body.rt-shell { margin: 0; display: flex; flex-direction: column; height: 100dvh
    Tracks strip is a compact band under the banner, shown only while Active. */
 .ride-state { align-self: flex-start; padding: 0 .5rem; border-radius: 1rem; font-size: .72rem; font-weight: 700; letter-spacing: .04em;
   text-transform: uppercase; background: rgba(255,255,255,.16); color: var(--rt-mast-ink); border: 1px solid rgba(255,255,255,.35); }
-.ride-state[data-state="active"] { background: #fff; color: #14532d; border-color: #fff; }
+.ride-state[data-state="active"], .ride-state[data-state="finished"] { background: #fff; color: #14532d; border-color: #fff; }
 .mast-links a[aria-current="page"] { color: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: .3rem; }
 @media (max-width: 575px) { .mast-links { font-size: .88rem; } .mast-links a, .mast-links .linkish { padding: 0 .4rem; } }
 .pagehead { max-width: 1000px; margin: 0 auto; padding: .5rem 16px 0; }
