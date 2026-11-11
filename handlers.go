@@ -224,6 +224,8 @@ func (a *App) routes() http.Handler {
 	// a question spends money and the log is the trip-keeper's own.
 	mux.Handle("GET /chester", a.requireAuth(a.chesterPage))
 	mux.Handle("POST /chester/ask", a.requireRide(a.chesterAsk))
+	mux.Handle("GET /chester/preferences", a.requireAuth(a.chesterPreferencesJSON))
+	mux.Handle("POST /chester/preferences", a.requireAuth(a.chesterPreferences))
 	mux.Handle("GET /driver/chester/memory", a.requireAuth(a.chesterMemoryPage))
 	mux.Handle("POST /driver/chester/memory/clear", a.requireAuth(a.chesterMemoryClear))
 	mux.Handle("GET /driver/chester/log", a.requireAuth(a.chesterLog))

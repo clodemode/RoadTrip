@@ -1485,8 +1485,8 @@ func TestChesterPageRenders(t *testing.T) {
 			t.Errorf("the page has no button for %s", p.Label)
 		}
 	}
-	if len(chesterPresets) != 8 {
-		t.Errorf("%d presets, want 8", len(chesterPresets))
+	if len(chesterPresets) != 10 {
+		t.Errorf("%d presets, want 10", len(chesterPresets))
 	}
 	for _, want := range []string{"For the passenger, or when parked.", "no live traffic", `name="mode" value="quick" checked`,
 		`name="mode" value="plan"`, ">Ask</button>", "Send my position", "Read the answer aloud", `aria-live="polite"`,
