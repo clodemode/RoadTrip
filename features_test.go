@@ -23,6 +23,7 @@ func TestFeatures(t *testing.T) {
 				initOldPhotoScenarios(sc, sw)
 				mw := initMarksScenarios(t, sc, sim)
 				initHoursMilestoneScenarios(t, sc, mw)
+				initPlanDaySummaryScenarios(t, sc, mw)
 				initChesterMusicScenarios(t, sc)
 				initDayBadgeScenarios(sc)
 				initDriveTracksScenarios(t, sc)

@@ -49,6 +49,11 @@
   }
   function round1(v) { return Math.round(v * 10) / 10; }
   function fixed1(v) { return round1(v).toFixed(1); }
+  /* quarter hours, "10½": the same rounding the page's server uses. */
+  function qh(h) {
+    var q = Math.round(h * 4), whole = Math.floor(q / 4), frac = q % 4;
+    return (whole > 0 || frac === 0 ? String(whole) : '') + ['', '¼', '½', '¾'][frac];
+  }
   function thousands(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -87,14 +92,31 @@
       total += l.miles;
     });
     order.sort(function (a, b) { return a - b; });
-    var hours = 0;
+    var hours = 0, milestones = 0;
     var days = order.map(function (n) {
       var d = byDay[n];
       d.long = doc.long_day_hours > 0 && d.hours > doc.long_day_hours;
       hours += d.hours;
+      /* Milestones: places passed on the way, never the night's end and never a
+         private place. Each comes at the share of its own leg its leg_frac says. */
+      d.milestones = [];
+      var startOrd = 0;
+      doc.checkpoints.forEach(function (c) { if (taken(c) && (!startOrd || c.ord < startOrd)) startOrd = c.ord; });
+      var prior = 0;
+      d.legs.forEach(function (l) {
+        var legHours = doc.avg_mph > 0 ? l.miles / doc.avg_mph : l.hours;
+        doc.checkpoints.forEach(function (c) {
+          if (!taken(c) || c.leg !== l.ord || c.ord === startOrd || c.is_terminal || c.precision === 'fuzzed' || !c.name) return;
+          d.milestones.push({ name: c.name, hours: round1(prior + (c.leg_frac || 0) * legHours) });
+        });
+        prior += legHours;
+      });
+      d.milestones.sort(function (a, b) { return a.hours - b.hours; });
+      milestones += d.milestones.length;
       return d;
     });
-    return { days: days, miles: round1(total), hours: round1(hours) };
+    return { days: days, miles: round1(total), hours: round1(hours), nights: days.length > 1 ? days.length - 1 : 0,
+      milestones: milestones };
   }
 
   /* --- the map ------------------------------------------------------------ */
@@ -141,7 +163,7 @@
     else { window.addEventListener('load', refit); window.addEventListener('resize', refit); }
   }
 
-  function drawMap() {
+  function drawMap(sum) {
     if (!map) return;
     lines.forEach(function (x) {
       var on = taken(x.leg);
@@ -157,17 +179,32 @@
         : ('Switch to this route: ' + fixed1(x.leg.miles) + ' mi'), { sticky: true });
     });
     cpLayer.clearLayers();
-    doc.checkpoints.forEach(function (c) {
-      if (!taken(c)) return;
-      var m = L.marker([c.lat, c.lng], {
-        icon: L.divIcon({ className: 'cp-pin', iconSize: [26, 26], iconAnchor: [13, 13],
-          html: '<span>' + c.ord + '</span>' }),
-        keyboard: false, zIndexOffset: 500
-      }).addTo(cpLayer);
-      m.bindPopup('<div class="popup"><h3>' + c.ord + '. ' + esc(c.name) + '</h3>' +
-        (c.label ? '<p>' + esc(c.label) + '</p>' : '') +
-        (c.precision === 'fuzzed' ? '<p class="muted">approximate position</p>' : '') +
-        '<p class="muted">' + esc(c.tz) + '</p></div>');
+    /* A night's end is a stop and carries its day's badge and the town; the
+       start and the places passed on the way are small plain dots. */
+    var dayOfLeg = {}, lastLeg = {}, colorOf = {}, dateOf = {};
+    sum.days.forEach(function (d) {
+      colorOf[d.day] = d.color; dateOf[d.day] = d.date;
+      d.legs.forEach(function (l) { dayOfLeg[l.ord] = d.day; lastLeg[d.day] = Math.max(lastLeg[d.day] || 0, l.ord); });
+    });
+    var cps = doc.checkpoints.filter(taken).sort(function (a, b) { return a.ord - b.ord; });
+    cps.forEach(function (c, i) {
+      var day = dayOfLeg[c.leg];
+      var isEnd = i > 0 && c.is_terminal && day && lastLeg[day] === c.leg;
+      var note = '<p class="muted">' + esc(c.tz) + '</p>' +
+        (c.precision === 'fuzzed' ? '<p class="muted">approximate position</p>' : '');
+      if (isEnd) {
+        L.marker([c.lat, c.lng], {
+          icon: L.divIcon({ className: 'day-pin', iconSize: null, iconAnchor: [15, 13],
+            html: '<span class="day-pin-b" style="background:' + esc(colorOf[day]) + '">d' + day + '</span>' +
+              '<span class="day-pin-n">' + esc(c.name) + '</span>' }),
+          keyboard: false, zIndexOffset: 600
+        }).addTo(cpLayer).bindPopup('<div class="popup"><h3>d' + day + ' &middot; ' + esc(c.name) + '</h3>' +
+          '<p>Stop for the night</p><p class="muted">' + esc(dateOf[day]) + '</p>' + note + '</div>');
+      } else {
+        L.circleMarker([c.lat, c.lng], { radius: 5, color: '#374151', weight: 2, fillColor: '#fff', fillOpacity: 1 })
+          .addTo(cpLayer).bindPopup('<div class="popup"><h3>' + esc(c.name) + '</h3><p>' +
+            (i === 0 ? 'Start' : 'Milestone') + '</p>' + note + '</div>');
+      }
     });
   }
 
@@ -204,20 +241,28 @@
     if (daysEl) {
       daysEl.innerHTML = sum.days.map(function (d) {
         return '<li><button type="button" class="day-row" data-day="' + d.day + '" style="--leg:' + esc(d.color) + '">' +
-          '<span class="day-n">' + d.day + '</span>' +
+          '<span class="day-n">d' + d.day + '</span>' +
           '<span class="day-main"><span class="day-name">' + esc(d.name) + '</span>' +
-          '<span class="day-date muted">' + esc(d.date) + '</span></span>' +
-          '<span class="day-nums"><span class="day-miles">' + fixed1(d.miles) + ' mi</span>' +
-          '<span class="day-hours muted">' + fixed1(d.hours) + ' h</span>' +
+          '<span class="day-date muted">' + esc(d.date) + '</span>' +
+          (d.milestones.length ? '<span class="day-ms muted">Milestones: ' + d.milestones.map(function (m) {
+            return esc(m.name) + ' at about ' + qh(m.hours) + ' h';
+          }).join(', ') + '</span>' : '') + '</span>' +
+          '<span class="day-nums"><span class="day-miles">' + thousands(Math.round(d.miles)) + ' mi</span>' +
+          '<span class="day-hours muted">about ' + qh(round1(d.hours)) + ' h</span>' +
           (d.long ? '<span class="pill pill-long">Long day</span>' : '') + '</span></button></li>';
       }).join('');
     }
     var miles = document.getElementById('plan-miles');
     var count = document.getElementById('plan-daycount');
     var hours = document.getElementById('plan-hours');
+    var counts = document.getElementById('plan-counts');
+    if (counts) {
+      counts.textContent = (sum.nights ? '· ' + sum.nights + (sum.nights === 1 ? ' night' : ' nights') : '') +
+        (sum.milestones ? ' · ' + sum.milestones + (sum.milestones === 1 ? ' milestone' : ' milestones') : '');
+    }
     if (miles) miles.textContent = thousands(Math.round(sum.miles)) + ' mi';
     if (count) count.textContent = sum.days.length + (sum.days.length === 1 ? ' day' : ' days');
-    if (hours) hours.textContent = '· about ' + fixed1(sum.hours) + ' h of driving';
+    if (hours) hours.textContent = '· about ' + qh(sum.hours) + ' h of driving';
   }
 
   function syncURL() {
@@ -237,7 +282,7 @@
     /* A day that the new selection no longer has cannot stay in focus. */
     if (focusDay && !sum.days.some(function (d) { return d.day === focusDay; })) { focusDay = 0; }
     drawDays(sum);
-    drawMap();
+    drawMap(sum);
     markDay();
     if (allBtn) allBtn.hidden = !focusDay;
   }

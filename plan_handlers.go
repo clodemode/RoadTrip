@@ -256,19 +256,12 @@ func (a *App) planPage(w http.ResponseWriter, r *http.Request) {
 	if legs, err := a.store.Legs(st.Ride.Slug); err == nil && len(legs) > 0 {
 		pageLeg = legs[0].Slug
 	}
-	// The hours timeline is the trip-keeper's planning aid: built for a driver
-	// alone, so a visitor's response cannot carry it.
-	var bars *hoursView
-	if legs, err := a.store.Legs(st.Ride.Slug); err == nil && len(legs) > 0 && a.isDriver(r) {
-		v := a.hoursBars(st.Ride.Slug, legs, allIndexes(len(legs)), len(legs) > 1)
-		bars = &v
-	}
 	var marks []TrackMark
 	if a.isDriver(r) {
 		marks, _ = a.store.TrackMarks(a.userOf(r))
 	}
 	a.render(w, r, "plan.html", map[string]any{
-		"Title": "Plan", "HoursBars": bars, "Marks": marks, "Ride": st.Ride, "Sum": sum, "Opts": st.optViews(choices),
+		"Title": "Plan", "Marks": marks, "Ride": st.Ride, "Sum": sum, "Opts": st.optViews(choices),
 		"Start": start, "HasFile": st.HasFile, "Plan": page, "PageLeg": pageLeg,
 		// Codes in, fixed sentences out; an unknown code is the empty string.
 		"Error": planRefusals[r.URL.Query().Get("error")], "Notice": planNotices[r.URL.Query().Get("ok")],

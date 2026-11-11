@@ -143,12 +143,20 @@
 
   /* --- checkpoints ------------------------------------------------------ */
   var cpLayer = L.layerGroup().addTo(map);
+  var colorBySlug = {};
+  (data.legs || []).forEach(function (leg) { colorBySlug[leg.slug] = leg.color; });
   (data.checkpoints || []).forEach(function (c) {
-    var m = L.marker([c.lat, c.lng], {
-      icon: L.divIcon({ className: 'cp-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
-        iconSize: [26, 26], iconAnchor: [13, 13], html: '<span>' + esc(c.mark || c.ord) + '</span>' }),
-      keyboard: false, zIndexOffset: 500
-    }).addTo(cpLayer);
+    /* A night's end is marked d1, d2 ...: it wears its day's badge in the day's
+       colour with the town beside it. Every other place stays a small pin. */
+    var isDayEnd = /^d\d+$/.test(c.mark || '');
+    var icon = isDayEnd
+      ? L.divIcon({ className: 'day-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
+          iconSize: null, iconAnchor: [15, 13],
+          html: '<span class="day-pin-b" style="background:' + esc(colorBySlug[c.leg_slug] || '#0d6efd') + '">' +
+            esc(c.mark) + '</span><span class="day-pin-n">' + esc(c.name) + '</span>' })
+      : L.divIcon({ className: 'cp-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
+          iconSize: [26, 26], iconAnchor: [13, 13], html: '<span>' + esc(c.mark || c.ord) + '</span>' });
+    var m = L.marker([c.lat, c.lng], { icon: icon, keyboard: false, zIndexOffset: isDayEnd ? 600 : 500 }).addTo(cpLayer);
     var bits = ['<div class="popup"><h3>' + esc(c.mark || c.ord) + '. ' + esc(c.name) + '</h3>'];
     if (c.label) bits.push('<p>' + esc(c.label) + '</p>');
     if (c.precision === 'fuzzed') bits.push('<p class="muted">approximate position</p>');

@@ -387,16 +387,20 @@ type planLeg struct {
 // planCP is one checkpoint the plan could have. Lat/Lng are the published
 // point: a private place is its snapped cell.
 type planCP struct {
-	Ord       int               `json:"ord"`
-	Leg       int               `json:"leg"`
-	Name      string            `json:"name"`
-	Label     string            `json:"label"`
-	Lat       float64           `json:"lat"`
-	Lng       float64           `json:"lng"`
-	TZ        string            `json:"tz"`
-	Precision string            `json:"precision"`
-	Terminal  bool              `json:"is_terminal"`
-	When      map[string]string `json:"when,omitempty"`
+	Ord       int     `json:"ord"`
+	Leg       int     `json:"leg"`
+	Name      string  `json:"name"`
+	Label     string  `json:"label"`
+	Lat       float64 `json:"lat"`
+	Lng       float64 `json:"lng"`
+	TZ        string  `json:"tz"`
+	Precision string  `json:"precision"`
+	Terminal  bool    `json:"is_terminal"`
+	// LegFrac is how far along its own leg's line the place lies, 0 to 1: a
+	// share, never a point. It lets a day name the hour a milestone comes at.
+	// Zero for a private place, which is never named.
+	LegFrac float64           `json:"leg_frac"`
+	When    map[string]string `json:"when,omitempty"`
 }
 
 // planDoc is a whole trip with every alternative in it, already published.
@@ -434,6 +438,7 @@ func publishPlan(raw []byte) (*planDoc, error) {
 	// choices it is tied to agree.
 	var legs []seedLeg
 	var cps []seedCP
+	fracs := map[string]float64{}
 	seen := map[string]bool{}
 	add := func(ls []seedLeg, cs []seedCP) {
 		for _, l := range ls {
@@ -448,6 +453,7 @@ func publishPlan(raw []byte) (*planDoc, error) {
 			if !seen[k] {
 				seen[k] = true
 				cps = append(cps, c)
+				fracs[k] = legFrac(ls, c)
 			}
 		}
 	}
@@ -465,13 +471,14 @@ func publishPlan(raw []byte) (*planDoc, error) {
 	}
 	var all []Checkpoint
 	for _, c := range cps {
+		frac := fracs["C|"+strconv.Itoa(c.Ord)+"|"+strconv.Itoa(c.LegOrd)+"|"+c.Name+"|"+whenText(c.When)]
 		pub := Checkpoint{Ord: c.Ord, Name: c.Name, Label: c.Label, Lat: c.Lat, Lng: c.Lng,
 			TZ: c.TZ, Precision: c.Precision, IsTerminal: c.IsTerminal}
 		pub.fuzz()
 		all = append(all, pub)
 		doc.Checkpoints = append(doc.Checkpoints, planCP{Ord: pub.Ord, Leg: c.LegOrd, Name: pub.Name,
 			Label: pub.Label, Lat: pub.Lat, Lng: pub.Lng, TZ: pub.TZ, Precision: pub.Precision,
-			Terminal: pub.IsTerminal, When: c.When})
+			Terminal: pub.IsTerminal, LegFrac: frac, When: c.When})
 	}
 	fuzzed := fuzzedOf(all)
 	for _, l := range legs {
@@ -495,6 +502,46 @@ func publishPlan(raw []byte) (*planDoc, error) {
 // planFromStore is the planner's view of a ride that has no trip file — an
 // embedded seed. There are no alternatives to show, only the days; the legs
 // and checkpoints come out of the store already fuzzed and masked.
+func storeFrac(l Leg, c Checkpoint) float64 {
+	if c.Precision == precisionFuzzed {
+		return 0
+	}
+	pts := linePoints(l.Line)
+	if len(pts) < 2 {
+		return 0
+	}
+	return fracAlong(pts, c.Lat, c.Lng)
+}
+
+// legFrac is how far along its leg's line a checkpoint lies, as a share. A
+// private place gets 0: it is never named with an hour.
+func legFrac(legs []seedLeg, c seedCP) float64 {
+	if c.Precision == precisionFuzzed {
+		return 0
+	}
+	for _, l := range legs {
+		if l.Ord != c.LegOrd {
+			continue
+		}
+		pts := linePoints(json.RawMessage(l.Line))
+		if len(pts) < 2 {
+			return 0
+		}
+		return fracAlong(pts, c.Lat, c.Lng)
+	}
+	return 0
+}
+
+// fracAlong is where (lat,lng) projects on pts, as a share of the line.
+func fracAlong(pts [][2]float64, lat, lng float64) float64 {
+	total := simPathLength(pts)
+	if total <= 0 {
+		return 0
+	}
+	along, _ := projectOnLine(pts, lat, lng)
+	return math.Max(0, math.Min(1, along/total))
+}
+
 func planFromStore(ride *Ride, legs []Leg) *planDoc {
 	doc := &planDoc{Ride: ride.Slug, Name: ride.Name, StartDate: ride.StartDate,
 		Options: []tripOption{}, Legs: []planLeg{}, Checkpoints: []planCP{}}
@@ -505,7 +552,7 @@ func planFromStore(ride *Ride, legs []Leg) *planDoc {
 		for _, c := range l.Checkpoints {
 			doc.Checkpoints = append(doc.Checkpoints, planCP{Ord: c.Ord, Leg: l.Ord, Name: c.Name,
 				Label: c.Label, Lat: c.Lat, Lng: c.Lng, TZ: c.TZ, Precision: c.Precision,
-				Terminal: c.IsTerminal})
+				Terminal: c.IsTerminal, LegFrac: storeFrac(l, c)})
 		}
 	}
 	return doc
@@ -571,6 +618,14 @@ type planDay struct {
 	// spared by the rounding of its own display.
 	Long  bool   `json:"long_day"`
 	Color string `json:"color"`
+	// Milestones are the places passed on the way that day, in driving order,
+	// each with the hour it comes at. The night's end is not one of them.
+	Milestones []planMilestone `json:"milestones"`
+}
+
+type planMilestone struct {
+	Name  string  `json:"name"`
+	Hours float64 `json:"hours"`
 }
 
 // planSummary is one selection worked out: the days, the totals, the
@@ -587,6 +642,8 @@ type planSummary struct {
 	Days            []planDay         `json:"days"`
 	DayCount        int               `json:"day_count"`
 	LongDays        int               `json:"long_days"`
+	Nights          int               `json:"nights"`
+	MilestoneCount  int               `json:"milestone_count"`
 	TotalMiles      float64           `json:"total_miles"`
 	TotalMilesShown string            `json:"total_miles_shown"`
 	TotalHours      float64           `json:"total_hours"`
@@ -601,6 +658,7 @@ func (d *planDoc) summarize(choices map[string]string, start string) planSummary
 		startDay = t
 	}
 	byDay := map[int]*planDay{}
+	dayLegs := map[int][]planLeg{}
 	rawMiles := map[int]float64{}
 	rawHours := map[int]float64{}
 	var order []int
@@ -622,6 +680,7 @@ func (d *planDoc) summarize(choices map[string]string, start string) planSummary
 			order = append(order, l.Day)
 		}
 		pd.Legs = append(pd.Legs, l.Ord)
+		dayLegs[l.Day] = append(dayLegs[l.Day], l)
 		if pd.Name != "" {
 			pd.Name += ", then "
 		}
@@ -651,6 +710,9 @@ func (d *planDoc) summarize(choices map[string]string, start string) planSummary
 		s.Days = append(s.Days, *pd)
 	}
 	s.DayCount = len(s.Days)
+	if s.DayCount > 1 {
+		s.Nights = s.DayCount - 1
+	}
 	s.TotalMiles = round1(total)
 	s.TotalMilesShown = thousands(int(math.Round(s.TotalMiles)))
 	s.TotalHours = round1(hours)
@@ -660,6 +722,34 @@ func (d *planDoc) summarize(choices map[string]string, start string) planSummary
 		}
 	}
 	sort.SliceStable(s.Checkpoints, func(i, j int) bool { return s.Checkpoints[i].Ord < s.Checkpoints[j].Ord })
+	// A milestone is a place passed on the way, not a night's end and never a
+	// private place. Its hour is the miles driven to it at the average speed.
+	startOrd := 0 // the first place of the plan is where it starts, not a milestone
+	for i, c := range s.Checkpoints {
+		if i == 0 || c.Ord < startOrd {
+			startOrd = c.Ord
+		}
+	}
+	for i := range s.Days {
+		day := &s.Days[i]
+		day.Milestones = []planMilestone{}
+		prior := 0.0 // hours driven on earlier legs of the day
+		for _, l := range dayLegs[day.Day] {
+			legHours := l.Hours
+			if d.AvgMPH > 0 {
+				legHours = l.Miles / d.AvgMPH
+			}
+			for _, c := range s.Checkpoints {
+				if c.Leg != l.Ord || c.Ord == startOrd || c.Terminal || c.Precision == precisionFuzzed || strings.TrimSpace(c.Name) == "" {
+					continue
+				}
+				day.Milestones = append(day.Milestones, planMilestone{Name: c.Name, Hours: round1(prior + c.LegFrac*legHours)})
+			}
+			prior += legHours
+		}
+		sort.SliceStable(day.Milestones, func(a, b int) bool { return day.Milestones[a].Hours < day.Milestones[b].Hours })
+		s.MilestoneCount += len(day.Milestones)
+	}
 	return s
 }
 
