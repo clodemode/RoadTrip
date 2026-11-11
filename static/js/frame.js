@@ -4,7 +4,7 @@
  * so everything that would leave the frame is dealt with here: a link to
  * another site opens in a new tab (a site that refuses framing is never blank),
  * a same-site link and form keep embed=1 for a browser that does not say
- * "iframe" itself, Sign out stops the music and goes to the top window, and the
+ * "iframe" itself (only when the page really is in a frame), Sign out stops the music and goes to the top window, and the
  * sign-in page breaks out of the frame. Nothing here touches the audio but the
  * explicit stop on sign out.
  */
@@ -28,6 +28,23 @@
   if (typeof document === 'undefined') return;
 
   var loc = window.location;
+  // Inside the shell's frame? A frame we cannot read is still a frame.
+  var inFrame;
+  try { inFrame = window.top !== window; } catch (e) { inFrame = true; }
+  var isLogin = !!(document.body && document.body.getAttribute && document.body.getAttribute('data-page') === 'login');
+  // A page in the top window whose address still says embed=1 lost its player
+  // card (an old tab, a shared link): say so, and load it again without the flag
+  // so the server serves the shell and the card.
+  if (!inFrame && !isLogin && /[?&]embed=1(&|#|$)/.test(loc.search || '')) {
+    try {
+      fetch('/driver/roadtracks/event', { method: 'POST', credentials: 'same-origin', keepalive: true,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'event=card_missing' }).catch(function () {});
+    } catch (e) { /* a report never stops the fix */ }
+    try {
+      var c = new URL(loc.href); c.searchParams.delete('embed');
+      loc.replace(c.pathname + c.search + c.hash);
+    } catch (e) { /* stay put */ }
+  }
   // The sign-in page asked for inside the frame (a session that ended): leave the frame.
   if (document.body && document.body.getAttribute && document.body.getAttribute('data-page') === 'login' && window.top !== window) {
     try {
@@ -42,7 +59,7 @@
     var href = a.getAttribute('href'), how = classify(href, a.getAttribute('target'), loc.href, loc.origin);
     if (how === 'blank') { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
     else if (how === 'top') a.setAttribute('target', '_top');
-    else if (how === 'embed') a.setAttribute('href', embedLink(href, loc.href));
+    else if (how === 'embed' && inFrame) a.setAttribute('href', embedLink(href, loc.href));
   }, true);
 
   document.addEventListener('submit', function (e) {
@@ -60,6 +77,7 @@
       return;
     }
     if (target && target !== '_self') return;
+    if (!inFrame) return;
     if ((f.getAttribute('method') || 'get').toLowerCase() === 'post') {
       f.setAttribute('action', embedLink(action, loc.href));
     } else if (!f.querySelector('input[name="embed"]')) {

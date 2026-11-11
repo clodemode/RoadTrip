@@ -57,7 +57,7 @@ const (
 )
 
 type App struct {
-	// melt is the fleet observability sink; nil (off) when MELT_REDIS_ADDR is unset.
+	// melt is the fleet observability sink; nil (off) when MELT_REDIS_ADDR and MELT_FILE are unset.
 	melt     *meltSink
 	tele     teleLimiter
 	store    *Store
@@ -302,7 +302,7 @@ func main() {
 	// reaches a log is spent.
 	// The driver screen's hazard sources. No TOMTOM_API_KEY is a supported
 	// state: the traffic chip then says so instead of staying quiet.
-	app.melt = newMelt(os.Getenv("MELT_REDIS_ADDR"), os.Getenv("MELT_VENUE"))
+	app.melt = newMeltSinks(os.Getenv("MELT_REDIS_ADDR"), os.Getenv("MELT_VENUE"), os.Getenv("MELT_FILE"))
 	app.hazards = newHazardSvc(os.Getenv("TOMTOM_API_KEY"))
 	app.free = newFreeSvc(os.Getenv("TOMTOM_API_KEY"))
 	app.shellOff = os.Getenv("PLAYER_SHELL") == "0"

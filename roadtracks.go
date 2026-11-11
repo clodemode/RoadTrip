@@ -125,14 +125,16 @@ func (a *App) roadtracksSearch(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "Type something to search."})
 		return
 	}
+	t0 := time.Now()
 	albums, err := a.tracks.search(r.Context(), q)
+	ms := time.Since(t0).Milliseconds()
 	if err != nil {
-		a.melt.Event("roadtracks_search", map[string]any{"qlen": len(q), "count": 0, "status": http.StatusBadGateway})
+		a.melt.Error("roadtracks_search", map[string]any{"qlen": len(q), "count": 0, "status": http.StatusBadGateway, "ms": ms, "reason": tracksReason(err)})
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "Music library unavailable"})
 		return
 	}
-	a.melt.Event("roadtracks_search", map[string]any{"qlen": len(q), "count": len(albums), "status": http.StatusOK})
+	a.melt.Event("roadtracks_search", map[string]any{"qlen": len(q), "count": len(albums), "status": http.StatusOK, "ms": ms})
 	_ = json.NewEncoder(w).Encode(map[string]any{"albums": albums})
 }
 
@@ -255,15 +257,23 @@ func (a *App) roadtracksAlbum(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "unavailable"})
 		return
 	}
+	t0 := time.Now()
 	doc, err := a.tracks.album(r.Context(), id)
+	ms := time.Since(t0).Milliseconds()
 	if err != nil {
-		a.melt.Event("roadtracks_album", map[string]any{"status": http.StatusBadGateway})
+		a.melt.Error("roadtracks_album", map[string]any{"status": http.StatusBadGateway, "ms": ms, "reason": tracksReason(err)})
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "unavailable"})
 		return
 	}
-	a.melt.Event("roadtracks_album", map[string]any{"tracks": len(doc.Tracks), "status": http.StatusOK})
+	a.melt.Event("roadtracks_album", map[string]any{"tracks": len(doc.Tracks), "status": http.StatusOK, "ms": ms})
 	_ = json.NewEncoder(w).Encode(doc)
+}
+
+// tracksReason is the library error as one word for a MELT record: timeout,
+// unreachable, status_503, bad_answer. The errors carry no URL or key.
+func tracksReason(err error) string {
+	return strings.ReplaceAll(strings.TrimSpace(err.Error()), " ", "_")
 }
 
 // resumeView is the server-held resume point, one per signed-in user.

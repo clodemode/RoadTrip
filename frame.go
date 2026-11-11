@@ -16,9 +16,17 @@ import (
 // embedded reports whether a request is for the page inside the frame: the
 // shell asks with embed=1, and a browser that sends Sec-Fetch-Dest says
 // "iframe" for every navigation made in the frame, redirects after a post
-// included, so a link needs no rewriting there.
+// included, so a link needs no rewriting there. A browser that says the load
+// is the whole window ("document") is never embedded, whatever the address
+// says: that page lost its frame (2026-11-11, the card that went missing).
 func embedded(r *http.Request) bool {
-	return r.URL.Query().Get("embed") == "1" || r.Header.Get("Sec-Fetch-Dest") == "iframe"
+	switch r.Header.Get("Sec-Fetch-Dest") {
+	case "iframe":
+		return true
+	case "document":
+		return false
+	}
+	return r.URL.Query().Get("embed") == "1"
 }
 
 // dropEmbed removes embed=1 from a relative address, so a sign-in "next" or a
@@ -114,6 +122,12 @@ func (a *App) shell(h http.Handler) http.Handler {
 			return
 		}
 		q := r.URL.Query()
+		// A whole-window load that still carries the frame's flag: send it to
+		// the clean address, which is served the shell and the card.
+		if q.Get("embed") == "1" {
+			http.Redirect(w, r, dropEmbed(r.URL.RequestURI()), http.StatusFound)
+			return
+		}
 		q.Set("embed", "1")
 		src := r.URL.Path + "?" + q.Encode()
 		w.Header().Set("Cache-Control", "private, no-store")

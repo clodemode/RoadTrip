@@ -63,10 +63,11 @@
     var cfg = { ahead: 3, ceiling: 300 * 1024 * 1024 };
     var items = {}, bad = {}, total = 0, busy = false, cold = false, full = false, cur = 0, gen = 0, tracks = [];
     function distance(i) { return Math.abs(i - cur); }
-    // The playing track first, then the next ones in album order, up to the limit.
+    // Only the NEXT tracks in album order, up to the limit. The playing track is
+    // left to the audio element: downloading it too fought the stream for the
+    // same bytes on a phone link (diagnosis 2026-11-11).
     function plan() {
       var out = [], i = cur;
-      if (tracks[cur] && tracks[cur].src) out.push(cur);
       for (var n = 0; n < cfg.ahead; n++) {
         i = nextPlayable(tracks, i);
         if (i < 0) break;
@@ -99,18 +100,22 @@
       if (cold) return;
       cold = true;
       env.log('roadtracks nest: cold (' + why + '); playing from the ordinary address');
+      if (env.report) env.report('nest_cold', { code: /^http/.test(why) ? 'http' : 'cors_or_offline' });
       env.changed();
     }
     function download(i, retried) {
       var t = tracks[i];
+      var status = false;
       return env.fetch(t.src).then(function (r) {
-        if (!r.ok) throw new Error('http ' + r.status);
+        if (!r.ok) { status = true; throw new Error('http ' + r.status); }
         return r.blob().then(function (b) {
           var ct = r.headers && r.headers.get ? r.headers.get('content-type') : '';
           return !b.type && ct ? new Blob([b], { type: ct }) : b;
         });
       }).catch(function (e) {
-        if (retried) throw e;
+        // A refusal with no status (another site's storage that will not share,
+        // or no signal) goes cold at once: asking for the album again cannot help.
+        if (retried || !status) throw e;
         // The address may have expired: ask for the album again, quietly, and try once more.
         return env.resign().then(function (ts) {
           tracks = ts || tracks;
@@ -140,7 +145,10 @@
     }
     return {
       setAlbum: function (ts) { gen++; busy = false; cold = false; full = false; bad = {}; Object.keys(items).forEach(function (k) { release(Number(k)); }); tracks = ts || []; cur = 0; env.changed(); },
-      playhead: function (i) { cur = i; full = false; pump(); env.changed(); },
+      // playhead only moves the place; downloading ahead starts once the playing
+      // track has made its first sound (started), so it never competes with it.
+      playhead: function (i) { cur = i; full = false; env.changed(); },
+      started: function () { pump(); },
       urlFor: function (i) { return items[i] ? items[i].url : null; },
       drop: function (i) { release(i); bad[i] = true; env.changed(); },
       ready: function () { return Object.keys(items).filter(function (k) { return Number(k) > cur; }).length; },
@@ -149,7 +157,45 @@
       config: function (o) { if (o && o.ceiling) cfg.ceiling = o.ceiling; if (o && o.ahead) cfg.ahead = o.ahead; }
     };
   }
-  var api = { toggleCard: toggleCard, nextPlayable: nextPlayable, metadataFor: metadataFor, stateBody: stateBody, unlockThenLoad: unlockThenLoad, stripEmbed: stripEmbed, createNest: createNest, SILENT: SILENT };
+  // THE WATCHDOG: a tap always ends in sound or a plain sentence. env:
+  // setTimeout, clearTimeout, ms {stall, retry, giveUp}, onStall(phase),
+  // onRetry(phase), onGiveUp(phase). arm(phase) after any start; ok() on the
+  // first sound. One retry per start: after it, the next silence gives up.
+  function createWatch(env) {
+    var t = null, retried = false, phase = '';
+    function cancel() { if (t) env.clearTimeout(t); t = null; }
+    function second() {
+      t = null;
+      if (retried) { retried = false; env.onGiveUp(phase); return; }
+      retried = true; arm(phase); env.onRetry(phase);
+    }
+    function stall() {
+      env.onStall(phase);
+      t = env.setTimeout(second, Math.max(0, (retried ? env.ms.giveUp : env.ms.retry) - env.ms.stall));
+    }
+    function arm(p) { cancel(); phase = p || 'stream'; t = env.setTimeout(stall, env.ms.stall); }
+    return {
+      arm: arm,
+      ok: function () { cancel(); retried = false; },
+      stop: function () { cancel(); retried = false; },
+      armed: function () { return !!t; },
+      phase: function () { return phase; }
+    };
+  }
+  // A failure report's body: an event word and a few numbers. Never a place, a
+  // title or an address; anything else handed in is dropped.
+  function reportBody(event, f) {
+    if (!/^[a-z_]{1,32}$/.test(String(event || ''))) return '';
+    f = f || {};
+    var b = 'event=' + event;
+    var int = function (v) { return typeof v === 'number' && isFinite(v) ? Math.max(0, Math.round(v)) : null; };
+    if (int(f.ms) !== null) b += '&ms=' + int(f.ms);
+    if (f.code) { var c = String(f.code).toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 24); if (c) b += '&code=' + c; }
+    if (int(f.album_id) !== null) b += '&album_id=' + int(f.album_id);
+    if (int(f.track_idx) !== null) b += '&track_idx=' + int(f.track_idx);
+    return b;
+  }
+  var api = { createWatch: createWatch, reportBody: reportBody, toggleCard: toggleCard, nextPlayable: nextPlayable, metadataFor: metadataFor, stateBody: stateBody, unlockThenLoad: unlockThenLoad, stripEmbed: stripEmbed, createNest: createNest, SILENT: SILENT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
   var root = typeof document !== 'undefined' && document.getElementById('rt-player');
@@ -160,13 +206,39 @@
   // asking: Drive Tracks has unlocked the element with the silent clip and is waiting for Chester's album.
   var asking = false;
 
+  // Timer lengths, in ms; the node harness shortens them (RTPlayer.configTimes).
+  var T = { stall: 8000, retry: 20000, giveUp: 15000, album: 25000 };
+  var MSG = { stall: 'Still trying to reach the music\u2026', gaveUp: 'Could not reach the music. Tap Play to try again.',
+    buffering: 'Buffering\u2026', loading: 'Still loading\u2026', nothing: 'Nothing to play yet. Ask Chester for an album.' };
+  var tapAt = 0, gaveUp = false, watchFrom = 0;
+  function now() { return Date.now(); }
+  // Client failure reports: fire and forget, a 404 is harmless.
+  function report(event, fields) {
+    try {
+      var b = reportBody(event, fields);
+      if (!b) return;
+      var p = fetch('/driver/roadtracks/event', { method: 'POST', credentials: 'same-origin', keepalive: true,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: b });
+      if (p && p.catch) p.catch(function () {});
+    } catch (e) { /* a report never breaks the player */ }
+  }
   function setText(id, v) { var el = $(id); if (el) el.textContent = v; }
   function status(v) { setText('rt-status', v); }
+  function statusText() { var el = $('rt-status'); return el ? el.textContent : ''; }
   function playBtn() { var b = $('rt-play'); if (b) b.textContent = audio.paused ? 'Play' : 'Pause'; }
 
+  // The album, with a limit: a dead link can never leave a tap waiting for good.
   function fetchAlbum(id) {
-    return fetch('/driver/roadtracks/album/' + encodeURIComponent(id), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
-      .then(function (r) { if (!r.ok) throw new Error('library'); return r.json(); });
+    var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, timer = null;
+    var fail = function (code) { var e = new Error(code); e.code = code; return e; };
+    var limit = new Promise(function (_, rej) {
+      timer = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) { /* gone */ } rej(fail('timeout')); }, T.album);
+    });
+    var opts = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+    if (ctl) opts.signal = ctl.signal;
+    var got = fetch('/driver/roadtracks/album/' + encodeURIComponent(id), opts)
+      .then(function (r) { if (!r.ok) throw fail('http'); return r.json(); }, function () { throw fail('network'); });
+    return Promise.race([got, limit]).then(function (v) { clearTimeout(timer); return v; }, function (e) { clearTimeout(timer); throw e; });
   }
   var nest = createNest({
     fetch: function (u) { return fetch(u); },
@@ -174,6 +246,7 @@
     makeURL: function (b) { return URL.createObjectURL(b); },
     revokeURL: function (u) { URL.revokeObjectURL(u); },
     log: function (l) { console.log(l); },
+    report: function (e, f) { report(e, f); },
     changed: function () { setText('rt-nest', nest && nest.isCold() ? 'streaming' : (nest ? nest.ready() : 0) + ' ready'); }
   });
   function paint() {
@@ -191,13 +264,14 @@
       if (typeof MediaMetadata !== 'undefined') navigator.mediaSession.metadata = new MediaMetadata(metadataFor(tracks[cur], album));
       var h = function (name, fn) { try { navigator.mediaSession.setActionHandler(name, fn); } catch (e) { /* not supported */ } };
       h('play', function () { audio.play(); });
-      h('pause', function () { audio.pause(); });
+      h('pause', function () { watch.stop(); audio.pause(); });
       h('nexttrack', function () { next(); });
       h('previoustrack', function () { var p = cur - 1; while (p >= 0 && !tracks[p].src) p--; if (p >= 0) playTrack(p, 0); });
     } catch (e) { /* the lock screen is a courtesy */ }
   }
 
   function giveUp(msg) {
+    watch.stop();
     audio.pause();
     status(msg || 'Could not play this album');
     playBtn();
@@ -208,6 +282,8 @@
     audio.src = nest.urlFor(i) || tracks[i].src;
     paint(); media();
     nest.playhead(i);
+    gaveUp = false; watchFrom = startAt;
+    watch.arm('stream');
     var p;
     try { p = audio.play(); } catch (e) { p = null; }
     if (p && p.catch) p.catch(function (e) {
@@ -227,26 +303,38 @@
     if (/^blob:/.test(audio.src || '')) { var at0 = lastPos; nest.drop(cur); playTrack(cur, at0); return; }
     fails++;
     if (fails >= 3) { giveUp('Could not play this album'); return; }
-    if (!refetched) {
-      refetched = true;
-      var at = lastPos, here = cur;
-      status('Reconnecting…');
-      fetchAlbum(album.album_id).then(function (doc) {
-        album = doc; tracks = doc.tracks || [];
-        if (tracks[here] && tracks[here].src) playTrack(here, at); else skipOn();
-      }).catch(function () { giveUp('Music library unavailable'); });
-      return;
-    }
+    if (!refetched) { refetched = true; reconnect('Reconnecting…'); return; }
     skipOn();
   }
+  // Fresh addresses for the album, then carry on from the same place.
+  function reconnect(msg) {
+    var at = audio.currentTime || lastPos, here = cur;
+    if (msg) status(msg);
+    fetchAlbum(album.album_id).then(function (doc) {
+      album = doc; tracks = doc.tracks || [];
+      if (tracks[here] && tracks[here].src) playTrack(here, at); else skipOn();
+    }).catch(function (e) { report('album_fetch_failed', { code: e && e.code, album_id: album && album.album_id }); giveUp('Music library unavailable'); });
+  }
+  var watch = createWatch({
+    setTimeout: function (f, ms) { return setTimeout(f, ms); }, clearTimeout: function (t) { clearTimeout(t); }, ms: T,
+    onStall: function () { status(MSG.stall); report('stream_stalled', { ms: T.stall, album_id: album && album.album_id, track_idx: cur }); },
+    // The album request is still running on its own limit; a stream gets fresh addresses once.
+    onRetry: function (phase) { if (phase === 'stream' && album && tracks.length && !opening) reconnect(''); },
+    onGiveUp: function (phase) {
+      report('play_timeout', { code: phase, album_id: album && album.album_id, track_idx: cur });
+      opening = false; asking = false; gaveUp = true; tapAt = 0;
+      audio.pause(); status(MSG.gaveUp); playBtn();
+    }
+  });
   function skipOn() {
     var n = nextPlayable(tracks, cur);
     if (n < 0) giveUp('Could not play this album'); else playTrack(n, 0);
   }
 
   function open(id, from, at) {
-    if (opening) return;
-    opening = true; asking = false; fails = 0; refetched = false;
+    if (opening) { status(MSG.loading); return; }
+    opening = true; asking = false; fails = 0; refetched = false; tapAt = now();
+    watch.arm('album');
     status('Loading…');
     setText('rt-title', from && from.album || ''); setText('rt-artist', from && from.albumartist || ''); setText('rt-track', '');
     waitTimer = setTimeout(function () { if (opening) status('Waking the music library…'); }, 2000);
@@ -258,9 +346,10 @@
       if (i < 0) i = nextPlayable(tracks, -1);
       if (i < 0) { giveUp('Nothing in this album can be played'); return; }
       playTrack(i, i === (from && from.idx) ? at : 0);
-    }).catch(function () {
-      opening = false; clearTimeout(waitTimer);
-      audio.pause(); status('Music library unavailable'); playBtn();
+    }).catch(function (e) {
+      opening = false; clearTimeout(waitTimer); watch.stop(); gaveUp = true;
+      report('album_fetch_failed', { code: e && e.code || 'network', album_id: id });
+      audio.pause(); status(e && e.code === 'timeout' ? MSG.gaveUp : 'Music library unavailable'); playBtn();
     });
   }
 
@@ -294,17 +383,53 @@
   if (frame) frame.addEventListener('load', frameLoaded);
 
   audio.addEventListener('ended', function () { if (!opening && !asking) next(); });
-  audio.addEventListener('error', function () { if (!asking) onError(); });
-  audio.addEventListener('timeupdate', function () { if (!opening) lastPos = audio.currentTime || 0; });
+  audio.addEventListener('error', function () {
+    if (asking) return;
+    if (!opening && tracks.length) report('stream_error', { code: 'media_' + (audio.error && audio.error.code || 0), album_id: album && album.album_id, track_idx: cur });
+    onError();
+  });
+  audio.addEventListener('timeupdate', function () {
+    if (opening) return;
+    var t = audio.currentTime || 0;
+    // Real progress is sound: the watchdog stands down.
+    if (watch.armed() && !audio.paused && t > watchFrom + 0.5) { watch.ok(); if (statusText() === MSG.buffering || statusText() === MSG.stall) status(''); }
+    lastPos = t;
+  });
+  // A stream that stops mid-play ('waiting'; 'stalled' also fires while buffered
+  // sound plays on, so it is not used): say so, and the same watchdog takes over.
+  function onStalled() {
+    if (opening || asking || audio.paused || !tracks.length || watch.armed()) return;
+    status(MSG.buffering); watchFrom = audio.currentTime || 0; watch.arm('stream');
+  }
+  audio.addEventListener('waiting', onStalled);
   audio.addEventListener('loadedmetadata', function () {
     if (startAt > 0 && !opening) { try { audio.currentTime = startAt; } catch (e) { /* seek is best effort */ } startAt = 0; }
   });
-  audio.addEventListener('playing', function () { if (opening || asking) return; fails = 0; refetched = false; status(''); playBtn(); });
+  audio.addEventListener('playing', function () {
+    if (opening || asking) return;
+    watch.ok(); fails = 0; refetched = false; gaveUp = false; status(''); playBtn();
+    if (tapAt) { report('first_sound', { ms: now() - tapAt, album_id: album && album.album_id, track_idx: cur }); tapAt = 0; }
+    nest.started();
+  });
   audio.addEventListener('pause', function () { if (opening || asking) return; playBtn(); sendState(); });
 
+  // Play. Nothing loaded: it does what Resume does, or says there is nothing
+  // yet; never a silent tap. Loaded: play, watched; after a give-up, from the
+  // same place with a fresh load.
   var pb = $('rt-play');
   if (pb) pb.addEventListener('click', function () {
-    if (audio.paused) { var p = audio.play(); if (p && p.catch) p.catch(function () { status('Tap Play to start'); }); } else audio.pause();
+    if (opening) { status(MSG.loading); return; }
+    if (!album || !tracks.length) {
+      if (asking) { status('Still asking Chester\u2026'); return; }
+      if (rb && parseInt(rb.getAttribute('data-album-id'), 10)) { resume(); return; }
+      status(MSG.nothing); return;
+    }
+    if (!audio.paused) { watch.stop(); audio.pause(); return; }
+    tapAt = now();
+    if (gaveUp) { playTrack(cur, audio.currentTime || lastPos); return; }
+    watchFrom = audio.currentTime || 0; watch.arm('stream');
+    var p = audio.play();
+    if (p && p.catch) p.catch(function (e) { if (!(e && e.name === 'AbortError')) status('Tap Play to start'); });
   });
   function mark(kind) {
     var t = tracks[cur];
@@ -320,27 +445,28 @@
   var nb = $('rt-next');
   if (nb) nb.addEventListener('click', function () { if (tracks.length) next(); });
   var rb = $('rt-resume');
-  if (rb) rb.addEventListener('click', function () {
+  function resume() {
     var id = parseInt(rb.getAttribute('data-album-id'), 10);
     if (!id) return;
     open(id, { album: rb.getAttribute('data-album'), albumartist: rb.getAttribute('data-artist'), idx: parseInt(rb.getAttribute('data-idx'), 10) || 0 },
       parseFloat(rb.getAttribute('data-pos')) || 0);
     rb.hidden = true;
-  });
+  }
+  if (rb) rb.addEventListener('click', resume);
 
   // Drive Tracks. asking() is called inside the tap: it unlocks sound for the
   // page and shows a line; the album comes later, from start().
   // say() ends the wait with a plain sentence when there is no album.
   function ask(msg) {
     if (opening) return;
-    asking = true; status(msg || '');
+    asking = true; watch.stop(); status(msg || '');
     setText('rt-title', ''); setText('rt-artist', ''); setText('rt-track', '');
     audio.src = SILENT;
     try { var p = audio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) { /* start() reports */ }
   }
   function say(msg) {
     if (opening) return;
-    asking = false; audio.pause(); status(msg); playBtn();
+    asking = false; watch.stop(); audio.pause(); status(msg); playBtn();
   }
   // The listener signs out: the music ends here and the place is kept.
   function stop() { audio.pause(); sendState(); }
@@ -359,12 +485,15 @@
   if (askBtn && window.RTDriveTracks) askBtn.addEventListener('click', function () {
     if (askBtn.disabled) return;
     askBtn.disabled = true;
-    var body = window.RTDriveTracks.body(hudFix());
-    window.RTDriveTracks({ fetch: window.fetch.bind(window), player: window.RTPlayer, body: body })
-      .then(function () { askBtn.disabled = false; });
+    var enable = function () { askBtn.disabled = false; };
+    try {
+      var body = window.RTDriveTracks.body(hudFix());
+      window.RTDriveTracks({ fetch: window.fetch.bind(window), player: window.RTPlayer, body: body }).then(enable, enable);
+    } catch (e) { enable(); }
   });
   window.RTPlayer = {
-    asking: ask, say: say, stop: stop,
+    asking: ask, say: say, stop: function () { watch.stop(); stop(); }, report: report,
+    configTimes: function (o) { for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k) && T.hasOwnProperty(k)) T[k] = o[k]; },
     start: function (a) { open(a.album_id, { album: a.album, albumartist: a.albumartist, idx: 0 }, 0); },
     configNest: function (o) { nest.config(o); },
     _state: function () { return { cur: cur, held: nest.held() }; }

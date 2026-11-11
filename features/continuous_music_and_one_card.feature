@@ -195,9 +195,9 @@ Feature: Music plays on between screens, in one Drive Tracks card, with the next
 
   # --- downloading songs in advance (NESTING), under node ------------------------
 
-  Scenario: Songs are downloaded one at a time, current first, then ahead in order, up to the limit
+  Scenario: Songs ahead are downloaded one at a time, in order, up to the limit, never the playing one (it would fight the stream)
     Given an album of 6 tracks is playing in the shell
-    Then the songs downloaded were tracks 1, 2, 3 and 4 in that order
+    Then the songs downloaded were tracks 2, 3 and 4 in that order
     And no two downloads ran at once
     And the card says 3 ready
 
@@ -222,11 +222,11 @@ Feature: Music plays on between screens, in one Drive Tracks card, with the next
     And the card never shows a playback error
     And the first track ending still plays track 2 from its ordinary address
 
-  Scenario: An expired address is signed again during the download, silently
+  Scenario: An expired address (a refusal with a status) is signed again during the download, silently
     Given the library's first addresses have expired
     When an album of 6 tracks is started
     Then the album was asked for again once
-    And the songs downloaded were tracks 1, 2, 3 and 4 in that order
+    And the songs downloaded were tracks 2, 3 and 4 in that order
     And the card never shows a playback error
 
   Scenario: Over the memory ceiling the farthest songs are let go first
