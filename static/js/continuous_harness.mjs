@@ -9,7 +9,7 @@ import vm from 'node:vm';
 
 const input = JSON.parse(readFileSync(0, 'utf8'));
 const mode = input.fetchMode || 'ok', bytes = input.bytes || 1000000, N = input.tracks || 4;
-const out = { audioLog: [], events: [], trackFetches: [], albumFetches: 0, statusHistory: [], created: [], revoked: [], logs: [],
+const out = { reports: [], audioLog: [], events: [], trackFetches: [], albumFetches: 0, statusHistory: [], created: [], revoked: [], logs: [],
   history: [], statePosts: 0, frameLoads: [], maxInflight: 0, held: [], title: '', syncEvents: [] };
 const idOf = (src) => Number((/\/[tb](\d+)\?/.exec(src) || [])[1]);
 
@@ -23,12 +23,16 @@ function el(id) {
   return e;
 }
 const els = {};
+if (input.resume) { els['rt-resume'] = el('rt-resume'); for (const [k, v] of Object.entries(input.resume)) els['rt-resume'].attrs['data-' + k] = String(v); }
 for (const id of ['rt-player', 'rt-art', 'rt-title', 'rt-artist', 'rt-track', 'rt-play', 'rt-next', 'rt-status', 'rt-nest', 'rt-frame', 'hud-drivetracks']) els[id] = el(id);
 const audio = el('rt-audio');
 els['rt-audio'] = audio;
 audio.paused = true; audio.currentTime = 0; audio._src = '';
 Object.defineProperty(audio, 'src', { get() { return this._src; }, set(v) { this._src = v; const l = 'src:' + (v.startsWith('data:') ? 'silent' : v); out.audioLog.push(l); out.events.push(l); } });
-audio.play = function () { this.paused = false; out.audioLog.push('play'); out.events.push('play'); queueMicrotask(() => this.fire('playing')); return Promise.resolve(); };
+// audioMode 'silent': the stream never makes a sound (no 'playing'), as on a dead link.
+audio.play = function () { this.paused = false; out.audioLog.push('play'); out.events.push('play');
+  if (input.audioMode !== 'silent' || this._src.startsWith('data:')) queueMicrotask(() => { if (!this._src.startsWith('data:')) out.events.push('sound'); this.fire('playing'); });
+  return Promise.resolve(); };
 audio.pause = function () { this.paused = true; out.audioLog.push('pause'); this.fire('pause'); };
 audio.load = function () { out.audioLog.push('load'); };
 const frameWin = { location: { pathname: '/', search: '', hash: '' }, document: { title: '' } };
@@ -40,16 +44,21 @@ const doc = (id) => ({ album_id: id, album: id === 42 ? 'First' : 'Second', albu
 const tick = () => new Promise((r) => setImmediate(r));
 async function fetchImpl(url, opts) {
   opts = opts || {};
+  if (url === '/driver/roadtracks/event') {
+    out.reports.push(Object.assign({ _keepalive: opts.keepalive === true, _type: (opts.headers || {})['Content-Type'] }, Object.fromEntries(new URLSearchParams(opts.body))));
+    return { ok: false, status: 404 };
+  }
   if (/\/driver\/roadtracks\/album\/(\d+)/.test(url)) {
     out.events.push('fetch:' + url);
     out.albumFetches++;
+    if (input.albumMode === 'hang') return new Promise(() => {});
     if (out.albumFetches > 1 && mode !== 'ok') resigned = true;
     const id = Number(/album\/(\d+)/.exec(url)[1]);
     return { ok: true, status: 200, json: async () => doc(id) };
   }
   if (url === '/driver/roadtracks/state') { out.statePosts++; return { ok: true, status: 200 }; }
   // a track download
-  out.trackFetches.push(idOf(url)); last = { idx: idOf(url), album: url.includes('/t') ? 't' : 'b' };
+  out.trackFetches.push(idOf(url)); out.events.push('dl:' + idOf(url)); last = { idx: idOf(url), album: url.includes('/t') ? 't' : 'b' };
   inflight++; out.maxInflight = Math.max(out.maxInflight, inflight);
   try {
     await tick();
@@ -77,6 +86,7 @@ out.createdSong = [];
 const settle = async () => { for (let i = 0; i < 40; i++) await tick(); };
 const startArgs = (id) => ({ album_id: id, album: id === 42 ? 'First' : 'Second', albumartist: 'Artist' });
 if (input.ceiling) P.configNest({ ceiling: input.ceiling });
+if (input.times) P.configTimes(input.times);
 for (const a of input.actions || []) {
   if (a.do === 'open') { P.start(startArgs(a.album || 42)); await settle(); }
   else if (a.do === 'frameTap') { out.events.length = 0; P.start(startArgs(a.album || 42)); out.syncEvents = out.events.slice(); await settle(); }
@@ -92,10 +102,14 @@ for (const a of input.actions || []) {
   else if (a.do === 'pause') { out.statePosts = 0; els['rt-play'].fire('click'); await settle(); }
   else if (a.do === 'signOut') { out.statePosts = 0; P.stop(); await settle(); }
   else if (a.do === 'settle') await settle();
+  else if (a.do === 'wait') { await new Promise((r) => setTimeout(r, a.ms)); await settle(); }
+  else if (a.do === 'play') { out.events.length = 0; els['rt-play'].fire('click'); out.syncEvents = out.events.slice(); await settle(); }
+  else if (a.do === 'audio') { audio.fire(a.event); await settle(); }
 }
 await settle();
 const st = P._state();
 out.held = st.held; out.cur = st.cur;
 out.paused = audio.paused; out.src = audio._src; out.status = els['rt-status']._t; out.trackText = els['rt-track']._t;
-out.nest = els['rt-nest']._t; out.title = ctx.document.title; out.hasRetry = true;
+out.nest = els['rt-nest']._t; out.playText = els['rt-play']._t; out.resumeHidden = els['rt-resume'] ? els['rt-resume'].hidden : null; out.title = ctx.document.title; out.hasRetry = true;
 console.log(JSON.stringify(out));
+process.exit(0);

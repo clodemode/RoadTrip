@@ -54,11 +54,15 @@ func cmStrs(v any) []string {
 // (static/js/player.js) and the frame script (static/js/frame.js).
 func initContinuousNodeScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	type world struct {
-		tracks  int
-		actions []map[string]any
-		mode    string
-		ceiling int
-		out     map[string]any
+		tracks    int
+		actions   []map[string]any
+		mode      string
+		ceiling   int
+		out       map[string]any
+		audioMode string
+		albumMode string
+		times     map[string]int
+		resume    map[string]any
 	}
 	w := &world{}
 	reset := func() { *w = world{tracks: 4, mode: "ok"} }
@@ -67,7 +71,14 @@ func initContinuousNodeScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		if w.out != nil {
 			return nil
 		}
-		in := map[string]any{"tracks": w.tracks, "actions": w.actions, "fetchMode": w.mode}
+		in := map[string]any{"tracks": w.tracks, "actions": w.actions, "fetchMode": w.mode,
+			"audioMode": w.audioMode, "albumMode": w.albumMode}
+		if w.times != nil {
+			in["times"] = w.times
+		}
+		if w.resume != nil {
+			in["resume"] = w.resume
+		}
 		if w.ceiling > 0 {
 			in["ceiling"], in["bytes"] = w.ceiling, 1000
 		}
@@ -206,6 +217,24 @@ func initContinuousNodeScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		if w.out["paused"] != true || num("statePosts") < 1 {
 			return fmt.Errorf("paused=%v statePosts=%d", w.out["paused"], num("statePosts"))
+		}
+		return nil
+	})
+	sc.Step(`^the songs downloaded were tracks (\d+), (\d+) and (\d+) in that order$`, func(a, b, c int) error {
+		if err := run(); err != nil {
+			return err
+		}
+		got := map[int]bool{}
+		var order []int
+		for _, s := range cmStrs(w.out["trackFetches"]) {
+			i, _ := strconv.Atoi(s)
+			if !got[i] {
+				got[i] = true
+				order = append(order, i)
+			}
+		}
+		if want := []int{a - 1, b - 1, c - 1}; fmt.Sprint(order) != fmt.Sprint(want) {
+			return fmt.Errorf("downloaded %v, want %v", order, want)
 		}
 		return nil
 	})
@@ -427,6 +456,235 @@ func initContinuousNodeScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		src := readFile(t, "static/js/player.js")
 		if m := regexp.MustCompile(`indexedDB|caches\.|localStorage|sessionStorage|showSaveFilePicker|\.download\b|FileSystem|StorageManager|navigator\.storage`).FindString(src); m != "" {
 			return fmt.Errorf("player.js uses %s", m)
+		}
+		return nil
+	})
+
+	// --- a tap never sticks (features/play_tap_never_sticks.feature) ---------------
+	short := map[string]int{"stall": 30, "retry": 80, "giveUp": 80, "album": 150}
+	sc.Step(`^the shell is idle with a resume point for album (\d+) at track (\d+)$`, func(id, n int) error {
+		reset()
+		w.resume = map[string]any{"album-id": id, "album": "First", "artist": "Artist", "idx": n - 1, "pos": 0}
+		return nil
+	})
+	sc.Step(`^the listener presses Play$`, func() error { act(map[string]any{"do": "play"}); return nil })
+	sc.Step(`^the Resume button is hidden$`, func() error {
+		if err := run(); err != nil {
+			return err
+		}
+		if w.out["resumeHidden"] != true {
+			return fmt.Errorf("Resume hidden=%v", w.out["resumeHidden"])
+		}
+		return nil
+	})
+	sc.Step(`^the player card says "([^"]*)"$`, func(say string) error {
+		if err := run(); err != nil {
+			return err
+		}
+		if w.out["status"] != say {
+			return fmt.Errorf("the card says %q (said %v)", w.out["status"], w.out["statusHistory"])
+		}
+		return nil
+	})
+	said := func(say string) (bool, error) {
+		if err := run(); err != nil {
+			return false, err
+		}
+		for _, s := range cmStrs(w.out["statusHistory"]) {
+			if s == say {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	sc.Step(`^the player card said "([^"]*)"$`, func(say string) error {
+		ok, err := said(say)
+		if err == nil && !ok {
+			err = fmt.Errorf("the card never said %q: %v", say, w.out["statusHistory"])
+		}
+		return err
+	})
+	sc.Step(`^the player card never said "([^"]*)"$`, func(say string) error {
+		ok, err := said(say)
+		if err == nil && ok {
+			err = fmt.Errorf("the card said %q", say)
+		}
+		return err
+	})
+	sc.Step(`^the music never starts playing$`, func() error { reset(); w.audioMode = "silent"; w.times = short; return nil })
+	sc.Step(`^the music library never answers$`, func() error { reset(); w.albumMode = "hang"; w.times = short; return nil })
+	sc.Step(`^the watchdog has had time to give up$`, func() error { act(map[string]any{"do": "wait", "ms": 600}); return nil })
+	sc.Step(`^the Play button reads "([^"]*)"$`, func(want string) error {
+		if err := run(); err != nil {
+			return err
+		}
+		if w.out["playText"] != want {
+			return fmt.Errorf("the Play button reads %q", w.out["playText"])
+		}
+		return nil
+	})
+	reported := func(event string) []map[string]any {
+		var o []map[string]any
+		for _, r := range w.out["reports"].([]any) {
+			if m := r.(map[string]any); m["event"] == event {
+				o = append(o, m)
+			}
+		}
+		return o
+	}
+	sc.Step(`^the player reported "([^"]*)" with code "([^"]*)"$`, func(event, code string) error {
+		if err := run(); err != nil {
+			return err
+		}
+		for _, m := range reported(event) {
+			if m["code"] == code {
+				return nil
+			}
+		}
+		return fmt.Errorf("no %s with code %s in %v", event, code, w.out["reports"])
+	})
+	sc.Step(`^the player reported "([^"]*)" with a time in milliseconds$`, func(event string) error {
+		if err := run(); err != nil {
+			return err
+		}
+		for _, m := range reported(event) {
+			if regexp.MustCompile(`^\d+$`).MatchString(fmt.Sprint(m["ms"])) {
+				return nil
+			}
+		}
+		return fmt.Errorf("no %s with ms in %v", event, w.out["reports"])
+	})
+	sc.Step(`^every report is a form post kept alive past the page, carrying only event, ms, code, album_id and track_idx$`, func() error {
+		if err := run(); err != nil {
+			return err
+		}
+		allowed := map[string]bool{"event": true, "ms": true, "code": true, "album_id": true, "track_idx": true, "_keepalive": true, "_type": true}
+		rs := w.out["reports"].([]any)
+		if len(rs) == 0 {
+			return fmt.Errorf("nothing was reported")
+		}
+		for _, r := range rs {
+			m := r.(map[string]any)
+			if m["_keepalive"] != true || m["_type"] != "application/x-www-form-urlencoded" {
+				return fmt.Errorf("report %v is not a kept-alive form post", m)
+			}
+			for k := range m {
+				if !allowed[k] {
+					return fmt.Errorf("report carries %q: %v", k, m)
+				}
+			}
+		}
+		return nil
+	})
+	sc.Step(`^the stream stalls$`, func() error { act(map[string]any{"do": "audio", "event": "stalled"}); return nil })
+	sc.Step(`^the stream plays again$`, func() error { act(map[string]any{"do": "audio", "event": "playing"}); return nil })
+	sc.Step(`^the playing track was never downloaded$`, func() error {
+		if err := run(); err != nil {
+			return err
+		}
+		for _, s := range cmStrs(w.out["trackFetches"]) {
+			if s == fmt.Sprint(num("cur")) {
+				return fmt.Errorf("the playing track %d was downloaded: %v", num("cur"), w.out["trackFetches"])
+			}
+		}
+		return nil
+	})
+	sc.Step(`^the first download began after the first sound$`, func() error {
+		if err := run(); err != nil {
+			return err
+		}
+		ev := cmStrs(w.out["events"])
+		sound, dl := -1, -1
+		for i, e := range ev {
+			if e == "sound" && sound < 0 {
+				sound = i
+			}
+			if strings.HasPrefix(e, "dl:") && dl < 0 {
+				dl = i
+			}
+		}
+		if sound < 0 || dl < 0 || dl < sound {
+			return fmt.Errorf("events %v", ev)
+		}
+		return nil
+	})
+	sc.Step(`^the album was asked for once only$`, func() error {
+		if err := run(); err != nil {
+			return err
+		}
+		if num("albumFetches") != 1 {
+			return fmt.Errorf("the album was asked for %d times", num("albumFetches"))
+		}
+		return nil
+	})
+	var dt map[string]any
+	sc.Step(`^the driver asks Chester and Chester never answers$`, func() error {
+		var err error
+		dt, err = runNode(t, "static/js/drive_tracks_harness.mjs", map[string]any{"hang": true, "askMs": 50})
+		return err
+	})
+	sc.Step(`^the card is told "([^"]*)"$`, func(want string) error {
+		s := cmStrs(dt["said"])
+		if len(s) != 1 || s[0] != want {
+			return fmt.Errorf("the card was told %v", s)
+		}
+		return nil
+	})
+	sc.Step(`^the ask is over so the button can be pressed again$`, func() error {
+		if dt["settled"] != true {
+			return fmt.Errorf("the ask never settled")
+		}
+		return nil
+	})
+	sc.Step(`^the player reported the ask timed out$`, func() error {
+		for _, r := range dt["reports"].([]any) {
+			if r.(map[string]any)["event"] == "ask_timeout" {
+				return nil
+			}
+		}
+		return fmt.Errorf("reports %v", dt["reports"])
+	})
+	var fr map[string]any
+	var topPage string
+	sc.Step(`^the frame script runs in the top window on "([^"]*)"$`, func(p string) error {
+		var err error
+		topPage = p
+		fr, err = runNode(t, "static/js/frame_harness.mjs", map[string]any{"kind": "load", "top": true, "page": p})
+		return err
+	})
+	sc.Step(`^the frame script runs in the top window on the sign-in page "([^"]*)"$`, func(p string) error {
+		var err error
+		fr, err = runNode(t, "static/js/frame_harness.mjs", map[string]any{"kind": "load", "top": true, "page": p, "login": true})
+		return err
+	})
+	sc.Step(`^the page is loaded again at "([^"]*)"$`, func(want string) error {
+		if r := cmStrs(fr["replaced"]); len(r) != 1 || r[0] != want {
+			return fmt.Errorf("loaded again at %v", r)
+		}
+		return nil
+	})
+	sc.Step(`^the page is not loaded again$`, func() error {
+		if r := fr["replaced"].([]any); len(r) != 0 {
+			return fmt.Errorf("loaded again at %v", r)
+		}
+		return nil
+	})
+	sc.Step(`^the frame script reported "([^"]*)"$`, func(event string) error {
+		for _, r := range fr["reports"].([]any) {
+			m := r.(map[string]any)
+			if m["url"] == "/driver/roadtracks/event" && m["body"] == "event="+event && m["keepalive"] == true {
+				return nil
+			}
+		}
+		return fmt.Errorf("reports %v", fr["reports"])
+	})
+	sc.Step(`^a link to "([^"]*)" in the top window is left as "([^"]*)"$`, func(h, want string) error {
+		o, err := runNode(t, "static/js/frame_harness.mjs", map[string]any{"kind": "link", "href": h, "top": true, "page": topPage})
+		if err != nil {
+			return err
+		}
+		if o["href"] != want {
+			return fmt.Errorf("href %v", o["href"])
 		}
 		return nil
 	})

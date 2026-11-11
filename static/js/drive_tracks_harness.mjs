@@ -11,10 +11,11 @@ const input = JSON.parse(readFileSync(0, 'utf8'));
 const mod = { exports: {} };
 vm.runInNewContext(readFileSync(new URL('./hud.js', import.meta.url), 'utf8'), {
   module: mod, document: { getElementById: () => null, addEventListener() {} }, window: { addEventListener() {} }, navigator: {},
-  TextDecoder, JSON, Promise,
+  TextDecoder, JSON, Promise, setTimeout, clearTimeout,
 });
-const out = { asked: [], said: [], started: [], posted: [] };
+const out = { asked: [], said: [], started: [], posted: [], reports: [], settled: false };
 const player = {
+  report: (e, f) => out.reports.push(Object.assign({ event: e }, f)),
   asking: (m) => out.asked.push(m),
   say: (m) => out.said.push(m),
   start: (a) => out.started.push(a),
@@ -34,9 +35,12 @@ await driveTracks({
   fetch: async (url, opts) => {
     out.posted.push({ url, method: opts.method, body: opts.body });
     if (input.throws) throw new Error('offline');
+    if (input.hang) return new Promise(() => {});
     return response();
   },
   player,
   body: input.posted || 'source=drivetracks',
+  askMs: input.askMs,
 });
+out.settled = true;
 console.log(JSON.stringify(out));
