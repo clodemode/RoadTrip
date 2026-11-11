@@ -58,13 +58,13 @@ Feature: Drive Tracks asks Chester for one album and plays it on the RoadTracks 
     When the driver taps Drive Tracks
     Then the question sent does not hold "The traveller last typed"
 
-  Scenario: Albums already picked today are named so Chester picks another
+  Scenario: Albums already picked on this trip are named so Chester picks another
     Given Drive Tracks already picked "Revolver" by "The Beatles" earlier today
     And the model will search the library for "the beatles"
     And the model will then show the album "m1" because "Familiar"
     And the model will then write "Abbey Road."
     When the driver taps Drive Tracks
-    Then the question sent holds "Albums already picked today, so pick a different one: Revolver by The Beatles"
+    Then the question sent holds "Albums already played on this trip, so pick a different one: Revolver by The Beatles"
 
   Scenario: An album the library cannot play is never offered
     Given the music library also holds "Revolver" by "The Beatles" as album 43, not playable
@@ -102,3 +102,52 @@ Feature: Drive Tracks asks Chester for one album and plays it on the RoadTracks 
     When the driver taps Drive Tracks
     Then the Chester page offers no Drive Tracks question
     And nothing sent to the model holds the library key or address and the card's answer holds no key
+
+  # Kris, 2026-11-10: Chester played Fully Completely three times and Gord's Gold
+  # twice on one trip. The question named only the six newest picks of the same
+  # day. Now every album already played on this trip is named, and the server
+  # takes it out of the search answer before Chester can pick it.
+
+  Scenario: The seventh pick of a trip is not one of the first six
+    Given the music library holds albums 1 to 7 by "The Tragically Hip", all playable
+    And Drive Tracks already picked albums 1 to 6 on this trip
+    And the model will search the library for "the tragically hip"
+    And the model will then show the album "m1" because "Home roads"
+    And the model will then write "Abbey Road suits."
+    When the driver taps Drive Tracks
+    Then the search answer Chester got says "Album 7 by The Tragically Hip"
+    And the search answer Chester got does not name "Album 1 by", "Album 2 by", "Album 3 by", "Album 4 by", "Album 5 by" or "Album 6 by"
+    And exactly one album card came back, for album 42
+    And the question sent holds "Album 1 by The Tragically Hip"
+    And the question sent holds "Album 6 by The Tragically Hip"
+    And the trouble record holds a drivetracks_pick for album 42 that avoided 6 albums and is not a repeat
+
+  Scenario: A pick from an earlier day of the same trip is not picked again
+    Given the music library also holds "Revolver" by "The Beatles" as album 43, playable
+    And Drive Tracks picked album 42 "Abbey Road" by "The Beatles" 2 days ago on this trip
+    And the model will search the library for "the beatles"
+    And the model will then show the album "m1" because "Familiar"
+    And the model will then write "Revolver."
+    When the driver taps Drive Tracks
+    Then exactly one album card came back, for album 43
+    And the question sent holds "Albums already played on this trip, so pick a different one: Abbey Road by The Beatles"
+
+  Scenario: A pick from another trip may be picked again
+    Given Drive Tracks picked album 42 "Abbey Road" by "The Beatles" 2 days ago on another trip
+    And the model will search the library for "the beatles"
+    And the model will then show the album "m1" because "Familiar"
+    And the model will then write "Abbey Road."
+    When the driver taps Drive Tracks
+    Then exactly one album card came back, for album 42
+    And the question sent does not hold "Albums already played on this trip"
+
+  Scenario: The library offers only already played albums: Chester says so, no card
+    Given Drive Tracks picked album 42 "Abbey Road" by "The Beatles" 2 days ago on this trip
+    And the model will search the library for "the beatles"
+    And the model will then show the album "m1" because "Familiar"
+    And the model will then write "Nothing new."
+    When the driver taps Drive Tracks
+    Then the search answer Chester got says "Every match has already been played on this trip. Search a different artist."
+    And the card is told to start no album
+    And the card shows the sentence "Chester found no album; search below"
+    And the trouble record holds a drivetracks_no_pick

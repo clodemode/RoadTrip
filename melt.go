@@ -40,24 +40,40 @@ type meltItem struct {
 
 type meltSink struct {
 	addr, venue string
-	ch          chan meltItem
-	drops       atomic.Int64
-	warned      sync.Map
+	// file is the MELT_FILE path, "" when the file sink is off. It is written
+	// only by drain, under fileMu, which the signed-in read also takes.
+	file   string
+	fileMu sync.Mutex
+	ch     chan meltItem
+	drops  atomic.Int64
+	warned sync.Map
 }
 
-// newMelt returns nil (off) when addr is empty. A nil *meltSink is safe to call.
-func newMelt(addr, venue string) *meltSink {
-	if strings.TrimSpace(addr) == "" {
-		log.Print("melt: off (MELT_REDIS_ADDR unset)")
+// newMelt is the Redis sink alone; see newMeltSinks.
+func newMelt(addr, venue string) *meltSink { return newMeltSinks(addr, venue, "") }
+
+// newMeltSinks returns nil (off) when both the Redis address and the file path
+// are empty. A nil *meltSink is safe to call. Either sink, or both, may be on.
+func newMeltSinks(addr, venue, file string) *meltSink {
+	addr, file = strings.TrimSpace(addr), strings.TrimSpace(file)
+	if addr == "" && file == "" {
+		log.Print("melt: off (MELT_REDIS_ADDR and MELT_FILE unset)")
 		return nil
 	}
 	if venue == "" {
 		venue = "kate"
 	}
-	m := &meltSink{addr: addr, venue: venue, ch: make(chan meltItem, meltQueue)}
+	m := &meltSink{addr: addr, file: file, venue: venue, ch: make(chan meltItem, meltQueue)}
 	go m.drain()
 	go m.reportDrops()
-	log.Printf("melt: on (%s, venue %s)", addr, venue)
+	redis, disk := "off", "off"
+	if addr != "" {
+		redis = addr
+	}
+	if file != "" {
+		disk = file
+	}
+	log.Printf("melt: on (redis %s, file %s, venue %s)", redis, disk, venue)
 	return m
 }
 
@@ -91,6 +107,7 @@ func (m *meltSink) publish(stream, name string, f map[string]any) {
 		rec["origin"] = "server"
 	}
 	rec["venue"] = m.venue
+	rec["stream"] = stream
 	body, err := json.Marshal(rec)
 	if err != nil {
 		return
@@ -125,6 +142,14 @@ func (m *meltSink) drain() {
 	var conn net.Conn
 	var rd *bufio.Reader
 	for it := range m.ch {
+		if m.file != "" {
+			if err := m.appendFile(it.body); err != nil {
+				m.drops.Add(1)
+			}
+		}
+		if m.addr == "" {
+			continue
+		}
 		if conn == nil {
 			c, err := net.DialTimeout("tcp", m.addr, meltIOLimit)
 			if err != nil {

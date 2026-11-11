@@ -184,6 +184,8 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/roadtracks/state", a.requireAuth(a.roadtracksState))
 	mux.Handle("POST /driver/roadtracks/mark", a.requireAuth(a.trackMarkAdd))
 	mux.Handle("POST /driver/roadtracks/mark/{id}/delete", a.requireAuth(a.trackMarkDelete))
+	mux.Handle("POST /driver/roadtracks/event", a.requireAuth(a.roadtracksEvent))
+	mux.Handle("GET /driver/melt.json", a.requireAuth(a.meltRead))
 	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
 	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))

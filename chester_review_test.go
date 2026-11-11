@@ -511,7 +511,7 @@ func TestChesterCachedPrefixDoesNotMoveWithTheCar(t *testing.T) {
 			t.Errorf("the tools carry %q, which moves with the car", moving)
 		}
 	}
-	if east.PromptVersion != "chester-rt-11" {
+	if east.PromptVersion != "chester-rt-12" {
 		t.Errorf("the prompt version is %q; the tool and the context block changed, so it must have too", east.PromptVersion)
 	}
 }

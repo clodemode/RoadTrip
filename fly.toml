@@ -27,6 +27,11 @@ primary_region = "dfw"   # Dallas — the ride departs from Austin
   # PLACE, and nothing else. "snap" = ticked (today's behaviour); "exact" =
   # clear. Every point away from a private place is exact in both modes.
   PIN_PRECISION = "snap"
+  # MELT trouble records. Fly has no fleet Redis, so they are kept as one JSON
+  # line each on the volume, rotated to .1 at 2 MB; read them signed in at
+  # GET /driver/melt.json.
+  MELT_FILE = "/data/melt/roadtrip.jsonl"
+  MELT_VENUE = "fly"
 
 [[mounts]]
   source = "roadtrip_data"

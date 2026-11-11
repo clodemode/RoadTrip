@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -79,6 +80,13 @@ func initDriveTracksScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the model will (?:then )?write "([^"]*)"$`, w.willWrite)
 	sc.Step(`^the traveller typed "([^"]*)" to Chester (\d+) (minutes|hours) ago$`, w.typed)
 	sc.Step(`^Drive Tracks already picked "([^"]*)" by "([^"]*)" earlier today$`, w.pickedToday)
+	sc.Step(`^the music library holds albums (\d+) to (\d+) by "([^"]*)", all playable$`, w.holdsRange)
+	sc.Step(`^Drive Tracks already picked albums (\d+) to (\d+) on this trip$`, w.pickedRange)
+	sc.Step(`^Drive Tracks picked album (\d+) "([^"]*)" by "([^"]*)" (\d+) days ago on (this|another) trip$`, w.pickedDaysAgo)
+	sc.Step(`^the search answer Chester got says "([^"]*)"$`, w.searchAnswerSays)
+	sc.Step(`^the search answer Chester got does not name "([^"]*)", "([^"]*)", "([^"]*)", "([^"]*)", "([^"]*)" or "([^"]*)"$`, func(a, b, c, d, e, f string) error { return w.searchAnswerLacks(a, b, c, d, e, f) })
+	sc.Step(`^the trouble record holds a drivetracks_pick for album (\d+) that avoided (\d+) albums and is not a repeat$`, w.meltPick)
+	sc.Step(`^the trouble record holds a drivetracks_no_pick$`, w.meltNoPick)
 
 	sc.Step(`^the driver opens the driver screen$`, w.openDriver)
 	sc.Step(`^the driver taps Drive Tracks$`, w.tap)
@@ -140,6 +148,7 @@ func (w *dtWorld) build() error {
 		w.app.tracks = newRoadtracks(rtKey, w.mo.srv.URL)
 	}
 	w.kris = asUser(w.t, w.app, "kris", roleAdmin)
+	w.app.melt = newMeltSinks("", "test", filepath.Join(w.t.TempDir(), "melt", "roadtrip.jsonl"))
 	if w.spent {
 		if err := w.app.store.InsertChesterQuery(&ChesterQuery{User: "kris", AskedAt: utcString(time.Now()), TZ: "UTC",
 			Mode: "quick", Question: "q", Model: stubModel, USD: 100}); err != nil {
@@ -171,7 +180,7 @@ func (w *dtWorld) typed(q, n, unit string) error {
 
 func (w *dtWorld) pickedToday(album, artist string) error {
 	w.seed = append(w.seed, func() {
-		w.addRow(ChesterQuery{AskedAt: utcString(time.Now().Add(-time.Second)), Preset: chesterDriveTracksPreset, Question: "earlier",
+		w.addRow(ChesterQuery{Ride: w.app.activeSlug(), AskedAt: utcString(time.Now().Add(-time.Second)), Preset: chesterDriveTracksPreset, Question: "earlier",
 			Music: []chesterMusicCard{{AlbumID: 43, Album: album, Artist: artist, Label: "Play"}}})
 	})
 	return nil
@@ -436,6 +445,136 @@ func (w *dtWorld) noLeak() error {
 		if strings.Contains(w.raw, bad) {
 			return fmt.Errorf("the answer to the card holds %q", bad)
 		}
+	}
+	return nil
+}
+
+func (w *dtWorld) holdsRange(from, to int, artist string) error {
+	for i := from; i <= to; i++ {
+		w.albums = append(w.albums, dtAlbum{i, "Album " + strconv.Itoa(i), artist, true})
+	}
+	return nil
+}
+
+// pickedRange seeds one Drive Tracks row per album, album 1 the oldest, all on
+// the active trip and spread over the last hours.
+func (w *dtWorld) pickedRange(from, to int) error {
+	w.seed = append(w.seed, func() {
+		for i := from; i <= to; i++ {
+			var a dtAlbum
+			for _, x := range w.albums {
+				if x.id == i {
+					a = x
+				}
+			}
+			w.addRow(ChesterQuery{Ride: w.app.activeSlug(), AskedAt: utcString(time.Now().Add(-time.Duration(to-i+1) * 20 * time.Minute)),
+				Preset: chesterDriveTracksPreset, Question: "earlier",
+				Music: []chesterMusicCard{{AlbumID: int64(a.id), Album: a.album, Artist: a.artist, Label: "Play"}}})
+		}
+	})
+	return nil
+}
+
+func (w *dtWorld) pickedDaysAgo(id int, album, artist string, days int, which string) error {
+	w.seed = append(w.seed, func() {
+		ride := w.app.activeSlug()
+		if which == "another" {
+			ride = "some-other-trip-2026-09"
+		}
+		w.addRow(ChesterQuery{Ride: ride, AskedAt: utcString(time.Now().Add(-time.Duration(days) * 24 * time.Hour)),
+			Preset: chesterDriveTracksPreset, Question: "earlier",
+			Music: []chesterMusicCard{{AlbumID: int64(id), Album: album, Artist: artist, Label: "Play"}}})
+	})
+	return nil
+}
+
+// searchAnswerSays reads the tool result the server handed back for the first
+// search_music call: the second request to the model carries it.
+func (w *dtWorld) searchAnswerSays(s string) error {
+	got, err := w.searchAnswer()
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(got, s) {
+		return fmt.Errorf("the search answer was %q", got)
+	}
+	return nil
+}
+
+func (w *dtWorld) searchAnswerLacks(names ...string) error {
+	got, err := w.searchAnswer()
+	if err != nil {
+		return err
+	}
+	for _, n := range names {
+		if strings.Contains(got, n) {
+			return fmt.Errorf("the search answer offered %q: %q", n, got)
+		}
+	}
+	return nil
+}
+
+func (w *dtWorld) searchAnswer() (string, error) {
+	reqs := w.stub.requests()
+	if len(reqs) < 2 {
+		return "", fmt.Errorf("the model was asked %d times; no search answer went back", len(reqs))
+	}
+	var doc struct {
+		Messages []struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(reqs[1].Body, &doc); err != nil || len(doc.Messages) == 0 {
+		return "", fmt.Errorf("the second request was not readable: %v", err)
+	}
+	var all []string
+	var v any
+	_ = json.Unmarshal(doc.Messages[len(doc.Messages)-1].Content, &v)
+	strs(v, &all)
+	return strings.Join(all, "\n"), nil
+}
+
+// meltRecords reads the signed-in trouble record route, waiting briefly for
+// the background writer.
+func (w *dtWorld) meltRecords(event string) ([]map[string]any, error) {
+	for i := 0; i < 100; i++ {
+		rec := doAs(w.t, w.app, w.kris, "GET", "/driver/melt.json?stream=all&event="+event, nil)
+		if rec.Code != http.StatusOK {
+			return nil, fmt.Errorf("/driver/melt.json answered %d", rec.Code)
+		}
+		var doc struct {
+			Records []map[string]any `json:"records"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+			return nil, err
+		}
+		if len(doc.Records) > 0 {
+			return doc.Records, nil
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return nil, fmt.Errorf("no %s record was written", event)
+}
+
+func (w *dtWorld) meltPick(id, avoided int) error {
+	recs, err := w.meltRecords("drivetracks_pick")
+	if err != nil {
+		return err
+	}
+	r := recs[0]
+	if r["stream"] != "events" || r["album_id"] != float64(id) || r["avoided"] != float64(avoided) || r["repeat"] != false {
+		return fmt.Errorf("the drivetracks_pick record is %v", r)
+	}
+	return nil
+}
+
+func (w *dtWorld) meltNoPick() error {
+	recs, err := w.meltRecords("drivetracks_no_pick")
+	if err != nil {
+		return err
+	}
+	if recs[0]["stream"] != "errors" || recs[0]["reason"] == nil {
+		return fmt.Errorf("the drivetracks_no_pick record is %v", recs[0])
 	}
 	return nil
 }

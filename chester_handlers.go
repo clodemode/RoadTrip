@@ -147,8 +147,10 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	preset := strings.TrimSpace(r.PostFormValue("preset"))
 	question := strings.TrimSpace(r.PostFormValue("q"))
+	var avoid map[int64]bool
 	if drive {
-		preset, question = chesterDriveTracksPreset, a.driveTracksQuestion(a.userOf(r), time.Now())
+		preset = chesterDriveTracksPreset
+		question, avoid = a.driveTracksQuestion(a.userOf(r), time.Now())
 	} else if preset != "" {
 		q, ok := chesterPreset(preset)
 		if !ok {
@@ -229,9 +231,12 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	// The music library is offered only when RoadTracks is on.
 	var lib *chesterMusicLib
 	if a.tracks != nil {
-		lib = &chesterMusicLib{svc: a.tracks, melt: a.melt, one: drive}
+		lib = &chesterMusicLib{svc: a.tracks, melt: a.melt, one: drive, avoid: avoid}
 	}
 	res := a.chester.ask(r.Context(), mode, cx, question, lib, emit)
+	if drive {
+		a.driveTracksMelt(avoid, res)
+	}
 	if res.Err == "" && !res.Synth && res.Answer != "" && !drive {
 		a.remember(user, question, res.Answer, res.Leanings, now)
 	}
