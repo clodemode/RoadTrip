@@ -616,3 +616,11 @@ body.rt-shell { margin: 0; display: flex; flex-direction: column; height: 100dvh
 .crumbs .sep { color: #9ca3af; }
 .crumbs [aria-current="page"] { font-weight: 600; color: #111827; }
 .pagehead h1 { margin: 0 0 .25rem; }
+
+/* Chester's traveller preferences form (appended: the Plan page work edits above). */
+.ch-prefs { margin-top: 1.4rem; }
+.ch-prefs-form { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); }
+.ch-pref { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; font-weight: 600; margin: 0; min-width: 0; }
+.ch-pref .form-control { min-height: 48px; font-weight: 400; font-size: 1rem; }
+.ch-pref-wide { grid-column: 1 / -1; }
+.ch-prefs-ok { color: var(--rt-ok); font-weight: 600; }

@@ -60,7 +60,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-12"
+	chesterPromptVersion = "chester-rt-13"
 
 	maxChesterQuestion = 1000
 )
@@ -820,6 +820,9 @@ func (a *App) chesterContext(now time.Time, lat, lng *float64) (*chesterContext,
 		}
 	}
 	st.WriteString(a.routeChoices(cx, rv.Legs, di))
+	// The traveller's standing preferences: the one new thing the API is told,
+	// and nothing at all when none are saved.
+	st.WriteString(a.loadPrefs().block())
 	cx.Stable = st.String()
 
 	var v strings.Builder
@@ -896,7 +899,7 @@ Sensitive but legal questions are ordinary travel help. When someone asks about 
 Write plain text: no Markdown, no headings, no bullet symbols, no web addresses (the card carries the address).
 
 In quick mode, the answer is a few short sentences, the most useful thing first, and names at most three places. It may be read aloud.
-In plan mode, the question is usually about tomorrow. A longer answer is right: compare the real options, name up to six places, and say what you would choose and why.` + chesterRoutePrompt
+In plan mode, the question is usually about tomorrow. A longer answer is right: compare the real options, name up to six places, and say what you would choose and why.` + chesterRoutePrompt + chesterTravellerPrompt
 
 // systemPromptFor is the system prompt: the music section is added only when
 // the library is on, so with it off the prompt is exactly the one it was.

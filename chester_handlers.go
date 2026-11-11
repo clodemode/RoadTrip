@@ -30,6 +30,8 @@ var chesterPresets = []struct{ ID, Label, Question string }{
 	{"lodging", "Tonight's lodging", "Where could we stay tonight, at or near tonight's stop? Give real options and what to check before booking."},
 	{"stop", "Worth a stop", "Is there anything worth a short stop ahead on today's route?"},
 	{"weather", "Weather and roads ahead", "What are the weather and the road conditions ahead on today's route? Say what you could confirm and what you could not."},
+	{"onway", "Things to do on the way today", "What are some good things to do or see on the way today, close to today's road? For each, say roughly how many extra minutes it adds."},
+	{"sleep", "Where to sleep tonight", "Where should we sleep tonight? Compare tonight's planned Stop with one or two towns a little before and after it on the same road, and say which have decent lodging inside our price band."},
 	{"howfar", "How far to tonight", "How far is it to tonight's stop, and roughly how long will it take? Say that it is an estimate."},
 }
 
@@ -85,6 +87,12 @@ func usd4(v float64) string { return "$" + strconv.FormatFloat(v, 'f', 4, 64) }
 // chesterPage is the helper itself: the presets, the box, the switch, the
 // answer and its cards. With no key it says so and offers nothing to press.
 func (a *App) chesterPage(w http.ResponseWriter, r *http.Request) {
+	a.renderChester(w, r, nil)
+}
+
+// renderChester draws the Chester page; extra carries a refused preferences
+// form back to the page with what was typed and which field was wrong.
+func (a *App) renderChester(w http.ResponseWriter, r *http.Request, extra map[string]any) {
 	data := map[string]any{"Title": "Chester", "On": a.chester != nil, "Presets": chesterPresets}
 	if q := r.URL.Query().Get("q"); len(q) <= 1000 {
 		data["Prefill"] = q // the template sets it as text
@@ -96,6 +104,13 @@ func (a *App) chesterPage(w http.ResponseWriter, r *http.Request) {
 		data["Quick"], data["Plan"] = cfg.Quick, cfg.Plan
 		data["QuickSecs"], data["PlanSecs"] = int(cfg.Quick.Timeout.Seconds()), int(cfg.Plan.Timeout.Seconds())
 	}
+	if _, typed := extra["Prefs"]; !typed {
+		data["Prefs"] = a.loadPrefs().withDefaults()
+	}
+	for k, v := range extra {
+		data[k] = v
+	}
+	data["PrefsSaved"] = r.URL.Query().Get("saved") == "preferences"
 	a.render(w, r, "chester.html", data)
 }
 

@@ -41,6 +41,7 @@ func TestFeatures(t *testing.T) {
 				initTestDriveSwitchScenarios(t, sc)
 				initContinuousMusicScenarios(t, sc)
 				initPlayerTroubleScenarios(t, sc)
+				initChesterPreferencesScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

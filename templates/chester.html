@@ -51,6 +51,32 @@
   <p id="ch-meta" class="muted small" hidden></p>
 </section>
 
+<section class="ch-prefs card" aria-labelledby="ch-prefs-h">
+  <div class="card-body">
+    <h2 id="ch-prefs-h" class="h5">What Chester should know about this drive</h2>
+    <p class="muted small">Saved on the server for the ride shown on this site, so every phone sees the same. Chester is told these with every question; it only suggests, and the plan changes only when you tap.</p>
+    {{if .PrefsSaved}}<p class="ch-prefs-ok" role="status">Saved.</p>{{end}}
+    {{if .PrefsError}}<p class="error" role="alert">{{.PrefsError}}</p>{{end}}
+    <form id="ch-prefs-form" class="ch-prefs-form" method="post" action="/chester/preferences" autocomplete="off">
+      <label class="ch-pref">Stop driving from
+        <input class="form-control" type="time" name="day_end_from" value="{{.Prefs.DayEndFrom}}"></label>
+      <label class="ch-pref">Stop driving by
+        <input class="form-control" type="time" name="day_end_to" value="{{.Prefs.DayEndTo}}"></label>
+      <label class="ch-pref">Hotel price, lowest a night ($)
+        <input class="form-control" type="number" inputmode="numeric" min="0" max="2000" name="price_low" value="{{if .Prefs.PriceLow}}{{.Prefs.PriceLow}}{{end}}"></label>
+      <label class="ch-pref">Hotel price, highest a night ($)
+        <input class="form-control" type="number" inputmode="numeric" min="0" max="2000" name="price_high" value="{{if .Prefs.PriceHigh}}{{.Prefs.PriceHigh}}{{end}}"></label>
+      <label class="ch-pref ch-pref-wide">Places to avoid
+        <input class="form-control" type="text" maxlength="160" name="avoid" value="{{.Prefs.Avoid}}" placeholder="One short line, no addresses"></label>
+      <label class="ch-pref">Who navigates
+        <input class="form-control" type="text" maxlength="40" name="navigator" value="{{.Prefs.Navigator}}"></label>
+      <label class="ch-pref">Most extra minutes a thing on the way may add
+        <input class="form-control" type="number" inputmode="numeric" min="0" max="120" name="max_extra_min" value="{{.Prefs.MaxExtraMin}}"></label>
+      <div class="ch-pref ch-pref-wide"><button type="submit" class="btn btn-primary ch-tap">Save</button></div>
+    </form>
+  </div>
+</section>
+
 <section class="ch-foot">
   <p class="muted small figure">Today: {{.Spent}} of {{.Cap}} used (the day runs on UTC). Quick asks {{.Quick.Model}} at {{.Quick.Effort}} effort;
     Plan asks {{.Plan.Model}} at {{.Plan.Effort}} effort.</p>
