@@ -107,6 +107,10 @@ func (a *App) funcs() template.FuncMap {
 		// mi and hr write a planner figure to one decimal, always.
 		"mi": fmtMiles,
 		"hr": fmtMiles,
+		// miles0 is a day's miles to the whole mile, "518"; qh its hours to
+		// the quarter, "8½".
+		"miles0": func(v float64) string { return thousands(int(math.Round(v))) },
+		"qh":     quarterHours,
 		// Chester's log: dollars to four places, a duration in seconds, a
 		// figure that may be absent, a percentage.
 		"usd":  usd4,

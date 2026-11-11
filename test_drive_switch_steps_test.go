@@ -74,9 +74,9 @@ func initTestDriveSwitchScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	}
 	sc.Step(`^neither page has an hours timeline$`, none)
 	sc.Step(`^the page has no hours timeline$`, none)
-	sc.Step(`^the page has an hours timeline$`, func() error {
-		if !strings.Contains(pages[0], hoursBar) {
-			return fmt.Errorf("no hours timeline")
+	sc.Step(`^the page has a day summary$`, func() error {
+		if !strings.Contains(pages[0], `class="day-row"`) {
+			return fmt.Errorf("no day summary")
 		}
 		return nil
 	})

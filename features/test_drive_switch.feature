@@ -1,6 +1,7 @@
-Feature: The trip-keeper swaps between trips, and the hours timeline is theirs
+Feature: The trip-keeper swaps between trips, and Plan shows day summaries, not an hours timeline
   The site shows one trip. A signed-in trip-keeper can swap it for a test drive
-  and back from any page. The hours timeline is a planning aid on Plan, signed in.
+  and back from any page. Plan summarises each day; there is no row of hour
+  dots on any page.
 
   Background:
     Given two trips are on the volume, the second named "Test Drive"
@@ -9,9 +10,10 @@ Feature: The trip-keeper swaps between trips, and the hours timeline is theirs
     When a visitor reads "/" and "/plan"
     Then neither page has an hours timeline
 
-  Scenario: The trip-keeper sees the timeline on Plan and not on the Ride page
+  Scenario: The trip-keeper sees day summaries on Plan and no hours timeline on either page
     When the trip-keeper reads "/plan?embed=1"
-    Then the page has an hours timeline
+    Then the page has no hours timeline
+    And the page has a day summary
     When the trip-keeper reads "/?embed=1"
     Then the page has no hours timeline
 

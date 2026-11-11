@@ -1,5 +1,5 @@
 Feature: The hours cards name where you will be
-  Each whole hour on the hours bar names the nearest stop or routing point
+  Each whole hour label the map draws beside the route names the nearest stop or routing point
   that lies near that distance along the plan, so "h2 Belleville" says where
   the car should be two hours out. A routing point is a place to drive
   through, not a stop, and it names an hour the same way a stop does. A

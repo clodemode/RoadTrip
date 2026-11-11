@@ -3,7 +3,8 @@
   <p class="plan-totals figure" id="plan-totals">
     <b id="plan-miles">{{.Sum.TotalMilesShown}} mi</b>
     over <b id="plan-daycount">{{.Sum.DayCount}} {{if eq .Sum.DayCount 1}}day{{else}}days{{end}}</b>
-    <span class="muted" id="plan-hours">&middot; about {{hr .Sum.TotalHours}} h of driving</span>
+    <span class="muted" id="plan-hours">&middot; about {{qh .Sum.TotalHours}} h of driving</span>
+    <span class="muted" id="plan-counts">{{if .Sum.Nights}}&middot; {{.Sum.Nights}} {{if eq .Sum.Nights 1}}night{{else}}nights{{end}}{{end}}{{if .Sum.MilestoneCount}} &middot; {{.Sum.MilestoneCount}} {{if eq .Sum.MilestoneCount 1}}milestone{{else}}milestones{{end}}{{end}}</span>
   </p>
 </section>
 
@@ -46,8 +47,6 @@
   {{else if .Notice}}<p class="plan-saved plan-msg" id="plan-result" role="status">{{.Notice}}</p>{{end}}
 </form>
 
-{{with .HoursBars}}{{template "hours_bar" .}}{{end}}
-
 {{with .Marks}}<section class="track-marks" aria-labelledby="marks-h">
   <h2 id="marks-h">Saved music</h2>
   <ul class="list-unstyled">{{range .}}
@@ -67,14 +66,15 @@
     {{range .Sum.Days}}
     <li>
       <button type="button" class="day-row" data-day="{{.Day}}" style="--leg:{{.Color}}">
-        <span class="day-n">{{.Day}}</span>
+        <span class="day-n">d{{.Day}}</span>
         <span class="day-main">
           <span class="day-name">{{.Name}}</span>
           <span class="day-date muted">{{day .Date}}</span>
+          {{with .Milestones}}<span class="day-ms muted">Milestones: {{range $i, $m := .}}{{if $i}}, {{end}}{{$m.Name}} at about {{qh $m.Hours}} h{{end}}</span>{{end}}
         </span>
         <span class="day-nums">
-          <span class="day-miles">{{mi .Miles}} mi</span>
-          <span class="day-hours muted">{{hr .Hours}} h</span>
+          <span class="day-miles">{{miles0 .Miles}} mi</span>
+          <span class="day-hours muted">about {{qh .Hours}} h</span>
           {{if .Long}}<span class="pill pill-long">Long day</span>{{end}}
         </span>
       </button>

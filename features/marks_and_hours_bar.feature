@@ -3,9 +3,11 @@ Feature: Letters for places, numbers only for driving days, and an hours bar
   driving day 2, h2 is hour 2. A one-day trip has no days to number, so every
   point on it is a letter, in route order, start included. A trip of several
   days marks its day ends d1, d2, d3, and its day chips the same.
-  Each day also shows an estimated time bar in hours: it starts at the day's
-  origin at 0, and every whole hour after that is labelled with the place the
-  car should be at by then, at the trip's average speed along the planned line.
+  The map shows each day's estimated time as small hour labels beside the
+  route: it starts at the day's origin at h0, and every whole hour after that
+  is labelled with the place the car should be at by then, at the trip's
+  average speed along the planned line. (The Plan page no longer draws a row of
+  hour dots for each day; see plan_day_summaries.feature.)
 
   Background:
     Given kris is signed in
@@ -29,11 +31,10 @@ Feature: Letters for places, numbers only for driving days, and an hours bar
     And every other stop is marked with a letter
     And each day chip reads "d" and its day number
 
-  Scenario: The hours bar starts at the origin at 0
+  Scenario: The hours start at the origin at 0
     Given the active trip is one day from Kingston to Toronto at 60 mph over 165 miles
     When anyone opens the home page
     Then the hours bar reads "h0 Kingston" first
-    And it ends at "about h2¾ Toronto"
 
   Scenario: The map draws the hours bar as a faint stick beside the route
     Given the active trip is one day from Kingston to Toronto at 60 mph over 165 miles
@@ -64,7 +65,6 @@ Feature: Letters for places, numbers only for driving days, and an hours bar
     When anyone opens the home page
     Then the hours bar reads "h0" at that stop first
     And its h1 tick lies 60 miles further along the planned line
-    And it ends at "about h1¾ Toronto"
 
   Scenario: A skipped stop does not move the hours bar
     Given the active trip is one day from Kingston to Toronto at 60 mph over 165 miles

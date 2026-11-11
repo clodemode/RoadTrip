@@ -61,7 +61,6 @@ func initMarksScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) 
 	sc.Step(`^every other stop is marked with a letter$`, m.otherLetters)
 	sc.Step(`^each day chip reads "d" and its day number$`, m.chips)
 	sc.Step(`^the hours bar reads "([^"]*)" first$`, m.barFirst)
-	sc.Step(`^it ends at "([^"]*)"$`, m.barLast)
 	sc.Step(`^the hours bar marks "(h1)" with that place's name$`, m.h1Named)
 	sc.Step(`^the hours bar marks "(h1)" with no name$`, m.h1Alone)
 	sc.Step(`^the hours bar marks "(h1)" without the private stop's name$`, m.h1NoPrivate)
@@ -203,9 +202,6 @@ var (
 	reCPN   = regexp.MustCompile(`<span class="cp-n">([^<]*)</span>`)
 	reLegN  = regexp.MustCompile(`<span class="leg-n">([^<]*)</span>`)
 	reMapMk = regexp.MustCompile(`"mark":"([^"]*)"`)
-	reBar   = regexp.MustCompile(`(?s)<ol class="hours-bar"[^>]*>(.*?)</ol>`)
-	reLi    = regexp.MustCompile(`(?s)<li[^>]*>(.*?)</li>`)
-	reTag   = regexp.MustCompile(`<[^>]*>`)
 )
 
 func submatches(re *regexp.Regexp, s string) []string {
@@ -280,25 +276,20 @@ func (m *marksWorld) chips() error {
 	return nil
 }
 
-// planPage is where the hours bar lives: the Plan page, signed in.
-func (m *marksWorld) planPage() string {
-	c := asUser(m.t, m.sim.app, "kris", roleAdmin)
-	return doAs(m.t, m.sim.app, c, "GET", "/plan?embed=1", nil).Body.String()
-}
-
-// bar returns the first hours bar's entries as a reader sees them: tags gone,
-// whitespace collapsed.
+// bar returns the whole-hour labels the map carries for the leg, as a reader
+// sees them on the map: "h0 Kingston", "h1 Pinecrest". The Plan page no longer
+// draws an hours bar; the map keeps the hours.
 func (m *marksWorld) bar() ([]string, error) {
-	g := reBar.FindStringSubmatch(m.planPage())
-	if g == nil {
-		return nil, fmt.Errorf("the signed-in Plan page has no hours bar")
+	hs, err := m.mapHours()
+	if err != nil {
+		return nil, err
 	}
 	var out []string
-	for _, li := range submatches(reLi, g[1]) {
-		out = append(out, strings.Join(strings.Fields(reTag.ReplaceAllString(li, " ")), " "))
+	for _, h := range hs {
+		out = append(out, strings.TrimSpace(h.Label+" "+h.Name))
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("the hours bar is empty")
+		return nil, fmt.Errorf("the map carries no hours")
 	}
 	return out, nil
 }
@@ -310,17 +301,6 @@ func (m *marksWorld) barFirst(want string) error {
 	}
 	if b[0] != want {
 		return fmt.Errorf("the hours bar starts %q, want %q (bar: %q)", b[0], want, b)
-	}
-	return nil
-}
-
-func (m *marksWorld) barLast(want string) error {
-	b, err := m.bar()
-	if err != nil {
-		return err
-	}
-	if b[len(b)-1] != want {
-		return fmt.Errorf("the hours bar ends %q, want %q (bar: %q)", b[len(b)-1], want, b)
 	}
 	return nil
 }
@@ -361,12 +341,12 @@ func (m *marksWorld) h1Alone(h string) error {
 }
 
 func (m *marksWorld) h1NoPrivate(h string) error {
-	g := reBar.FindStringSubmatch(m.planPage())
-	if g == nil {
-		return fmt.Errorf("the signed-in Plan page has no hours bar")
+	b, err := m.bar()
+	if err != nil {
+		return err
 	}
-	if strings.Contains(g[1], "Home Base") {
-		return fmt.Errorf("the hours bar names the private stop")
+	if strings.Contains(strings.Join(b, " "), "Home Base") {
+		return fmt.Errorf("the map's hours name the private stop")
 	}
 	return m.h1Alone(h)
 }
