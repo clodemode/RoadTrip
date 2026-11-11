@@ -92,6 +92,34 @@ func initTestDriveSwitchScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	sc.Step(`^the trip-keeper bookmarks (\d+) seconds into "([^"]*)" twice and favourites it twice$`, func(sec, title string) error {
+		for _, kind := range []string{"bookmark", "bookmark", "favourite", "favourite"} {
+			rw := doAs(t, app, kris, "POST", "/driver/roadtracks/mark", url.Values{"kind": {kind}, "album_id": {"7"}, "album": {"A"}, "artist": {"B"}, "track_idx": {"2"}, "title": {title}, "position_s": {sec}})
+			if rw.Code != http.StatusNoContent {
+				return fmt.Errorf("mark answered %d", rw.Code)
+			}
+		}
+		return nil
+	})
+	sc.Step(`^the page lists "([^"]*)" at "([^"]*)"$`, func(title, at string) error {
+		if !strings.Contains(pages[0], title) || !strings.Contains(pages[0], at) {
+			return fmt.Errorf("Plan does not list %s at %s", title, at)
+		}
+		return nil
+	})
+	sc.Step(`^the trip-keeper has (\d+) saved marks$`, func(n int) error {
+		m, err := app.store.TrackMarks("kris")
+		if err != nil || len(m) != n {
+			return fmt.Errorf("%d marks, err %v", len(m), err)
+		}
+		return nil
+	})
+	sc.Step(`^the page links "([^"]*)"$`, func(h string) error {
+		if !strings.Contains(pages[0], `href="`+h+`"`) {
+			return fmt.Errorf("no link to %s", h)
+		}
+		return nil
+	})
 	sw := func(slug, from string) error {
 		req := httptest.NewRequest("POST", "/driver/ride/active", strings.NewReader(url.Values{"slug": {slug}}.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

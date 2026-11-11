@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -33,17 +32,6 @@ func initChangeTripScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^kris is signed in as an admin$`, func() { w.cookie = asUser(w.t, w.app, "kris", roleAdmin) })
 	sc.Step(`^the site is a KATE$`, func() { w.app.simAllowed = true })
 	sc.Step(`^the site is not a KATE$`, func() { w.app.simAllowed = false })
-	sc.Step(`^kris looks at the driver screen for a trip control$`, func() {
-		w.body = doAs(w.t, w.app, w.cookie, "GET", "/driver", nil).Body.String()
-	})
-	sc.Step(`^the trip control offers both trips$`, w.offersBoth)
-	sc.Step(`^the active trip is the selected one$`, w.activeSelected)
-	sc.Step(`^there is no trip control$`, func() error {
-		if strings.Contains(w.body, `action="/driver/ride/active"`) {
-			return fmt.Errorf("the driver screen carries a trip control off a KATE")
-		}
-		return nil
-	})
 	sc.Step(`^kris chooses the first trip from the browser$`, func() {
 		req := httptest.NewRequest("POST", "/driver/ride/active", strings.NewReader(url.Values{"slug": {w.slugs[0]}}.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -92,23 +80,6 @@ func (w *tripSwitchWorld) twoTrips() error {
 	w.slugs = w.slugs[len(w.slugs)-2:]
 	if w.slugs[0] == active {
 		return fmt.Errorf("first trip must not be the active one")
-	}
-	return nil
-}
-
-func (w *tripSwitchWorld) offersBoth() error {
-	for _, s := range w.slugs {
-		if !strings.Contains(w.body, `<option value="`+s+`"`) {
-			return fmt.Errorf("no option for %q", s)
-		}
-	}
-	return nil
-}
-
-func (w *tripSwitchWorld) activeSelected() error {
-	m := regexp.MustCompile(`<option value="([^"]*)" selected`).FindAllStringSubmatch(w.body, -1)
-	if len(m) != 1 || m[0][1] != w.app.activeSlug() {
-		return fmt.Errorf("selected options %v, active %q", m, w.app.activeSlug())
 	}
 	return nil
 }

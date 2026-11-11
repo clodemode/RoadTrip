@@ -306,6 +306,17 @@
   if (pb) pb.addEventListener('click', function () {
     if (audio.paused) { var p = audio.play(); if (p && p.catch) p.catch(function () { status('Tap Play to start'); }); } else audio.pause();
   });
+  function mark(kind) {
+    var t = tracks[cur];
+    if (!album || !t) { status('Nothing playing to save.'); return; }
+    fetch('/driver/roadtracks/mark', { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: stateBody(album, cur, audio.currentTime) + '&kind=' + kind + '&title=' + encodeURIComponent(t.title || '') })
+      .then(function (r) { status(r.ok ? (kind === 'bookmark' ? 'Marked this point. See Plan.' : 'Favourited. See Plan.') : 'Could not save that.'); })
+      .catch(function () { status('Could not save that.'); });
+  }
+  var fb = $('rt-fav'); if (fb) fb.addEventListener('click', function () { mark('favourite'); });
+  var bm = $('rt-bookmark'); if (bm) bm.addEventListener('click', function () { mark('bookmark'); });
   var nb = $('rt-next');
   if (nb) nb.addEventListener('click', function () { if (tracks.length) next(); });
   var rb = $('rt-resume');

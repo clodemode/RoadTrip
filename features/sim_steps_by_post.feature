@@ -47,7 +47,15 @@ Feature: On a KATE the simulated car moves one step per post, not by the clock
     And no stop was skipped
     And kris's simulated car is at C
 
-  Scenario: A note with no photo does not move the car
+  Scenario: A note sent with the phone's position counts as a post
+    Given the drive has started at A with the stepping car
+    And kris has posted 1 photo since the start
+    And the phone reports a position at B
+    When kris posts a text-only note
+    Then the note was saved
+    And B is arrived at
+
+  Scenario: A note with no photo and no phone position does not move the car
     Given the drive has started at A with the stepping car
     When kris posts a text-only note
     Then the note was saved

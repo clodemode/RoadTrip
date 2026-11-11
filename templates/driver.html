@@ -3,10 +3,6 @@
 {{with .NoticePost}}<form method="post" action="/driver/post/{{.ID}}/fuzz" class="post-fuzz">
   <button class="btn btn-sm btn-outline-primary">Fuzz This</button>
   <span class="muted small">&mdash; make that post&rsquo;s location inexact</span></form>{{end}}
-{{if .TripChoices}}<form method="post" action="/driver/ride/active" class="trip-switch small">
-  <label for="trip-pick">Trip</label>
-  <select id="trip-pick" name="slug">{{range .TripChoices}}<option value="{{.Slug}}"{{if eq .Slug $.ActiveSlug}} selected{{end}}>{{.Name}}</option>{{end}}</select>
-  <button class="btn btn-sm btn-outline-primary">Change trip</button></form>{{end}}
 <section class="hud" id="hud" data-url="/driver/hud.json"{{if .SimOn}} data-sim="1"{{end}}>
 
   {{if not (or .Destined .Aimless)}}<header class="hud-top" aria-label="Gauges">

@@ -48,6 +48,16 @@
 
 {{with .HoursBars}}{{template "hours_bar" .}}{{end}}
 
+{{with .Marks}}<section class="track-marks" aria-labelledby="marks-h">
+  <h2 id="marks-h">Saved music</h2>
+  <ul class="list-unstyled">{{range .}}
+    <li>{{if eq .Kind "bookmark"}}&#127919;&#9834; {{.At}}{{else}}&#9825;{{end}} <b>{{.Title}}</b> &middot; {{.Album}} &middot; {{.Artist}}
+      <form method="post" action="/driver/roadtracks/mark/{{.ID}}/delete" class="d-inline"><button class="btn btn-sm btn-link">Remove</button></form></li>{{end}}
+  </ul>
+</section>{{end}}
+
+{{if .IsAdmin}}<p class="plan-users"><a class="btn btn-outline-secondary" href="/driver/users">Users setup</a></p>{{end}}
+
 <section class="plan-days">
   <div class="section-head">
     <h2>Days</h2>

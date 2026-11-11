@@ -20,11 +20,25 @@ Feature: The trip-keeper swaps between trips, and the hours timeline is theirs
     Then the page has no trip switch
 
   Scenario: The trip-keeper switches to the test drive and stays on the page
-    When the trip-keeper reads "/driver?embed=1"
+    When the trip-keeper reads "/?embed=1"
     Then the page offers a switch to "Test Drive"
+    When the trip-keeper reads "/plan?embed=1"
+    Then the page offers a switch to "Test Drive"
+    When the trip-keeper reads "/driver?embed=1"
+    Then the page has no trip switch
     When the trip-keeper switches to "Test Drive" from "/plan"
     Then the answer returns to "/plan"
     And the site shows "Test Drive"
     When the trip-keeper switches back to the first trip from "/driver"
     Then the answer returns to "/driver"
     And the site no longer shows "Test Drive"
+
+  Scenario: The trip-keeper saves music and finds it on Plan
+    When the trip-keeper bookmarks 95 seconds into "Blue Road" twice and favourites it twice
+    And the trip-keeper reads "/plan?embed=1"
+    Then the page lists "Blue Road" at "1:35"
+    And the trip-keeper has 3 saved marks
+
+  Scenario: The Plan page links the Users setup for an admin
+    When the trip-keeper reads "/plan?embed=1"
+    Then the page links "/driver/users"

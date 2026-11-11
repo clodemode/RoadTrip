@@ -35,7 +35,7 @@ const (
 // on, so with RoadTracks off the prompt is the one it always was.
 const chesterMusicPrompt = `
 
-Music. When the traveller asks for music, call search_music with an artist or an album title. The library matches album and artist names only, never moods or genres, so for a mood think of artists that suit it and search several of them at once, as separate search_music calls in the same turn. Recommend only from the albums the searches return. Then call show_music with the references of the albums you will recommend (one to three) and one short sentence on why each suits the drive. The page turns each into a card with a Play button that opens the album in the music library; you cannot play anything yourself and the music does not start by itself, so say that they tap Play to open it. If search_music says the library is unavailable, say so plainly and do not suggest an album. Write the answer after your last tool call, as for places.`
+Music. When the traveller asks for music, call search_music with an artist or an album title. The library matches album and artist names only, never moods or genres, so for a mood think of artists that suit it and search several of them at once, as separate search_music calls in the same turn. Recommend only from the albums the searches return. Then call show_music with the references of the albums you will recommend (one to three) and two or three plain sentences on why you chose each: what about this album fits this stretch of road, the hour and what the traveller asked. The page turns each into a card with a Play button that opens the album in the music library; you cannot play anything yourself and the music does not start by itself, so say that they tap Play to open it. If search_music says the library is unavailable, say so plainly and do not suggest an album. Write the answer after your last tool call, as for places.`
 
 // chesterMusicLib is the library as one question sees it; nil is the feature off.
 type chesterMusicLib struct {
@@ -100,7 +100,7 @@ func chesterMusicTools() []anthropic.BetaToolUnionParam {
 				"items": map[string]any{"type": "object",
 					"properties": map[string]any{
 						"ref": map[string]any{"type": "string", "description": "A reference from search_music, such as m1."},
-						"why": map[string]any{"type": "string", "description": "One short sentence."}},
+						"why": map[string]any{"type": "string", "description": "Two or three sentences saying why you chose it."}},
 					"required": []string{"ref", "why"}, "additionalProperties": false}}},
 			[]string{"albums"}),
 	}
@@ -188,7 +188,7 @@ func (m *chesterMusicRun) show(raw string) string {
 		}
 		m.shown[a.URL] = true
 		m.cards = append(m.cards, chesterMusicCard{AlbumID: a.ID, Album: cleanLine(a.Album, 120), Artist: cleanLine(a.Albumartist, 120),
-			Year: a.Year, Why: cleanLine(it.Why, 300), Href: a.URL, Label: "Play"})
+			Year: a.Year, Why: cleanLine(it.Why, 700), Href: a.URL, Label: "Play"})
 	}
 	if len(m.cards) == 0 {
 		return "No card was shown: those references were not in this question's search results. Write the answer without recommending an album."
