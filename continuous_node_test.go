@@ -576,7 +576,7 @@ func initContinuousNodeScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^the stream stalls$`, func() error { act(map[string]any{"do": "audio", "event": "stalled"}); return nil })
+	sc.Step(`^the stream stalls$`, func() error { act(map[string]any{"do": "audio", "event": "waiting"}); return nil })
 	sc.Step(`^the stream plays again$`, func() error { act(map[string]any{"do": "audio", "event": "playing"}); return nil })
 	sc.Step(`^the playing track was never downloaded$`, func() error {
 		if err := run(); err != nil {

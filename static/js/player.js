@@ -210,7 +210,7 @@
   var T = { stall: 8000, retry: 20000, giveUp: 15000, album: 25000 };
   var MSG = { stall: 'Still trying to reach the music\u2026', gaveUp: 'Could not reach the music. Tap Play to try again.',
     buffering: 'Buffering\u2026', loading: 'Still loading\u2026', nothing: 'Nothing to play yet. Ask Chester for an album.' };
-  var tapAt = 0, gaveUp = false;
+  var tapAt = 0, gaveUp = false, watchFrom = 0;
   function now() { return Date.now(); }
   // Client failure reports: fire and forget, a 404 is harmless.
   function report(event, fields) {
@@ -264,7 +264,7 @@
       if (typeof MediaMetadata !== 'undefined') navigator.mediaSession.metadata = new MediaMetadata(metadataFor(tracks[cur], album));
       var h = function (name, fn) { try { navigator.mediaSession.setActionHandler(name, fn); } catch (e) { /* not supported */ } };
       h('play', function () { audio.play(); });
-      h('pause', function () { audio.pause(); });
+      h('pause', function () { watch.stop(); audio.pause(); });
       h('nexttrack', function () { next(); });
       h('previoustrack', function () { var p = cur - 1; while (p >= 0 && !tracks[p].src) p--; if (p >= 0) playTrack(p, 0); });
     } catch (e) { /* the lock screen is a courtesy */ }
@@ -282,7 +282,7 @@
     audio.src = nest.urlFor(i) || tracks[i].src;
     paint(); media();
     nest.playhead(i);
-    gaveUp = false;
+    gaveUp = false; watchFrom = startAt;
     watch.arm('stream');
     var p;
     try { p = audio.play(); } catch (e) { p = null; }
@@ -392,15 +392,15 @@
     if (opening) return;
     var t = audio.currentTime || 0;
     // Real progress is sound: the watchdog stands down.
-    if (watch.armed() && t > lastPos + 0.2) { watch.ok(); if (statusText() === MSG.buffering || statusText() === MSG.stall) status(''); }
+    if (watch.armed() && !audio.paused && t > watchFrom + 0.5) { watch.ok(); if (statusText() === MSG.buffering || statusText() === MSG.stall) status(''); }
     lastPos = t;
   });
-  // A stream that stops mid-play: say so, and the same watchdog takes over.
+  // A stream that stops mid-play ('waiting'; 'stalled' also fires while buffered
+  // sound plays on, so it is not used): say so, and the same watchdog takes over.
   function onStalled() {
     if (opening || asking || audio.paused || !tracks.length || watch.armed()) return;
-    status(MSG.buffering); watch.arm('stream');
+    status(MSG.buffering); watchFrom = audio.currentTime || 0; watch.arm('stream');
   }
-  audio.addEventListener('stalled', onStalled);
   audio.addEventListener('waiting', onStalled);
   audio.addEventListener('loadedmetadata', function () {
     if (startAt > 0 && !opening) { try { audio.currentTime = startAt; } catch (e) { /* seek is best effort */ } startAt = 0; }
@@ -424,10 +424,10 @@
       if (rb && parseInt(rb.getAttribute('data-album-id'), 10)) { resume(); return; }
       status(MSG.nothing); return;
     }
-    if (!audio.paused) { audio.pause(); return; }
+    if (!audio.paused) { watch.stop(); audio.pause(); return; }
     tapAt = now();
     if (gaveUp) { playTrack(cur, audio.currentTime || lastPos); return; }
-    watch.arm('stream');
+    watchFrom = audio.currentTime || 0; watch.arm('stream');
     var p = audio.play();
     if (p && p.catch) p.catch(function (e) { if (!(e && e.name === 'AbortError')) status('Tap Play to start'); });
   });
