@@ -30,6 +30,22 @@ func rideActive(legs []Leg) bool {
 	return fin.ID != st.ID && fin.ArrivedAt == "" && fin.SkippedAt == ""
 }
 
+// rideFinished is a drive that began and whose finish is reached or skipped.
+// It is the one state that is neither Active nor Planning: the banner says so,
+// because "Planning" after the last check-in reads as a ride that never began.
+func rideFinished(legs []Leg) bool {
+	st := tripStart(legs)
+	if st == nil || st.ArrivedAt == "" {
+		return false
+	}
+	cps := rideCheckpoints(legs)
+	if len(cps) == 0 {
+		return false
+	}
+	fin := cps[len(cps)-1]
+	return fin.ID != st.ID && (fin.ArrivedAt != "" || fin.SkippedAt != "")
+}
+
 // menuFor lists the masthead links in the order of the ride's state. Each link
 // keeps the gate it always had; the state only decides which are worth the room.
 func menuFor(active, started, driver, chesterOn, hasChecklist, admin bool, path string) []menuItem {
@@ -114,12 +130,16 @@ func pageHead(name string, data map[string]any, rideName string) (string, []crum
 
 // chrome fills the template data the banner, the strip and the page head read.
 func (a *App) chrome(r *http.Request, name string, data map[string]any, authed, driver bool) {
-	active, started := false, false
+	active, started, finished := false, false, false
 	if rv, err := a.loadRide(); err == nil {
 		active = rideActive(rv.Legs)
+		finished = rideFinished(rv.Legs)
 		started = driveStarted(rv.Legs)
 	}
 	data["RideState"], data["RideStateLabel"] = "planning", "Planning"
+	if finished {
+		data["RideState"], data["RideStateLabel"] = "finished", "Finished"
+	}
 	if active {
 		data["RideState"], data["RideStateLabel"] = "active", "Active"
 		// The simulated car is the signed-in user's own business: only they see the word.
