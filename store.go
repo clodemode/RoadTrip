@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -2106,6 +2107,7 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 		legID      int64
 		ord, posts int
 		line       string
+		plan       seedLeg
 	}
 	var changes []roadChange
 	for rows.Next() {
@@ -2124,7 +2126,7 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 		case !ok:
 			reasons = append(reasons, fmt.Sprintf("leg %d holds %d post(s) and the new plan has no leg %d", ord, posts, ord))
 		case pl.Slug != slug:
-			changes = append(changes, roadChange{legID, ord, posts, pl.Line})
+			changes = append(changes, roadChange{legID, ord, posts, pl.Line, pl})
 		}
 	}
 	rows.Close()
@@ -2132,6 +2134,17 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 		return nil, err
 	}
 	for _, c := range changes {
+		// A leg the new plan carries under another slug is the same leg when
+		// everything the road made real is identical: a choice is allowed to
+		// name its own copy of a shared first day (the slug says which choice
+		// it came from), and the copy changes nothing that was driven.
+		same, err := legUnchanged(tx, c.legID, c.plan, sd.Checkpoints)
+		if err != nil {
+			return nil, err
+		}
+		if same {
+			continue
+		}
 		why, err := roadChangeRefused(tx, c.legID, c.ord, c.posts, c.line)
 		if err != nil {
 			return nil, err
@@ -2175,6 +2188,69 @@ func planConflicts(tx *sql.Tx, sd *seedData) ([]string, error) {
 	}
 	rows.Close()
 	return routingConflicts(tx, sd, reasons)
+}
+
+// legUnchanged reports whether the plan's leg (found by order, carried under a
+// different slug) is, in every way the road can have made real, the leg the
+// database already holds: the same name, date, miles, hours, hint and road
+// line, and the same stops in the same order with the same names, points,
+// zones and precision. The slug is the one thing left out: it only says which
+// choice the document wrote the leg for. Anything else that differs is a
+// change, and the caller judges it as it always has.
+func legUnchanged(tx *sql.Tx, legID int64, pl seedLeg, cps []seedCP) (bool, error) {
+	var name, date, hint, line string
+	var miles, hours float64
+	if err := tx.QueryRow(`SELECT name,date,est_miles,est_hours,route_hint,line_geojson FROM legs WHERE id=?`, legID).
+		Scan(&name, &date, &miles, &hours, &hint, &line); err != nil {
+		return false, err
+	}
+	if name != pl.Name || date != pl.Date || miles != pl.EstMiles || hours != pl.EstHours || hint != pl.RouteHint {
+		return false, nil
+	}
+	if !sameJSON(line, pl.Line) {
+		return false, nil
+	}
+	var want []seedCP
+	for _, c := range cps {
+		if c.LegOrd == pl.Ord {
+			want = append(want, c)
+		}
+	}
+	sort.Slice(want, func(i, j int) bool { return want[i].Ord < want[j].Ord })
+	rows, err := tx.Query(`SELECT ord,name,lat,lng,tz,precision FROM checkpoints WHERE leg_id=? ORDER BY ord`, legID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	i := 0
+	for rows.Next() {
+		var c seedCP
+		if err := rows.Scan(&c.Ord, &c.Name, &c.Lat, &c.Lng, &c.TZ, &c.Precision); err != nil {
+			return false, err
+		}
+		if i >= len(want) {
+			return false, nil
+		}
+		w := want[i]
+		if w.Ord != c.Ord || w.Name != c.Name || w.Lat != c.Lat || w.Lng != c.Lng || w.TZ != c.TZ || w.Precision != c.Precision {
+			return false, nil
+		}
+		i++
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return i == len(want), nil
+}
+
+// sameJSON compares two JSON texts by value, so spacing never decides it. Text
+// that is not JSON is compared as it stands.
+func sameJSON(a, b string) bool {
+	var ca, cb bytes.Buffer
+	if json.Compact(&ca, []byte(a)) != nil || json.Compact(&cb, []byte(b)) != nil {
+		return a == b
+	}
+	return ca.String() == cb.String()
 }
 
 // roadChangeRefused judges a new road for a leg that holds posts. The road
@@ -2397,11 +2473,26 @@ func (s *Store) refreshPlan(sd *seedData, prune bool, after func(*sql.Tx) error)
 		// one added on the road (source 'road') is the trip-keeper's and a
 		// re-push never takes it away. planConflicts has already refused a
 		// document that would change the routing points of a leg driven.
-		if _, err := tx.Exec(`DELETE FROM routing_points WHERE source='plan'
-		  AND leg_id IN (SELECT id FROM legs WHERE ride_slug=?)`, r.Slug); err != nil {
+		// The routing points of a driven leg are the same set (planConflicts
+		// refused otherwise), so they are left as they are and keep their ids.
+		driven, err := drivenLegs(tx, r.Slug)
+		if err != nil {
 			return n, err
 		}
-		if err := insertPlanRouting(tx, legIDs, sd.Routing); err != nil {
+		if _, err := tx.Exec(`DELETE FROM routing_points WHERE source='plan'
+		  AND leg_id IN (SELECT id FROM legs WHERE ride_slug=? AND NOT EXISTS (
+		    SELECT 1 FROM posts p WHERE p.leg_id=legs.id)
+		    AND NOT EXISTS (SELECT 1 FROM checkpoints c WHERE c.leg_id=legs.id
+		      AND (c.arrived_at<>'' OR c.skipped_at<>'')))`, r.Slug); err != nil {
+			return n, err
+		}
+		var fresh []seedRP
+		for _, x := range sd.Routing {
+			if !driven[x.LegOrd] {
+				fresh = append(fresh, x)
+			}
+		}
+		if err := insertPlanRouting(tx, legIDs, fresh); err != nil {
 			return n, err
 		}
 	}
