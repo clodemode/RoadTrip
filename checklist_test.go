@@ -958,8 +958,9 @@ func TestFrontPageSummarisesTheChecklist(t *testing.T) {
 	if !strings.Contains(home, `<a href="/checklist">Checklist</a>: 0 of 5 done &middot; 0 of 3 questions answered`) {
 		t.Error("/ does not summarise the checklist as 0 of 5 done")
 	}
-	if strings.Count(home, `href="/checklist"`) != 2 {
-		t.Errorf("/ has %d links to the checklist; want the masthead's and the summary's", strings.Count(home, `href="/checklist"`))
+	// The masthead no longer links to it (Kris, 2026-11-12): the summary is the one link.
+	if strings.Count(home, `href="/checklist"`) != 1 {
+		t.Errorf("/ has %d links to the checklist; want the summary's alone", strings.Count(home, `href="/checklist"`))
 	}
 	markOK(t, app, clStep, "call-ahead", url.Values{})
 	markOK(t, app, clStep, "inspect", url.Values{})
@@ -968,10 +969,10 @@ func TestFrontPageSummarisesTheChecklist(t *testing.T) {
 	if !strings.Contains(home, `Checklist</a>: 2 of 5 done &middot; 1 of 3 questions answered`) {
 		t.Error("/ does not summarise the checklist as 2 of 5 done")
 	}
-	// Every page's masthead reaches it.
+	// No masthead carries it any more (Kris, 2026-11-12).
 	for _, p := range []string{"/plan", "/photos", "/legs/day-1-ridge"} {
-		if body := send(t, app, "GET", p, testToken, "", nil).Body.String(); !strings.Contains(body, `<a href="/checklist">Checklist</a>`) {
-			t.Errorf("%s has no masthead link to the checklist", p)
+		if body := send(t, app, "GET", p, testToken, "", nil).Body.String(); strings.Contains(body, `<a href="/checklist">Checklist</a>`) {
+			t.Errorf("%s still has a masthead link to the checklist", p)
 		}
 	}
 	// The stage progress on the page itself.
