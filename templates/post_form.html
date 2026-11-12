@@ -8,32 +8,37 @@
     <button class="btn btn-sm btn-outline-primary">Fuzz This</button>
     <span class="muted small">&mdash; make that post&rsquo;s location inexact</span></form>{{end}}
 
-  <form method="post" action="/driver/post" enctype="multipart/form-data" class="d-flex flex-column gap-3 mt-3" id="post-form"{{if .SimOn}} data-sim="1"{{end}}>
-    {{/* What is being posted comes first. One radio per kind, all named kind,
-         so the server reads it exactly as it read the old select. post.js
-         opens and closes the sections below to suit it; without script every
-         section stays open and the form posts as it always did. In start mode
-         the choice is fixed to photo and tucked away. */}}
+  <script>document.documentElement.classList.add('js');</script>
+  <form method="post" action="/driver/post" enctype="multipart/form-data" class="d-flex flex-column gap-3 mt-3{{if not .StartMode}} one-tap{{end}}" id="post-form"{{if .SimOn}} data-sim="1"{{end}}>
+    {{/* One tap posts. A title or note, if wanted, is typed first; then one
+         button per post type. post.js turns a photo type's button into the
+         file picker and posts the moment a photo is chosen. Each button is a
+         real submit button named kind, so without script the same form posts
+         as it always did: pick the file, tap a type or Post. In start mode the
+         buttons and the fields are tucked away and the photo is the page. */}}
+    <div id="post-text"{{if .StartMode}} hidden{{end}}>
+      <p class="muted small mb-2">Type a title or note first if you want one, then tap what you are posting.</p>
+      <label class="form-label d-block mb-2">Title <span class="form-text">(optional)</span><input class="form-control" name="title" id="f-title" maxlength="140" autocomplete="off"></label>
+      <label class="form-label d-block mb-0">Note <span class="form-text">(optional)</span><textarea class="form-control" name="body" id="f-body" rows="2"></textarea></label>
+      <p class="error mb-0 mt-2" id="text-need" role="alert" hidden>Type a title or a note first, then tap Note.</p>
+    </div>
     <fieldset class="kind-row" id="post-types"{{if .StartMode}} hidden{{end}}>
       <legend>What are you posting?</legend>
-      {{range .Kinds}}<label class="kind-choice"><input type="radio" name="kind" value="{{.Value}}"{{if eq .Value $.Kind}} checked{{end}}><span>{{.Label}}</span></label>{{end}}
+      {{range .Kinds}}<button type="submit" name="kind" value="{{.Value}}" class="kind-btn">{{.Label}}</button>{{end}}
     </fieldset>
     <div id="sec-upload">
       <label class="form-label d-block">Photo (JPEG)
         <input class="form-control photo-pick" type="file" name="photo" id="f-photo" accept="image/jpeg">
       </label>
-      <p class="muted small" id="exif-status">photo GPS: pick a file to read it</p>
     </div>
     {{if .StartMode}}<p class="mb-0"><a class="btn btn-outline-dark tap" id="other-link" href="/driver/post?full=1">Post something else instead</a></p>{{end}}
     <div id="form-rest" class="d-flex flex-column gap-3"{{if .StartMode}} hidden{{end}}>
-    <details id="sec-text" open>
-      <summary class="tap">Title and caption</summary>
-      <label class="form-label d-block mt-2">Title<input class="form-control" name="title" maxlength="140" autocomplete="off"></label>
-      <label class="form-label d-block">Body<textarea class="form-control" name="body" rows="3"></textarea></label>
-    </details>
-    <details id="more-options"{{if .Error}} open{{end}}>
+    {{/* Open, so that without script every option is in view and Post is
+         there to tap; the line after it closes it for a page that runs. */}}
+    <details id="more-options" open>
       <summary class="tap">More options</summary>
       <div class="d-flex flex-column gap-3 mt-2">
+      <p class="muted small mb-0" id="exif-status">photo GPS: pick a file to read it</p>
       <div class="row g-2">
         <label class="form-label col-6">Zone<select class="form-select" name="tz" id="f-tz">
           {{range .Zones}}<option value="{{.}}"{{if eq . $.DefaultTZ}} selected{{end}}>{{.}}</option>{{end}}
@@ -61,8 +66,23 @@
         <label class="form-check touch"><input class="form-check-input" type="radio" name="pin_source" value="none" id="p-none">
           <span>No pin <span class="muted small">&mdash; location hidden</span></span></label>
       </fieldset>
+      {{/* Written by post.js once it has set the toggle's default. Absent (no
+           JS) means "nobody chose" and the server applies the default itself. */}}
+      <input type="hidden" name="fuzz_choice" id="f-fuzzset" value="">
+      {{/* post.js sets this to 1 while the pin-source radio is only what the page
+           pre-selected, and clears it once the driver touches the radio. Absent
+           (no JS, or an older page) means the pin source, if sent, is a choice. */}}
+      <input type="hidden" name="pin_auto" id="f-pinauto" value="">
+      <div class="pin-privacy">
+        <label class="form-check touch"><input class="form-check-input" type="checkbox" name="fuzz_location" id="f-fuzz" value="1">
+          <span><strong>Fuzz This</strong> <span class="muted small">&mdash; publish a 5 km cell, not the exact point. You can undo it after posting.</span></span></label>
+        <p class="muted small" id="pin-publishes">publishes as: &mdash;</p>
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg" id="btn-post">Post</button>
       </div>
     </details>
+    {{if not .Error}}<script>document.getElementById('more-options').removeAttribute('open');</script>{{end}}
+    </div>
     <input type="hidden" name="lat" id="f-lat">
     <input type="hidden" name="lng" id="f-lng">
     <input type="hidden" name="accuracy" id="f-acc">
@@ -71,19 +91,6 @@
          and uses its own value; these are never trusted. */}}
     <input type="hidden" name="photo_lat" id="f-plat">
     <input type="hidden" name="photo_lng" id="f-plng">
-    {{/* Written by post.js once it has set the toggle's default. Absent (no
-         JS) means "nobody chose" and the server applies the default itself. */}}
-    <input type="hidden" name="fuzz_choice" id="f-fuzzset" value="">
-    {{/* post.js sets this to 1 while the pin-source radio is only what the page
-         pre-selected, and clears it once the driver touches the radio. Absent
-         (no JS, or an older page) means the pin source, if sent, is a choice. */}}
-    <input type="hidden" name="pin_auto" id="f-pinauto" value="">
-    <div class="pin-privacy">
-      <label class="form-check touch"><input class="form-check-input" type="checkbox" name="fuzz_location" id="f-fuzz" value="1">
-        <span><strong>Fuzz This</strong> <span class="muted small">&mdash; publish a 5 km cell, not the exact point. You can undo it after posting.</span></span></label>
-      <p class="muted small" id="pin-publishes">publishes as: &mdash;</p>
-    </div>
-    </div>
     {{if .Start}}<fieldset class="milestone" id="start-fieldset"{{if .StartMode}} hidden{{end}}>
       <legend>Start the drive</legend>
       <label class="form-check"><input class="form-check-input" type="radio" name="milestone_id" value=""{{if not .StartMode}} checked{{end}}>
@@ -108,7 +115,6 @@
         <span>Real GPS: the photo&rsquo;s GPS or the phone</span></label>
     </fieldset>{{end}}
     {{if .StartMode}}<button type="submit" class="btn btn-primary btn-lg tap-lg" id="btn-start">Start the drive from {{.Start.Name}}</button>{{end}}
-    <button type="submit" class="btn btn-primary btn-lg"{{if .StartMode}} id="btn-post" hidden{{end}}>Post</button>
     <p class="muted small">Best pin: choose from Photo Library &mdash; the photo keeps its own GPS and time. A shot taken here carries no GPS, so the phone&rsquo;s location when you pick it is used; the phone shares it only over https.</p>
     <p class="muted small">JPEG only (iPhone: Settings &rarr; Camera &rarr; Formats &rarr; Most Compatible). Max 20 MB.</p>
   </form>

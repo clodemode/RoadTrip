@@ -22,15 +22,46 @@ test('a refused or missing location reports an error and never throws', () => {
   assert.equal(err.code, 0);
 });
 
-const { sectionsFor, locationReason } = createRequire(import.meta.url)('./post.js');
+const { carriesPhoto, noteBlocked, autoSubmit, sendDecision, FIX_WAIT_MS, locationReason } = createRequire(import.meta.url)('./post.js');
 
-test('each post type opens the sections it needs', () => {
-  assert.deepEqual(sectionsFor('photo'), { upload: true, textOpen: false });
-  assert.deepEqual(sectionsFor('note'), { upload: false, textOpen: true });
-  for (const k of ['sight', 'meal', 'lodging', 'mishap', 'tip']) {
-    assert.deepEqual(sectionsFor(k), { upload: true, textOpen: true }, k);
+test('every post type but a note carries a photo', () => {
+  assert.equal(carriesPhoto('note'), false);
+  for (const k of ['photo', 'sight', 'meal', 'lodging', 'mishap', 'tip', 'nonsense']) {
+    assert.equal(carriesPhoto(k), true, k);
   }
-  assert.deepEqual(sectionsFor('nonsense'), { upload: true, textOpen: true });
+});
+
+test('a words-only post with no words is blocked, and any word unblocks it', () => {
+  assert.equal(noteBlocked('', ''), true);
+  assert.equal(noteBlocked('  ', '\n'), true);
+  assert.equal(noteBlocked(undefined, null), true);
+  assert.equal(noteBlocked('Gas', ''), false);
+  assert.equal(noteBlocked('', 'Pie was good.'), false);
+});
+
+test('a chosen photo is posted at once, unless More options is open and was changed', () => {
+  assert.equal(autoSubmit(false, false), true);
+  assert.equal(autoSubmit(true, false), true);   // opened and looked, changed nothing
+  assert.equal(autoSubmit(false, true), true);   // changed, then closed: the page asks nothing more
+  assert.equal(autoSubmit(true, true), false);
+});
+
+test('a photo is sent once it is read and the phone has answered, held when the driver is posting by hand', () => {
+  const ready = { auto: true, exifDone: true, fixNeeded: false, elapsed: 50 };
+  assert.equal(sendDecision(ready), 'send');
+  assert.equal(sendDecision({ ...ready, auto: false }), 'hold');
+  assert.equal(sendDecision({ ...ready, exifDone: false }), 'wait');
+  assert.equal(sendDecision({ ...ready, fixNeeded: true }), 'wait');
+});
+
+test('the wait for the phone is capped at about two seconds, then the post goes without it', () => {
+  assert.equal(FIX_WAIT_MS, 2000);
+  const slow = { auto: true, exifDone: false, fixNeeded: true };
+  assert.equal(sendDecision({ ...slow, elapsed: FIX_WAIT_MS - 1 }), 'wait');
+  assert.equal(sendDecision({ ...slow, elapsed: FIX_WAIT_MS }), 'send');
+  assert.equal(sendDecision({ ...slow, elapsed: 60000 }), 'send');
+  // A held photo stays held however long it waits.
+  assert.equal(sendDecision({ ...slow, auto: false, elapsed: 60000 }), 'hold');
 });
 
 test('choosing a photo asks for a fresh, high-accuracy fix', () => {
