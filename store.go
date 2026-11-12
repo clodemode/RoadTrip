@@ -489,6 +489,14 @@ func (s *Store) migrate() error {
 	}); err != nil {
 		return err
 	}
+	// plays.pub_id is the opaque public name of a play (listen.go); the library's
+	// album number never leaves the server. Rows from before it get one here.
+	if err := s.addColumns("plays", []string{"pub_id TEXT NOT NULL DEFAULT ''"}); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`UPDATE plays SET pub_id = lower(hex(randomblob(8))) WHERE pub_id = ''`); err != nil {
+		return err
+	}
 	if err := s.chesterFirstWordNullable(); err != nil {
 		return err
 	}

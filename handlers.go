@@ -165,6 +165,8 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /plan.json", a.planJSON)
 	// What is playing and what played: open to a visitor, text only (plays.go).
 	mux.HandleFunc("GET /tracks.json", a.tracksJSON)
+	// A visitor hears one play of the active ride (listen.go): checked, then handed on.
+	mux.HandleFunc("GET /tracks/{id}/audio", a.tracksAudio)
 	// The checklist: the active ride's steps and questions. Private text is
 	// read only for a signed-in request; /checklist.json never carries it.
 	// Both are driver-only (Kris, 2026-11-07).
