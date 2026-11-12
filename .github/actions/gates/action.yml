@@ -1,0 +1,43 @@
+name: gates
+description: >-
+  The checks a release has to pass: gofmt, js syntax, js tests, go vet, go build
+  and go test -race. ONE definition, used by ci.yml (the record, once per merge
+  to trunk) and by deploy.yml (only when no CI record proves the commit).
+  Expects the repo checked out and Go set up.
+
+runs:
+  using: composite
+  steps:
+    - name: gofmt
+      shell: bash
+      run: |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "::error::gofmt needed on:"
+          echo "$unformatted"
+          gofmt -d .
+          exit 1
+        fi
+
+    # A browser drops the WHOLE script on one syntax error, and go test never
+    # parses JS: an unescaped apostrophe in hud.js killed every /driver control
+    # live on 2026-11-07. node ships on the runner.
+    - name: js syntax
+      shell: bash
+      run: for f in static/js/*.js; do node --check "$f" || exit 1; done
+
+    - name: js tests
+      shell: bash
+      run: node --test static/js/*_test.mjs
+
+    - name: go vet
+      shell: bash
+      run: go vet ./...
+
+    - name: go build
+      shell: bash
+      run: go build ./...
+
+    - name: go test
+      shell: bash
+      run: go test -race -count=1 -timeout 20m ./...

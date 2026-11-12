@@ -212,9 +212,57 @@
     all.push([p.lat, p.lng]);
   });
 
+  /* --- what is playing (nowplaying.js, text only) ------------------------
+     The skeleton in the page becomes a small control in the map's corner: the
+     "Currently playing" chip and the Listen Inn toggle that opens the list
+     over the map's edge. Each play with a published point is a music note. */
+  var NP = window.RTNowPlaying, npEl = document.getElementById('np');
+  var playLayer = L.layerGroup().addTo(map);
+  if (NP && npEl) {
+    var npLine = document.getElementById('np-line'), npLabel = document.getElementById('np-label'),
+        npPanel = document.getElementById('np-panel'), npBtn = document.getElementById('np-toggle'), npLast = 0;
+    var npCtl = L.control({ position: 'bottomleft' });
+    npCtl.onAdd = function () { L.DomEvent.disableClickPropagation(npEl); L.DomEvent.disableScrollPropagation(npEl); return npEl; };
+    npCtl.addTo(map);
+    var drawPlays = function (doc) {
+      var t = NP.chipText(doc);
+      npEl.hidden = !t;
+      if (t) { npLabel.textContent = t.label; npLine.textContent = t.line; }
+      npPanel.innerHTML = (doc.tracks || []).map(function (p) { return NP.rowHtml(p, esc, doc.listen && !!document.getElementById('np-audio')); }).join('');
+      if (window.RTListen && window.RTListen.update) window.RTListen.update(doc);
+      playLayer.clearLayers();
+      (doc.tracks || []).forEach(function (p) {
+        if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+        L.marker([p.lat, p.lng], {
+          icon: L.divIcon({ className: 'np-pin', iconSize: [22, 22], iconAnchor: [11, 11], html: '<span>&#9834;</span>' }),
+          keyboard: false, zIndexOffset: 400
+        }).addTo(playLayer).bindPopup('<div class="popup">' + NP.rowHtml(p, esc) + '</div>');
+      });
+    };
+    npBtn.addEventListener('click', function () {
+      var open = npPanel.hidden;
+      npPanel.hidden = !open;
+      npBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    drawPlays(window.RIDE_TRACKS || { tracks: [] });
+    npLast = Date.now();
+    /* Once a minute, and only while the tab is visible: a hidden tab must not
+       keep the machine awake. Coming back to the tab asks at once if it is due. */
+    var npAsk = function () {
+      if (!NP.shouldPoll(document.hidden, npLast, Date.now())) return;
+      npLast = Date.now();
+      fetch('/tracks.json', { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (doc) { if (doc) drawPlays(doc); })
+        .catch(function () { /* the chip keeps what it had */ });
+    };
+    setInterval(npAsk, NP.EVERY_MS);
+    document.addEventListener('visibilitychange', npAsk);
+  }
+
   L.control.layers(null, {
     'Route': legLayer, 'Driven': trackLayer, 'Checkpoints': cpLayer,
-    'Candidate stops': sightLayer, 'Posts': postLayer
+    'Candidate stops': sightLayer, 'Posts': postLayer, 'Music': playLayer
   }, { collapsed: true }).addTo(map);
 
   /* --- fit --------------------------------------------------------------- */

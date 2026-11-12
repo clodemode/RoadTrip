@@ -9,7 +9,7 @@
 </section>
 
 <div id="map" data-mode="plan"></div>
-{{if .Opts}}<p class="plan-maphint muted small">Solid line: the route this plan takes. Dashed grey: the other choices. Tap a dashed line to switch to it.</p>{{end}}
+{{if .Opts}}<p class="plan-maphint muted small">Solid line: the route this plan takes. Dashed grey: the other choices. Tap a dashed line to switch to it.{{if .RerouteOn}} Or <a href="/chester?preset=reroute">ask Chester about changing the route</a>.{{end}}</p>{{end}}
 
 <form id="plan-form" class="plan-form" method="get" action="/plan">
   {{range $o := .Opts}}

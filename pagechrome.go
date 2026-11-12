@@ -48,7 +48,7 @@ func rideFinished(legs []Leg) bool {
 
 // menuFor lists the masthead links in the order of the ride's state. Each link
 // keeps the gate it always had; the state only decides which are worth the room.
-func menuFor(active, started, driver, chesterOn, hasChecklist, admin bool, path string) []menuItem {
+func menuFor(active, started, driver, chesterOn, admin bool, path string) []menuItem {
 	cur := func(href string) bool { return path == href }
 	var m []menuItem
 	add := func(label, href string, ok bool, current bool) {
@@ -73,8 +73,6 @@ func menuFor(active, started, driver, chesterOn, hasChecklist, admin bool, path 
 		add("Lodging", "/driver/lodging", driver, cur("/driver/lodging"))
 		add("Photos", "/photos", true, cur("/photos"))
 	}
-	add("GeoJSON", "/route.geojson", driver, false)
-	add("Checklist", "/checklist", driver && hasChecklist, cur("/checklist"))
 	add("Users", "/driver/users", admin, cur("/driver/users"))
 	return m
 }
@@ -147,10 +145,9 @@ func (a *App) chrome(r *http.Request, name string, data map[string]any, authed, 
 			data["RideStateLabel"] = "Active, simulation"
 		}
 	}
-	hc, _ := data["HasChecklist"].(bool)
 	chesterOn, _ := data["ChesterOn"].(bool)
 	admin, _ := data["IsAdmin"].(bool)
-	data["Menu"] = menuFor(active, started, driver, chesterOn, hc, admin, r.URL.Path)
+	data["Menu"] = menuFor(active, started, driver, chesterOn, admin, r.URL.Path)
 	hud, _ := data["HUD"].(bool)
 	data["TracksOn"] = a.tracks != nil
 	emb, _ := data["Embed"].(bool)

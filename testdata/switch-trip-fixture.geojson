@@ -1,0 +1,1199 @@
+{
+ "type": "FeatureCollection",
+ "synthetic": true,
+ "name": "Alder to Elm, a fixture trip whose second night is a choice after an identical first day; every place invented",
+ "ride": {
+  "slug": "switch-fixture",
+  "name": "Alder to Elm",
+  "start_date": "2030-06-01",
+  "mode": "CAR"
+ },
+ "avg_mph": 60,
+ "long_day_hours": 9.5,
+ "options": [
+  {
+   "id": "tonight",
+   "title": "Where to sleep tonight",
+   "default": "near",
+   "choices": [
+    {
+     "id": "near",
+     "label": "Cedar Camp then Dogwood",
+     "detail": "the near night"
+    },
+    {
+     "id": "far",
+     "label": "Cedar Camp then Fir Landing",
+     "detail": "a longer second day"
+    },
+    {
+     "id": "bent",
+     "label": "A different first road",
+     "detail": "changes day 1"
+    },
+    {
+     "id": "moved",
+     "label": "A different first stop",
+     "detail": "moves a stop on day 1"
+    },
+    {
+     "id": "detour",
+     "label": "A different middle stop",
+     "detail": "replaces a stop on day 1"
+    }
+   ]
+  }
+ ],
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 1,
+    "day": 1,
+    "slug": "d1-near",
+    "name": "Alder \u2192 Cedar Camp",
+    "est_miles": 300,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "near"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -100.4,
+      40.1
+     ],
+     [
+      -100.8,
+      40.6
+     ],
+     [
+      -101.0,
+      41.0
+     ],
+     [
+      -101.5,
+      41.6
+     ],
+     [
+      -102.0,
+      42.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 1,
+    "leg": 1,
+    "name": "Alder",
+    "label": "Start",
+    "tz": "America/Chicago",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "near"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.4,
+     40.1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 2,
+    "leg": 1,
+    "name": "Birch Gate",
+    "label": "Waypoint",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "near"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -101.0,
+     41.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 3,
+    "leg": 1,
+    "name": "Cedar Camp",
+    "label": "Night 1",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "near"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -102.0,
+     42.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "routing",
+    "leg": 1,
+    "after": 1,
+    "name": "Plum Bridge",
+    "when": {
+     "tonight": "near"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.8,
+     40.6
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 2,
+    "day": 2,
+    "slug": "d2-near",
+    "name": "Cedar Camp \u2192 Dogwood",
+    "est_miles": 300,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "near"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -102.0,
+      42.0
+     ],
+     [
+      -103.0,
+      42.6
+     ],
+     [
+      -104.0,
+      43.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 4,
+    "leg": 2,
+    "name": "Dogwood",
+    "label": "Night 2",
+    "tz": "America/Denver",
+    "precision": "approx",
+    "when": {
+     "tonight": "near"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -104.0,
+     43.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 3,
+    "day": 3,
+    "slug": "d3-near",
+    "name": "Dogwood \u2192 Elm",
+    "est_miles": 320,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "near"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -104.0,
+      43.0
+     ],
+     [
+      -106.0,
+      44.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 5,
+    "leg": 3,
+    "name": "Elm",
+    "label": "Finish",
+    "tz": "America/Denver",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "near"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -106.0,
+     44.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 1,
+    "day": 1,
+    "slug": "d1-far",
+    "name": "Alder \u2192 Cedar Camp",
+    "est_miles": 300,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "far"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -100.4,
+      40.1
+     ],
+     [
+      -100.8,
+      40.6
+     ],
+     [
+      -101.0,
+      41.0
+     ],
+     [
+      -101.5,
+      41.6
+     ],
+     [
+      -102.0,
+      42.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 1,
+    "leg": 1,
+    "name": "Alder",
+    "label": "Start",
+    "tz": "America/Chicago",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "far"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.4,
+     40.1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 2,
+    "leg": 1,
+    "name": "Birch Gate",
+    "label": "Waypoint",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "far"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -101.0,
+     41.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 3,
+    "leg": 1,
+    "name": "Cedar Camp",
+    "label": "Night 1",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "far"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -102.0,
+     42.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "routing",
+    "leg": 1,
+    "after": 1,
+    "name": "Plum Bridge",
+    "when": {
+     "tonight": "far"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.8,
+     40.6
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 2,
+    "day": 2,
+    "slug": "d2-far",
+    "name": "Cedar Camp \u2192 Fir Landing",
+    "est_miles": 420,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "far"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -102.0,
+      42.0
+     ],
+     [
+      -103.0,
+      42.2
+     ],
+     [
+      -104.0,
+      42.4
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 4,
+    "leg": 2,
+    "name": "Fir Landing",
+    "label": "Night 2",
+    "tz": "America/Denver",
+    "precision": "approx",
+    "when": {
+     "tonight": "far"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -104.0,
+     42.4
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 3,
+    "day": 3,
+    "slug": "d3-far",
+    "name": "Fir Landing \u2192 Elm",
+    "est_miles": 200,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "far"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -104.0,
+      42.4
+     ],
+     [
+      -106.0,
+      44.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 5,
+    "leg": 3,
+    "name": "Elm",
+    "label": "Finish",
+    "tz": "America/Denver",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "far"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -106.0,
+     44.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 1,
+    "day": 1,
+    "slug": "d1-bent",
+    "name": "Alder \u2192 Cedar Camp",
+    "est_miles": 300,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "bent"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -100.4,
+      40.1
+     ],
+     [
+      -100.2,
+      40.9
+     ],
+     [
+      -100.9,
+      41.2
+     ],
+     [
+      -101.4,
+      41.9
+     ],
+     [
+      -102.0,
+      42.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 1,
+    "leg": 1,
+    "name": "Alder",
+    "label": "Start",
+    "tz": "America/Chicago",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "bent"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.4,
+     40.1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 2,
+    "leg": 1,
+    "name": "Birch Gate",
+    "label": "Waypoint",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "bent"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -101.0,
+     41.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 3,
+    "leg": 1,
+    "name": "Cedar Camp",
+    "label": "Night 1",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "bent"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -102.0,
+     42.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "routing",
+    "leg": 1,
+    "after": 1,
+    "name": "Plum Bridge",
+    "when": {
+     "tonight": "bent"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.8,
+     40.6
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 2,
+    "day": 2,
+    "slug": "d2-bent",
+    "name": "Cedar Camp \u2192 Dogwood",
+    "est_miles": 300,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "bent"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -102.0,
+      42.0
+     ],
+     [
+      -103.0,
+      42.6
+     ],
+     [
+      -104.0,
+      43.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 4,
+    "leg": 2,
+    "name": "Dogwood",
+    "label": "Night 2",
+    "tz": "America/Denver",
+    "precision": "approx",
+    "when": {
+     "tonight": "bent"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -104.0,
+     43.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 3,
+    "day": 3,
+    "slug": "d3-bent",
+    "name": "Dogwood \u2192 Elm",
+    "est_miles": 320,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "bent"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -104.0,
+      43.0
+     ],
+     [
+      -106.0,
+      44.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 5,
+    "leg": 3,
+    "name": "Elm",
+    "label": "Finish",
+    "tz": "America/Denver",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "bent"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -106.0,
+     44.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 1,
+    "day": 1,
+    "slug": "d1-moved",
+    "name": "Alder \u2192 Cedar Camp",
+    "est_miles": 300,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "moved"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -100.4,
+      40.1
+     ],
+     [
+      -100.8,
+      40.6
+     ],
+     [
+      -101.0,
+      41.0
+     ],
+     [
+      -101.5,
+      41.6
+     ],
+     [
+      -102.0,
+      42.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 1,
+    "leg": 1,
+    "name": "Alder",
+    "label": "Start",
+    "tz": "America/Chicago",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "moved"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.4,
+     40.1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 2,
+    "leg": 1,
+    "name": "Birch Gate",
+    "label": "Waypoint",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "moved"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -101.0,
+     41.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 3,
+    "leg": 1,
+    "name": "Cedar Camp",
+    "label": "Night 1",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "moved"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -102.2,
+     42.1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "routing",
+    "leg": 1,
+    "after": 1,
+    "name": "Plum Bridge",
+    "when": {
+     "tonight": "moved"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.8,
+     40.6
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 2,
+    "day": 2,
+    "slug": "d2-moved",
+    "name": "Cedar Camp \u2192 Dogwood",
+    "est_miles": 300,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "moved"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -102.0,
+      42.0
+     ],
+     [
+      -103.0,
+      42.6
+     ],
+     [
+      -104.0,
+      43.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 4,
+    "leg": 2,
+    "name": "Dogwood",
+    "label": "Night 2",
+    "tz": "America/Denver",
+    "precision": "approx",
+    "when": {
+     "tonight": "moved"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -104.0,
+     43.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 3,
+    "day": 3,
+    "slug": "d3-moved",
+    "name": "Dogwood \u2192 Elm",
+    "est_miles": 320,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "moved"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -104.0,
+      43.0
+     ],
+     [
+      -106.0,
+      44.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 5,
+    "leg": 3,
+    "name": "Elm",
+    "label": "Finish",
+    "tz": "America/Denver",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "moved"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -106.0,
+     44.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 1,
+    "day": 1,
+    "slug": "d1-detour",
+    "name": "Alder \u2192 Cedar Camp",
+    "est_miles": 300,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "detour"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -100.4,
+      40.1
+     ],
+     [
+      -100.8,
+      40.6
+     ],
+     [
+      -101.0,
+      41.0
+     ],
+     [
+      -101.5,
+      41.6
+     ],
+     [
+      -102.0,
+      42.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 1,
+    "leg": 1,
+    "name": "Alder",
+    "label": "Start",
+    "tz": "America/Chicago",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "detour"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.4,
+     40.1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 2,
+    "leg": 1,
+    "name": "Birch Hill",
+    "label": "Waypoint",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "detour"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -101.0,
+     41.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 3,
+    "leg": 1,
+    "name": "Cedar Camp",
+    "label": "Night 1",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "when": {
+     "tonight": "detour"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -102.0,
+     42.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "routing",
+    "leg": 1,
+    "after": 1,
+    "name": "Plum Bridge",
+    "when": {
+     "tonight": "detour"
+    }
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.8,
+     40.6
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 2,
+    "day": 2,
+    "slug": "d2-detour",
+    "name": "Cedar Camp \u2192 Dogwood",
+    "est_miles": 300,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "detour"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -102.0,
+      42.0
+     ],
+     [
+      -103.0,
+      42.6
+     ],
+     [
+      -104.0,
+      43.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 4,
+    "leg": 2,
+    "name": "Dogwood",
+    "label": "Night 2",
+    "tz": "America/Denver",
+    "precision": "approx",
+    "when": {
+     "tonight": "detour"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -104.0,
+     43.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 3,
+    "day": 3,
+    "slug": "d3-detour",
+    "name": "Dogwood \u2192 Elm",
+    "est_miles": 320,
+    "route_hint": "the plain road",
+    "when": {
+     "tonight": "detour"
+    }
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -104.0,
+      43.0
+     ],
+     [
+      -106.0,
+      44.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 5,
+    "leg": 3,
+    "name": "Elm",
+    "label": "Finish",
+    "tz": "America/Denver",
+    "precision": "fuzzed",
+    "when": {
+     "tonight": "detour"
+    },
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -106.0,
+     44.0
+    ]
+   }
+  }
+ ]
+}

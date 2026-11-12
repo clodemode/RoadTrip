@@ -59,12 +59,12 @@ Feature: Drive Tracks asks Chester for one album and plays it on the RoadTracks 
     Then the question sent does not hold "The traveller last typed"
 
   Scenario: Albums already picked on this trip are named so Chester picks another
-    Given Drive Tracks already picked "Revolver" by "The Beatles" earlier today
+    Given Drive Tracks already picked "Village Green" by "The Kinks" earlier today
     And the model will search the library for "the beatles"
     And the model will then show the album "m1" because "Familiar"
     And the model will then write "Abbey Road."
     When the driver taps Drive Tracks
-    Then the question sent holds "Albums already played on this trip, so pick a different one: Revolver by The Beatles"
+    Then the question sent holds "Albums already played on this trip, so pick a different one: Village Green by The Kinks"
 
   Scenario: An album the library cannot play is never offered
     Given the music library also holds "Revolver" by "The Beatles" as album 43, not playable
@@ -115,7 +115,7 @@ Feature: Drive Tracks asks Chester for one album and plays it on the RoadTracks 
     And the model will then show the album "m1" because "Home roads"
     And the model will then write "Abbey Road suits."
     When the driver taps Drive Tracks
-    Then the search answer Chester got says "Album 7 by The Tragically Hip"
+    Then the search answer Chester got says "Abbey Road by The Beatles"
     And the search answer Chester got does not name "Album 1 by", "Album 2 by", "Album 3 by", "Album 4 by", "Album 5 by" or "Album 6 by"
     And exactly one album card came back, for album 42
     And the question sent holds "Album 1 by The Tragically Hip"
@@ -123,23 +123,14 @@ Feature: Drive Tracks asks Chester for one album and plays it on the RoadTracks 
     And the trouble record holds a drivetracks_pick for album 42 that avoided 6 albums and is not a repeat
 
   Scenario: A pick from an earlier day of the same trip is not picked again
-    Given the music library also holds "Revolver" by "The Beatles" as album 43, playable
+    Given the music library also holds "All Things Must Pass" by "George Harrison" as album 43, playable
     And Drive Tracks picked album 42 "Abbey Road" by "The Beatles" 2 days ago on this trip
     And the model will search the library for "the beatles"
     And the model will then show the album "m1" because "Familiar"
-    And the model will then write "Revolver."
+    And the model will then write "All Things Must Pass."
     When the driver taps Drive Tracks
     Then exactly one album card came back, for album 43
     And the question sent holds "Albums already played on this trip, so pick a different one: Abbey Road by The Beatles"
-
-  Scenario: A pick from another trip may be picked again
-    Given Drive Tracks picked album 42 "Abbey Road" by "The Beatles" 2 days ago on another trip
-    And the model will search the library for "the beatles"
-    And the model will then show the album "m1" because "Familiar"
-    And the model will then write "Abbey Road."
-    When the driver taps Drive Tracks
-    Then exactly one album card came back, for album 42
-    And the question sent does not hold "Albums already played on this trip"
 
   Scenario: The library offers only already played albums: Chester says so, no card
     Given Drive Tracks picked album 42 "Abbey Road" by "The Beatles" 2 days ago on this trip

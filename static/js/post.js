@@ -218,13 +218,33 @@
     return true;
   }
 
-  // sectionsFor says which parts of the form a post type needs: the photo
-  // upload, and whether the title and body are open (else tucked away as an
-  // optional caption). An unknown type shows everything.
-  function sectionsFor(kind) {
-    if (kind === 'photo') return { upload: true, textOpen: false };
-    if (kind === 'note') return { upload: false, textOpen: true };
-    return { upload: true, textOpen: true };
+  // carriesPhoto says whether a post type's button is the file picker. A note
+  // is words only; every other type is posted with the photo that was picked.
+  function carriesPhoto(kind) { return kind !== 'note'; }
+
+  // noteBlocked is true when a words-only post has no words: nothing is sent,
+  // and the page says to type a title or a note first.
+  function noteBlocked(title, body) {
+    return !String(title || '').trim() && !String(body || '').trim();
+  }
+
+  // autoSubmit: a photo (or a note) is posted the moment it is chosen unless
+  // the driver has opened More options and changed something in it. Then the
+  // Post button is how a careful post is made.
+  function autoSubmit(moreOpen, dirty) { return !(moreOpen && dirty); }
+
+  var FIX_WAIT_MS = 2000;           // the most a post waits for the phone's position
+
+  // sendDecision says what a chosen photo does next: 'hold' (the driver posts
+  // it with the Post button), 'wait' (the photo is still being read, or the
+  // phone has not answered yet), or 'send'. The wait is for at most FIX_WAIT_MS
+  // after the pick; past that the post goes without it and the server falls
+  // back on its own.
+  function sendDecision(st) {
+    if (!st.auto) return 'hold';
+    if (st.elapsed >= FIX_WAIT_MS) return 'send';
+    if (!st.exifDone || st.fixNeeded) return 'wait';
+    return 'send';
   }
 
   // locationReason is the plain reason the phone's position is not on offer.
@@ -235,7 +255,7 @@
   }
 
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { paintThenSend: paintThenSend, exifGPS: exifGPS, exifTaken: exifTaken, photoAgeWords: photoAgeWords, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, sectionsFor: sectionsFor, locationReason: locationReason };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { paintThenSend: paintThenSend, exifGPS: exifGPS, exifTaken: exifTaken, photoAgeWords: photoAgeWords, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, carriesPhoto: carriesPhoto, noteBlocked: noteBlocked, autoSubmit: autoSubmit, sendDecision: sendDecision, FIX_WAIT_MS: FIX_WAIT_MS, locationReason: locationReason };
     return;
   }
 
@@ -384,24 +404,102 @@
   fuzz.addEventListener('change', function () { refresh(true); });
   if (cpSel) cpSel.addEventListener('change', function () { refresh(false); });
 
+  // --- one tap ---------------------------------------------------------------
+  // A button per post type. A type that carries a photo opens the file picker,
+  // and the photo is posted the moment it is chosen; a note posts on the tap.
+  // Only a change the driver made inside More options turns that off: then the
+  // Post button there is how the post is sent.
+  var postForm = photo && photo.form;
+  var more = $('more-options'), btnPost = $('btn-post'), needEl = $('text-need'),
+      titleEl = $('f-title'), bodyEl = $('f-body');
+  var kindEl = null, chosenBtn = null, dirty = false;
+  var pickStart = 0, exifDone = true, freshPending = false;
+  var sentButton = null, sentLabel = '';
+
+  function moreOpen() { return !!more && more.open; }
+  // fixNeeded: the fresh position asked for at the pick has not come back.
+  function fixNeeded() { return !simOn && freshPending; }
+  if (more) {
+    // Only a real tap or keystroke counts; the page's own defaults never do.
+    ['input', 'change'].forEach(function (t) {
+      more.addEventListener(t, function (e) { if (e.isTrusted) dirty = true; });
+    });
+  }
+
+  function formButtons() { return [].slice.call(postForm.querySelectorAll('button[type=submit]')); }
+
+  // sendNow says the post is on its way and sends it once the new label is on
+  // the screen. Every button is off, so a second tap cannot send it twice; they
+  // are restored if the browser brings this page back from its cache.
+  function sendNow(b) {
+    sentButton = b; sentLabel = b.textContent;
+    b.textContent = uploadingLabel(b.id === 'btn-start');
+    formButtons().forEach(function (x) { x.disabled = true; });
+    paintThenSend(function (f) { window.requestAnimationFrame(f); },
+      function (f) { setTimeout(f, 200); },
+      function () { postForm.submit(); });
+  }
+
+  // maybeSend runs once the chosen photo has been read, and again whenever the
+  // phone answers, until the photo goes or the wait is over.
+  function maybeSend() {
+    if (!chosenBtn || !photo.files || !photo.files.length) return;
+    var d = sendDecision({ auto: autoSubmit(moreOpen(), dirty), exifDone: exifDone,
+      fixNeeded: fixNeeded(), elapsed: Date.now() - pickStart });
+    if (d === 'send') sendNow(chosenBtn);
+    else if (d === 'wait') setTimeout(maybeSend, 100);
+    else if (btnPost) btnPost.focus();
+  }
+
+  if (postForm && $('post-types')) {
+    kindEl = document.createElement('input');
+    kindEl.type = 'hidden';
+    postForm.appendChild(kindEl);
+    [].slice.call(document.querySelectorAll('.kind-btn')).forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        chosenBtn = btn;
+        kindEl.name = 'kind';
+        kindEl.value = btn.value;
+        if (needEl) needEl.hidden = true;
+        if (carriesPhoto(btn.value)) { photo.click(); return; }       // the photo's pick posts it
+        if (noteBlocked(titleEl && titleEl.value, bodyEl && bodyEl.value)) {
+          if (needEl) needEl.hidden = false;
+          if (titleEl) titleEl.focus();
+          return;
+        }
+        if (autoSubmit(moreOpen(), dirty)) sendNow(btn);
+        else if (btnPost) btnPost.focus();
+      });
+    });
+    [titleEl, bodyEl].forEach(function (e) {
+      if (e && needEl) e.addEventListener('input', function () { needEl.hidden = true; });
+    });
+  }
+
   if (photo) {
     photo.addEventListener('change', function () {
       exif = null;
       noExif = false;
       taken = null;
+      pickStart = Date.now();
       var f = photo.files && photo.files[0];
       if (!f) {
+        exifDone = true;
         exSt.textContent = 'photo GPS: no file picked';
         exNote.textContent = '— no file picked';
         refresh(false);
         return;
       }
+      exifDone = false;
       exSt.textContent = 'photo GPS: reading…';
       var fr = new FileReader();
       fr.onerror = function () {
         exSt.textContent = 'photo GPS: could not read this file';
         exNote.textContent = '— unreadable';
+        exifDone = true;
         refresh(false);
+        maybeSend();
       };
       fr.onload = function () {
         exif = exifGPS(fr.result);
@@ -414,35 +512,30 @@
           sayNoExif();
           exNote.textContent = '— none, normal for a camera shot';
         }
+        exifDone = true;
         refresh(false);
+        maybeSend();
       };
       // Slice, never the whole file: a 25 MB JPEG read into an ArrayBuffer on
       // a phone is exactly the kind of allocation that cost four posts on
       // 2026-09-02.
       fr.readAsArrayBuffer(f.slice(0, Math.min(EXIF_SLICE, f.size)));
       askFix(true);                   // the camera's position is the phone's, now
+      maybeSend();                    // waits for the read and the fix, at most FIX_WAIT_MS
     });
   }
 
-  // Say the post is on its way, and stop a second tap sending it twice. The
-  // button is restored if the browser brings this page back from its cache.
-  var postForm = photo && photo.form;
+  // The Post and Start buttons, and Enter in a field, send as they always did.
   if (postForm) {
-    var sentButton = null, sentLabel = '';
     postForm.addEventListener('submit', function (e) {
       var b = e.submitter || postForm.querySelector('button[type=submit]:not([hidden])');
       if (!b) return;
-      var hasPhoto = !!(photo.files && photo.files.length);
       e.preventDefault();
-      sentButton = b; sentLabel = b.textContent;
-      b.textContent = uploadingLabel(b.id === 'btn-start', hasPhoto);
-      b.disabled = true;
-      paintThenSend(function (f) { window.requestAnimationFrame(f); },
-        function (f) { setTimeout(f, 200); },
-        function () { postForm.submit(); });
+      sendNow(b);
     });
     window.addEventListener('pageshow', function () {
-      if (sentButton) { sentButton.disabled = false; sentButton.textContent = sentLabel; sentButton = null; }
+      if (sentButton) { sentButton.textContent = sentLabel; sentButton = null; }
+      formButtons().forEach(function (x) { x.disabled = false; });
     });
   }
 
@@ -467,58 +560,42 @@
   }
   function onFix(f) {
     fix = f;
+    freshPending = false;
     sayNoExif();
     if (geoSt) geoSt.textContent = 'location: on (±' + fix.acc + ' m)';
     refresh(false);
+    maybeSend();
   }
   function onNoFix(e, fresh) {
+    freshPending = false;
     if (fresh && fix) {
       if (geoSt) geoSt.textContent = 'location: on (±' + fix.acc + ' m), could not refresh';
+      maybeSend();
       return;
     }
     fix = null;
     sayNoExif();
     if (geoSt) geoSt.textContent = 'location: off — ' + locationReason(secure, e.code);
     refresh(false);
+    maybeSend();
   }
   function askFix(fresh) {
     if (simOn) return;
     if (geoSt) geoSt.textContent = fix ? 'location: on (±' + fix.acc + ' m), refreshing…' : 'location: asking…';
+    if (fresh) freshPending = true;
     askLocation(navigator.geolocation, onFix, function (e) { onNoFix(e, fresh); }, fresh);
   }
-
-  // The post type decides which sections are open. The upload closes for a
-  // note, and a photo already chosen is dropped with it so a hidden photo is
-  // never posted. Without script every section stays open.
-  var secUp = $('sec-upload'), secText = $('sec-text');
-  function checkedKind() {
-    var r = document.querySelector('input[name="kind"]:checked');
-    return r ? r.value : '';
-  }
-  function applyKind() {
-    var s = sectionsFor(checkedKind());
-    if (secUp) secUp.hidden = !s.upload;
-    if (secText) secText.open = s.textOpen;
-    if (!s.upload && photo && photo.value) {
-      photo.value = '';
-      photo.dispatchEvent(new Event('change'));
-    }
-  }
-  [].slice.call(document.querySelectorAll('input[name="kind"]')).forEach(function (r) {
-    r.addEventListener('change', applyKind);
-  });
-  applyKind();
 
   // Start mode opens on the photo alone. "Post something else" opens the rest.
   var other = $('other-link');
   if (other) {
     other.addEventListener('click', function (ev) {
       ev.preventDefault();
-      ['post-types', 'form-rest', 'start-fieldset', 'btn-post'].forEach(function (id) { var e = $(id); if (e) e.hidden = false; });
+      ['post-types', 'post-text', 'form-rest', 'start-fieldset'].forEach(function (id) { var e = $(id); if (e) e.hidden = false; });
+      if (postForm) postForm.classList.add('one-tap');
       ['btn-start', 'other-link'].forEach(function (id) { var e = $(id); if (e) e.hidden = true; });
       var h = document.querySelector('h1'); if (h) h.textContent = 'Post a Photo';
       var jp = document.querySelector('input[name="milestone_id"][value=""]'); if (jp) jp.checked = true;
-      applyKind();
     });
   }
 

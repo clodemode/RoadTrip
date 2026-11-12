@@ -46,6 +46,10 @@ type chesterMusicLib struct {
 	// avoid is the albums already played on this trip (Drive Tracks only): a
 	// search drops them before any reference is numbered, so none can be picked.
 	avoid map[int64]bool
+	// artists is the artistKey of every artist picked lately on any trip
+	// (Drive Tracks only): a search drops all of their albums, so the pick does
+	// not depend on the model obeying the question.
+	artists map[string]bool
 }
 
 // chesterMusicCard is an album as the page gets it. Href is built here from
@@ -137,13 +141,16 @@ func (m *chesterMusicRun) search(ctx context.Context, raw string) (string, bool)
 	}
 	// An album the library says it cannot play is never offered: it is dropped
 	// before any reference is numbered, so the model cannot pick it.
-	// So is an album already played on this trip, for Drive Tracks.
-	playable, avoided := albums[:0:0], 0
+	// So is an album already played on this trip and any album by an artist
+	// picked lately, for Drive Tracks.
+	playable, avoided, steered := albums[:0:0], 0, 0
 	for _, a := range albums {
 		switch {
 		case !a.Playable:
 		case m.lib.avoid[a.ID]:
 			avoided++
+		case m.lib.artists[artistKey(a.Albumartist)]:
+			steered++
 		default:
 			playable = append(playable, a)
 		}
@@ -155,6 +162,9 @@ func (m *chesterMusicRun) search(ctx context.Context, raw string) (string, bool)
 	m.lib.melt.Event("chester_music_search", map[string]any{"qlen": len(q), "count": len(albums), "status": 200})
 	if len(albums) == 0 && avoided > 0 {
 		return driveTracksAllPlayed, false
+	}
+	if len(albums) == 0 && steered > 0 {
+		return driveTracksAllSteered, false
 	}
 	if len(albums) == 0 {
 		return "No playable album in the library matched. Say so, or try one different search.", false

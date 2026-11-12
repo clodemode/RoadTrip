@@ -32,6 +32,24 @@
 
 <div id="map" data-mode="ride"></div>
 
+{{/* What is playing and what played, for everyone (text only; plays.go). The
+     skeleton is drawn only for a ride that has plays; map.js moves it onto the
+     map as a corner control and keeps it fresh. */}}
+{{with .NowPlaying}}
+<aside class="np" id="np" aria-label="Music on this trip">
+  <p class="np-chip" id="np-chip"><span class="np-label" id="np-label">Currently playing</span> <span id="np-line"></span></p>
+  {{/* Hearing it (listen.go): one shared audio element, only for a visitor and only with PUBLIC_LISTEN on.
+       A signed-in driver's page may carry the Drive Tracks player, so there the control is not drawn at all:
+       two players on one page would fight. */}}
+  {{if and .Listen (not $.StripOn)}}<audio id="np-audio" preload="none"></audio>
+  <button type="button" class="np-listen" id="np-listen" hidden>Listen</button>
+  <p class="np-msg" id="np-msg" role="status" hidden></p>{{end}}
+  <button type="button" class="np-toggle" id="np-toggle" aria-expanded="false" aria-controls="np-panel">Listen Inn</button>
+  <div class="np-panel" id="np-panel" hidden></div>
+</aside>
+<script>window.RIDE_TRACKS = {{json .}};</script>
+{{end}}
+
 {{/* The day's end: the trip-keeper's first navigation target, with Add a stop.
      Signed-in only (DayEnd is built for a driver alone); a visitor's page has
      no navigator link and no place search. */}}
@@ -45,6 +63,7 @@
     <a class="btn btn-outline-dark" href="{{.Google}}" rel="noopener">Google Maps</a>
     <a class="btn btn-outline-dark" href="{{.Apple}}" rel="noopener">Apple Maps</a>
   </p>
+  {{if $.RerouteOn}}<p class="dayend-via"><a href="/chester?preset=reroute">Change the route: ask Chester</a></p>{{end}}
   {{if .CanAdd}}<details class="dayend-add"{{if or .Found .FindErr}} open{{end}}>
     <summary class="tap">Add a stop</summary>
     <form method="get" action="/" class="hud-dest">
@@ -92,5 +111,7 @@
 </section>
 
 <script>window.RIDE = {{json .Map}};</script>
+<script defer src="/static/js/nowplaying.js?v={{.V}}"></script>
+{{with .NowPlaying}}{{if and .Listen (not $.StripOn)}}<script defer src="/static/js/listen.js?v={{$.V}}"></script>{{end}}{{end}}
 <script defer src="/static/js/map.js?v={{.V}}"></script>
 {{template "foot" .}}

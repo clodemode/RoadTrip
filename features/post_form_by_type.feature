@@ -2,8 +2,8 @@ Feature: The post form opens on what is being posted
   Kris, 2026-11-08: "We tried to Start Drive, and it wanted a photo. When I
   provided a photo, it asked what type of post. Make the form smarter and flow
   using collapse/expand divs based on post type." The type comes first, as
-  large choices, Photo by default; the sections below expand or collapse to
-  suit it. Before the drive starts, in Trip mode, Start the drive lands on the
+  large choices; since 2026-11-12 (post_one_tap.feature) each choice is a button
+  that posts at once, and the sections below are all under More options. Before the drive starts, in Trip mode, Start the drive lands on the
   same address but opens straight on the photo. In FreeLance Aimless or
   Destined there is no start to make, so the form never offers one.
 
@@ -11,11 +11,11 @@ Feature: The post form opens on what is being posted
     Given kris is signed in
     And the active trip has stops A, B, C and D in order along a line, none arrived at
 
-  Scenario: Photo is the default type and every kind is a choice
+  Scenario: Every kind is a button, and none is pre-selected
     Given the drive has started at A
     When kris opens the post form
-    Then the form has a "kind" radio for every post kind
-    And the photo kind is the one selected
+    Then the form has a "kind" button for every post kind
+    And no kind is pre-selected
 
   Scenario: Before the start, in Trip mode, the form opens in start mode
     When kris opens the post form
@@ -46,7 +46,7 @@ Feature: The post form opens on what is being posted
     Given the drive has started at A
     When kris opens the post form
     Then More options holds Leg, Zone, Checkpoint, When and Pin
-    And "Fuzz This" stays outside More options
+    And "Fuzz This" is inside More options
 
   Scenario: A Start with a hand-opened full form is still the same form
     When kris asks for the full form

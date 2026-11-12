@@ -163,6 +163,10 @@ func (a *App) routes() http.Handler {
 	// alternative. /plan.json is the same arithmetic as data.
 	mux.HandleFunc("GET /plan", a.planPage)
 	mux.HandleFunc("GET /plan.json", a.planJSON)
+	// What is playing and what played: open to a visitor, text only (plays.go).
+	mux.HandleFunc("GET /tracks.json", a.tracksJSON)
+	// A visitor hears one play of the active ride (listen.go): checked, then handed on.
+	mux.HandleFunc("GET /tracks/{id}/audio", a.tracksAudio)
 	// The checklist: the active ride's steps and questions. Private text is
 	// read only for a signed-in request; /checklist.json never carries it.
 	// Both are driver-only (Kris, 2026-11-07).
@@ -457,10 +461,10 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		data["SimBanner"] = a.simBanner(r)
 	}
 	data["SimOn"] = data["SimBanner"] != ""
-	// Whether the masthead links to /checklist: only for a ride that has one.
-	_, data["HasChecklist"] = a.store.ChecklistSummary(a.activeSlug())
 	// Whether the masthead links to Chester: signed in, and switched on.
 	data["ChesterOn"] = authed && a.chester != nil
+	// Whether the plan and ride pages link to Chester's route change.
+	data["RerouteOn"] = data["ChesterOn"] == true && a.hasRouteChoices()
 	data["CreatureName"] = CreatureName
 	data["CreatureTag"] = CreatureTag
 	data["CreatureAlt"] = CreatureAlt
@@ -958,6 +962,7 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	if sum, ok := a.store.ChecklistSummary(rv.Ride.Slug); ok {
 		data["Checklist"] = sum
 	}
+	data["NowPlaying"] = a.nowPlayingFor(rv.Ride.Slug, time.Now()) // nil: no plays, no chip
 	a.render(w, r, "index.html", data)
 }
 
@@ -1320,8 +1325,10 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// postForm is the one thumb-sized screen: photo, kind, title, body, leg,
-// checkpoint, zone, hide-location. Leg defaults to today's, zone follows the
+// postForm is the one thumb-sized screen: an optional title and note, then one
+// button per post kind (a photo kind's button is the file picker and posts the
+// photo as soon as it is chosen). Leg, zone, checkpoint, time, pin and the fuzz
+// toggle are under More options. Leg defaults to today's, zone follows the
 // last arrival, and picking a checkpoint re-selects its zone (see the inline
 // script in the template).
 func (a *App) postForm(w http.ResponseWriter, r *http.Request) {
@@ -1754,10 +1761,6 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 	if a.freeSvc().get(a.userOf(r)).Mode != modeTrip {
 		start = nil
 	}
-	kind := "photo"
-	if k := r.PostFormValue("kind"); validKind(k) {
-		kind = k
-	}
 	// A stop's own Check in (the Ride page, ?checkpoint=): the form opens on
 	// that stop, its leg and its zone, once the drive has started and while the
 	// stop is open. Opening it stamps nothing: the photo's position decides.
@@ -1786,7 +1789,6 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 		"Start":      start, "NextStop": nextStopName(rv.Legs),
 		"StartMode":  start != nil && r.URL.Query().Get("full") == "",
 		"SimAllowed": a.simAllowed,
-		"Kind":       kind,
 		// What the form needs to say, before posting, what will be published:
 		// the private cells the fuzz toggle pre-ticks itself for, and which way
 		// PIN_PRECISION tips that default. These are the ALREADY-FUZZED

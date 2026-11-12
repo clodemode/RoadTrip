@@ -58,14 +58,17 @@ const (
 
 type App struct {
 	// melt is the fleet observability sink; nil (off) when MELT_REDIS_ADDR and MELT_FILE are unset.
-	melt     *meltSink
-	tele     teleLimiter
-	store    *Store
-	auth     *Auth
-	tmpl     *template.Template
-	dataDir  string
-	mediaDir string
-	rideSlug string
+	melt *meltSink
+	tele teleLimiter
+	// listenOff is PUBLIC_LISTEN=0: no visitor may hear the tracks (listen.go). The zero value is on.
+	listenOff   bool
+	listenBrake addrLimiter
+	store       *Store
+	auth        *Auth
+	tmpl        *template.Template
+	dataDir     string
+	mediaDir    string
+	rideSlug    string
 	// assetV busts the static cache on deploy. Static assets are served with a
 	// long max-age, so without a version in the URL a redeploy would leave
 	// browsers running the previous build's JS and CSS against the new HTML.
@@ -107,6 +110,9 @@ type App struct {
 	shellOff   bool // PLAYER_SHELL=0: plain pages, no player frame (the road fall-back)
 	// tracks is the RoadTracks search; nil is the feature off.
 	tracks *roadtracksSvc
+	// driveSeed draws the seed of one Drive Tracks tap; nil is random. A test
+	// fixes it so the angle a tap is given can be told in advance.
+	driveSeed func() uint64
 }
 
 // PIN_PRECISION values. See App.pinPrecision.
@@ -318,6 +324,11 @@ func main() {
 	}
 	if app.tracks = newRoadtracks(os.Getenv("ROADTRACKS_TOKEN"), os.Getenv("ROADTRACKS_BASE")); app.tracks != nil {
 		app.tracks.linkBase = strings.TrimRight(strings.TrimSpace(os.Getenv("ROADTRACKS_LINK_BASE")), "/")
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("PUBLIC_LISTEN"))) {
+	case "0", "off", "false", "no":
+		app.listenOff = true
+		log.Print("listen: PUBLIC_LISTEN off, visitors cannot hear the tracks")
 	}
 	if app.tracks == nil {
 		log.Print("roadtracks: ROADTRACKS_TOKEN unset, the RoadTracks card is off")
