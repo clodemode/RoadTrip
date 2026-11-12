@@ -23,7 +23,7 @@ Feature: Chester knows the traveller's standing preferences and helps on the way
     And the PREFERENCES block says "Places to avoid: the south shores of Lake Ontario and Lake Erie"
     And the PREFERENCES block says "Navigation: Waze"
     And the PREFERENCES block says "at most 20 extra minutes"
-    And the prompt version on the row is "chester-rt-14"
+    And the prompt version on the row is "chester-rt-15"
 
   Scenario: With no preferences saved the API is told nothing new
     Given the stubbed API will answer "Birch Gate has fuel."

@@ -488,6 +488,8 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
   margin: .7rem 0 0; padding: 0 1rem; border-radius: var(--ds-radius); background: var(--ds-primary); color: #fff;
   font-size: 1.4rem; font-weight: 800; letter-spacing: .02em; text-decoration: none; }
 .ch-play:hover, .ch-play:focus-visible { color: #fff; filter: brightness(1.12); }
+/* A podcast card shares .ch-place; its button is the same large link as Play, in a calmer weight. */
+.ch-podcast .ch-podcast-open { font-size: 1.15rem; font-weight: 700; }
 .ch-foot { margin-top: 1.6rem; }
 .ch-off { max-width: 36rem; }
 

@@ -110,6 +110,8 @@ type App struct {
 	shellOff   bool // PLAYER_SHELL=0: plain pages, no player frame (the road fall-back)
 	// tracks is the RoadTracks search; nil is the feature off.
 	tracks *roadtracksSvc
+	// podcasts is Apple's podcast search for Chester; nil is it off. It needs no key.
+	podcasts *podcastSvc
 	// driveSeed draws the seed of one Drive Tracks tap; nil is random. A test
 	// fixes it so the angle a tap is given can be told in advance.
 	driveSeed func() uint64
@@ -322,6 +324,7 @@ func main() {
 	} else {
 		log.Print("traffic: TOMTOM_API_KEY set")
 	}
+	app.podcasts = newPodcastSvc()
 	if app.tracks = newRoadtracks(os.Getenv("ROADTRACKS_TOKEN"), os.Getenv("ROADTRACKS_BASE")); app.tracks != nil {
 		app.tracks.linkBase = strings.TrimRight(strings.TrimSpace(os.Getenv("ROADTRACKS_LINK_BASE")), "/")
 	}
