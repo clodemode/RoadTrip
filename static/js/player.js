@@ -45,6 +45,15 @@
       '&artist=' + enc(String(album.albumartist || '')) + '&track_idx=' + enc(String(idx | 0)) +
       '&position_s=' + enc(String(Math.max(0, Math.round((pos || 0) * 10) / 10)));
   }
+  // The same body plus the track that has just started sounding: its title, the
+  // album's year and `started`, a number the page keeps for that start so a retry
+  // is the same start (plays.go). Still text and numbers, never an address.
+  function startedBody(album, track, idx, pos, key) {
+    album = album || {};
+    var enc = encodeURIComponent;
+    return stateBody(album, idx, pos) + '&title=' + enc(String((track && track.title) || '')) +
+      '&year=' + enc(String(album.year | 0)) + '&started=' + enc(String(Math.max(0, Math.round(key || 0))));
+  }
   // The tap's own work: load the silent clip and call play() BEFORE anything
   // asynchronous, then ask for the album. Returns the album's promise.
   function unlockThenLoad(audio, fetchAlbum, id) {
@@ -195,7 +204,7 @@
     if (int(f.track_idx) !== null) b += '&track_idx=' + int(f.track_idx);
     return b;
   }
-  var api = { createWatch: createWatch, reportBody: reportBody, toggleCard: toggleCard, nextPlayable: nextPlayable, metadataFor: metadataFor, stateBody: stateBody, unlockThenLoad: unlockThenLoad, stripEmbed: stripEmbed, createNest: createNest, SILENT: SILENT };
+  var api = { createWatch: createWatch, reportBody: reportBody, toggleCard: toggleCard, nextPlayable: nextPlayable, metadataFor: metadataFor, stateBody: stateBody, startedBody: startedBody, unlockThenLoad: unlockThenLoad, stripEmbed: stripEmbed, createNest: createNest, SILENT: SILENT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
   var root = typeof document !== 'undefined' && document.getElementById('rt-player');
@@ -277,8 +286,28 @@
     playBtn();
   }
   // A downloaded copy plays with no network; otherwise the ordinary src does.
+  // A track that starts from its beginning is one play; the same track loaded
+  // again within half a minute (a retry) keeps the same start number.
+  var startMark = null, pend = null;
+  function markStart(i, at) {
+    pend = null;
+    if (at > 0 || !album) return;
+    var t = now(), id = album.album_id;
+    if (!(startMark && startMark.id === id && startMark.idx === i && t - startMark.at < 30000)) startMark = { id: id, idx: i, key: t, at: t, sent: false };
+    if (!startMark.sent) pend = startMark;
+  }
+  function sendStarted(m) {
+    m.sent = true;
+    try {
+      fetch('/driver/roadtracks/state', { method: 'POST', credentials: 'same-origin', keepalive: true,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: startedBody(album, tracks[m.idx], m.idx, audio.currentTime || 0, m.key) })
+        .then(function (r) { if (!r.ok) m.sent = false; }, function () { m.sent = false; });
+    } catch (e) { m.sent = false; }
+  }
   function playTrack(i, at) {
     cur = i; startAt = at || 0; lastPos = startAt;
+    markStart(i, at || 0);
     audio.src = nest.urlFor(i) || tracks[i].src;
     paint(); media();
     nest.playhead(i);
@@ -408,6 +437,7 @@
   audio.addEventListener('playing', function () {
     if (opening || asking) return;
     watch.ok(); fails = 0; refetched = false; gaveUp = false; status(''); playBtn();
+    if (pend && pend.idx === cur && !pend.sent) sendStarted(pend);
     if (tapAt) { report('first_sound', { ms: now() - tapAt, album_id: album && album.album_id, track_idx: cur }); tapAt = 0; }
     nest.started();
   });

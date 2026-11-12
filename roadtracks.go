@@ -314,6 +314,11 @@ func (a *App) roadtracksState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save", http.StatusInternalServerError)
 		return
 	}
+	// A track that has just started sounding is also a play (plays.go). The
+	// resume point is saved either way; a play that cannot be kept is not an error.
+	if sp, ok := startedOf(r, id, idx); ok {
+		_ = a.recordPlay(a.userOf(r), sp, time.Now())
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -100,3 +100,10 @@ test('a failure report carries an event word and numbers only, never a place, a 
   assert.equal(P.reportBody('Bad Event', {}), '');
   assert.equal(P.reportBody('ask_timeout', { ms: 'soon' }), 'event=ask_timeout');
 });
+
+test('startedBody is the resume body plus title, year and the start number, and never an address', () => {
+  const album = { album_id: 42, album: 'Rec', albumartist: 'B', year: 1969, art: 'https://x.example.test/a' };
+  const b = P.startedBody(album, { title: 'One', src: 'https://y.example.test/s?sig=1' }, 2, 0.4, 1760000000123);
+  assert.equal(b, 'album_id=42&album=Rec&artist=B&track_idx=2&position_s=0.4&title=One&year=1969&started=1760000000123');
+  assert.equal(b.includes('example.test'), false);
+});
