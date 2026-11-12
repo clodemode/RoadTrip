@@ -228,7 +228,8 @@
       var t = NP.chipText(doc);
       npEl.hidden = !t;
       if (t) { npLabel.textContent = t.label; npLine.textContent = t.line; }
-      npPanel.innerHTML = (doc.tracks || []).map(function (p) { return NP.rowHtml(p, esc); }).join('');
+      npPanel.innerHTML = (doc.tracks || []).map(function (p) { return NP.rowHtml(p, esc, doc.listen && !!document.getElementById('np-audio')); }).join('');
+      if (window.RTListen && window.RTListen.update) window.RTListen.update(doc);
       playLayer.clearLayers();
       (doc.tracks || []).forEach(function (p) {
         if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;

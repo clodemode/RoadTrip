@@ -36,9 +36,13 @@
 
   // One row, used by the list and by a marker's popup so they read the same.
   // esc is the page's own HTML escaper.
-  function rowHtml(p, esc) {
+  // listen: the doc says visitors may hear it, so a row with a name gets a Play button.
+  function rowHtml(p, esc, listen) {
     var year = p.year ? ' (' + p.year + ')' : '';
-    return '<div class="np-row"><p class="np-when">' + esc(fmtWhen(p.started_at)) + '</p>' +
+    var can = listen && p.id;
+    return '<div class="np-row"' + (can ? ' data-id="' + esc(p.id) + '"' : '') + '>' +
+      (can ? '<button type="button" class="np-play" data-id="' + esc(p.id) + '" aria-label="Play ' + esc(p.track) + '">Play</button>' : '') +
+      '<p class="np-when">' + esc(fmtWhen(p.started_at)) + '</p>' +
       '<p class="np-track"><b>' + esc(p.track) + '</b></p>' +
       '<p class="np-album">' + esc(p.album) + year + ' &middot; ' + esc(p.artist) + '</p>' +
       (p.note ? '<p class="np-note">' + esc(p.note) + '</p>' : '') + '</div>';

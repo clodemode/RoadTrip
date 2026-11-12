@@ -43,6 +43,7 @@ func TestFeatures(t *testing.T) {
 				initContinuousMusicScenarios(t, sc)
 				initPlayerTroubleScenarios(t, sc)
 				initPublicNowPlayingScenarios(t, sc)
+				initListenInnScenarios(t, sc)
 				initChesterPreferencesScenarios(t, sc)
 			}()
 		},

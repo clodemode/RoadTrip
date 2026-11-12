@@ -114,6 +114,7 @@ session cookie will never come back.
 | `CHESTER_DAILY_USD` | the most Chester may spend in one UTC day, in dollars; default `5`. Above zero and no more than `100`: anything else (a typo such as `1e308` included) leaves Chester off, and boot logs why |
 | `CHESTER_FALLBACK` | `default` (the default) or `off`; whether a question the API's safety classifiers decline is re-run on the model the API recommends for that case |
 | `ANTHROPIC_BASE_URL` | optional; sends Chester's questions to another address. For a local stub only: the key goes wherever this points |
+| `PUBLIC_LISTEN` | default on; `0`, `off`, `false` or `no` stops a signed-out visitor hearing the tracks played on the active ride (Kris, 2026-11-12: "Let them hear it"). Needs `ROADTRACKS_TOKEN`. Off: `GET /tracks/{id}/audio` answers 404, `/tracks.json` says `"listen": false` and the Listen Inn panel has no Play control. The route redirects (302) to the one short-lived address the library gives for that play's track, so no audio passes through the Fly machine and the key never leaves it; one address may ask 30 times a minute, then 429 |
 | `PORT` | default `8080` |
 | `COOKIE_SECURE` | default `1`; set `0` only for plain-HTTP local runs |
 

@@ -35,6 +35,7 @@ const (
 // Play is one track that started sounding.
 type Play struct {
 	ID        int64
+	PubID     string // opaque public name; see listen.go
 	Ride      string
 	User      string
 	AlbumID   int64
@@ -52,6 +53,7 @@ type Play struct {
 
 // playView is a play as the public page and /tracks.json show it.
 type playView struct {
+	ID        string   `json:"id,omitempty"` // opaque: names the play to /tracks/{id}/audio, never the album
 	Track     string   `json:"track"`
 	Album     string   `json:"album"`
 	Artist    string   `json:"artist"`
@@ -65,27 +67,28 @@ type playView struct {
 
 // tracksDoc is the whole public answer: now, or last when nothing is current.
 type tracksDoc struct {
+	Listen bool       `json:"listen"` // whether a visitor may hear the tracks (PUBLIC_LISTEN)
 	Now    *playView  `json:"now"`
 	Last   *playView  `json:"last"`
 	Tracks []playView `json:"tracks"`
 }
 
 func (p Play) view() playView {
-	return playView{Track: p.Title, Album: p.Album, Artist: p.Artist, Year: p.Year, StartedAt: p.StartedAt,
+	return playView{ID: p.PubID, Track: p.Title, Album: p.Album, Artist: p.Artist, Year: p.Year, StartedAt: p.StartedAt,
 		TZ: p.TZ, Note: p.Note, Lat: p.Lat, Lng: p.Lng}
 }
 
 // AddPlay records one start; the same start reported again is ignored.
 func (s *Store) AddPlay(p Play) error {
-	_, err := s.db.Exec(`INSERT OR IGNORE INTO plays(ride_slug, user, album_id, album, artist, year, track_idx, title, started_at, tz, note, lat, lng, start_key)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, p.Ride, p.User, p.AlbumID, p.Album, p.Artist, p.Year, p.TrackIdx, p.Title, p.StartedAt, p.TZ, p.Note, p.Lat, p.Lng, p.StartKey)
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO plays(ride_slug, user, album_id, album, artist, year, track_idx, title, started_at, tz, note, lat, lng, start_key, pub_id)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, lower(hex(randomblob(8))))`, p.Ride, p.User, p.AlbumID, p.Album, p.Artist, p.Year, p.TrackIdx, p.Title, p.StartedAt, p.TZ, p.Note, p.Lat, p.Lng, p.StartKey)
 	return err
 }
 
 // Plays is a ride's plays, newest first, at most limit. User and the album
 // number are read only to be dropped by view(); nothing selects them for a page.
 func (s *Store) Plays(ride string, limit int) ([]Play, error) {
-	rows, err := s.db.Query(`SELECT id, album, artist, year, title, started_at, tz, note, lat, lng FROM plays
+	rows, err := s.db.Query(`SELECT id, pub_id, album, artist, year, title, started_at, tz, note, lat, lng FROM plays
 WHERE ride_slug = ? ORDER BY started_at DESC, id DESC LIMIT ?`, ride, limit)
 	if err != nil {
 		return nil, err
@@ -94,7 +97,7 @@ WHERE ride_slug = ? ORDER BY started_at DESC, id DESC LIMIT ?`, ride, limit)
 	var out []Play
 	for rows.Next() {
 		var p Play
-		if err := rows.Scan(&p.ID, &p.Album, &p.Artist, &p.Year, &p.Title, &p.StartedAt, &p.TZ, &p.Note, &p.Lat, &p.Lng); err != nil {
+		if err := rows.Scan(&p.ID, &p.PubID, &p.Album, &p.Artist, &p.Year, &p.Title, &p.StartedAt, &p.TZ, &p.Note, &p.Lat, &p.Lng); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -128,14 +131,16 @@ func (a *App) nowPlayingFor(ride string, now time.Time) *tracksDoc {
 	if err != nil || len(plays) == 0 {
 		return nil
 	}
-	return tracksDocOf(plays, now)
+	doc := tracksDocOf(plays, now)
+	doc.Listen = a.listenOn()
+	return doc
 }
 
 // tracksJSON: GET /tracks.json, open to a visitor like the home page.
 func (a *App) tracksJSON(w http.ResponseWriter, r *http.Request) {
 	doc := a.nowPlayingFor(a.activeSlug(), time.Now())
 	if doc == nil {
-		doc = &tracksDoc{Tracks: []playView{}}
+		doc = &tracksDoc{Tracks: []playView{}, Listen: a.listenOn()}
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, doc)

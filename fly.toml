@@ -27,6 +27,10 @@ primary_region = "dfw"   # Dallas — the ride departs from Austin
   # PLACE, and nothing else. "snap" = ticked (today's behaviour); "exact" =
   # clear. Every point away from a private place is exact in both modes.
   PIN_PRECISION = "snap"
+  # Signed-out visitors may hear the tracks played on the active ride (Kris, 2026-11-12,
+  # "Let them hear it"). "0" turns it off with no code change; the Listen Inn panel then
+  # shows no Play control and /tracks/{id}/audio answers 404. Default on.
+  PUBLIC_LISTEN = "1"
   # MELT trouble records. Fly has no fleet Redis, so they are kept as one JSON
   # line each on the volume, rotated to .1 at 2 MB; read them signed in at
   # GET /driver/melt.json.

@@ -25,6 +25,7 @@ type moStub struct {
 	mu     sync.Mutex
 	auth   string
 	query  string
+	albums int // album answers asked for, the stub's own count
 	status int
 	body   string
 }
@@ -39,6 +40,11 @@ func newMO(t *testing.T) *moStub {
 		s.auth, s.query = r.Header.Get("Authorization"), r.URL.Query().Get("q")
 		st, body := s.status, strings.ReplaceAll(s.body, "BASE", s.srv.URL)
 		s.mu.Unlock()
+		if strings.HasPrefix(r.URL.Path, "/api/roadtracks/album/") {
+			s.mu.Lock()
+			s.albums++
+			s.mu.Unlock()
+		}
 		if r.URL.Path == "/api/roadtracks/album/42" {
 			w.WriteHeader(st)
 			w.Write([]byte(strings.ReplaceAll(moAlbum42, "BASE", s.srv.URL)))

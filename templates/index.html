@@ -38,6 +38,12 @@
 {{with .NowPlaying}}
 <aside class="np" id="np" aria-label="Music on this trip">
   <p class="np-chip" id="np-chip"><span class="np-label" id="np-label">Currently playing</span> <span id="np-line"></span></p>
+  {{/* Hearing it (listen.go): one shared audio element, only for a visitor and only with PUBLIC_LISTEN on.
+       A signed-in driver's page may carry the Drive Tracks player, so there the control is not drawn at all:
+       two players on one page would fight. */}}
+  {{if and .Listen (not $.StripOn)}}<audio id="np-audio" preload="none"></audio>
+  <button type="button" class="np-listen" id="np-listen" hidden>Listen</button>
+  <p class="np-msg" id="np-msg" role="status" hidden></p>{{end}}
   <button type="button" class="np-toggle" id="np-toggle" aria-expanded="false" aria-controls="np-panel">Listen Inn</button>
   <div class="np-panel" id="np-panel" hidden></div>
 </aside>
@@ -105,5 +111,6 @@
 
 <script>window.RIDE = {{json .Map}};</script>
 <script defer src="/static/js/nowplaying.js?v={{.V}}"></script>
+{{with .NowPlaying}}{{if and .Listen (not $.StripOn)}}<script defer src="/static/js/listen.js?v={{$.V}}"></script>{{end}}{{end}}
 <script defer src="/static/js/map.js?v={{.V}}"></script>
 {{template "foot" .}}
