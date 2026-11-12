@@ -94,9 +94,9 @@ func (a *App) funcs() template.FuncMap {
 			// reaches a template.
 			return postCard{Post: p, Authed: authed, CanUnfuzz: authed && p.PinFuzzed && a.store.CanUnfuzz(p.ID)}
 		},
-		"row": func(c Checkpoint, legOrd int, driver, chesterOn bool, nextID int64, showTZ bool, navLegID int64, started bool) stopRow {
+		"row": func(c Checkpoint, legOrd int, driver, chesterOn bool, nextID int64, showTZ bool, navLegID int64, started bool, addr map[int]string) stopRow {
 			open := !c.IsStart && c.ArrivedAt == "" && c.SkippedAt == ""
-			return stopRow{Checkpoint: c, LegOrd: legOrd, Driver: driver, ChesterOn: chesterOn, Next: c.ID == nextID, ShowTZ: showTZ,
+			return stopRow{Checkpoint: c, LegOrd: legOrd, Driver: driver, ChesterOn: chesterOn, Next: c.ID == nextID, ShowTZ: showTZ, Addr: addr,
 				Nav:     driver && open && (c.ID == nextID || c.LegID == navLegID),
 				CheckIn: driver && open && started}
 		},
@@ -945,12 +945,12 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 		"Title": "", "Ride": rv.Ride, "Legs": rv.Legs, "Posts": posts,
 		"Day": di, "PageLeg": pageLeg, "Multi": len(rv.Legs) > 1,
 		"NextID": nextOpenID(rv.Legs), "DriveStarted": driveStarted(rv.Legs),
-		"NavLegID": navLegID,
-		"Map":      withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
+		"NavLegID": navLegID, "NavAddr": a.navAddresses(r),
+		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
 	// The day's end and Add a stop: the trip-keeper's, and nobody else's. A
 	// visitor's page carries no navigator link and no place search.
 	if a.isDriver(r) {
-		if de := dayEnd(rv.Legs, dl, len(rv.Legs) > 1); de != nil {
+		if de := dayEnd(rv.Legs, dl, len(rv.Legs) > 1, a.navAddresses(r)); de != nil {
 			de.CanAdd = a.freeSvc().key != ""
 			a.lookupStop(r, de)
 			data["DayEnd"] = de
@@ -1002,7 +1002,7 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 		"Title": leg.Name, "Ride": rv.Ride, "Leg": leg, "Prev": prev, "Next": next,
 		"Posts": posts, "Day": di, "Total": len(rv.Legs), "Multi": len(rv.Legs) > 1,
 		"NextID":   nextOpenID(rv.Legs),
-		"NavLegID": navLegID, "DriveStarted": driveStarted(rv.Legs),
+		"NavLegID": navLegID, "NavAddr": a.navAddresses(r), "DriveStarted": driveStarted(rv.Legs),
 		// The tracks are computed over the whole ride so this leg's own track
 		// still begins where the day before it ended.
 		"Map":     withHours(buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars),
@@ -1025,16 +1025,14 @@ type stopRow struct {
 	ShowTZ    bool
 	Nav       bool
 	CheckIn   bool
+	// Addr is the private addresses by checkpoint ord, set for the signed-in
+	// trip-keeper's render only (navAddresses); nil otherwise.
+	Addr map[int]string
 }
 
-// Links are the row's three navigators. A private place is a snapped cell, so
-// its links carry the name and never the cell, as the driver screen's do.
-func (s stopRow) Links() navLinks {
-	if s.Precision == precisionFuzzed {
-		return mapLinks(0, 0, s.Name)
-	}
-	return mapLinks(s.Lat, s.Lng, s.Name)
-}
+// Links are the row's three navigators, built as the driver screen's are
+// (stopNav): a private place's carry its address or its name, never the cell.
+func (s stopRow) Links() navLinks { return stopNav(s.Checkpoint, s.Addr) }
 
 // isDriver is render's Driver rule, for a handler that must decide before it
 // renders: signed in AND on the ride the site shows.

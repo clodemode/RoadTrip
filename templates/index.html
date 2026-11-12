@@ -84,7 +84,7 @@
   <h2>Checkpoints</h2>
   <ol class="cp-list">
   {{range $leg := .Legs}}{{range .Checkpoints}}
-    {{template "stop_row" (row . $leg.Ord $.Driver $.ChesterOn $.NextID false $.NavLegID $.DriveStarted)}}
+    {{template "stop_row" (row . $leg.Ord $.Driver $.ChesterOn $.NextID false $.NavLegID $.DriveStarted $.NavAddr)}}
   {{end}}{{end}}
   </ol>
 </section>

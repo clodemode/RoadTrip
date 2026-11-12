@@ -90,6 +90,13 @@ func hudMiles(mi float64) string { return strconv.Itoa(int(math.Round(mi))) + " 
 
 // buildHUD is pure: the ride, the clock and, optionally, a position.
 func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving bool) hudView {
+	return buildHUDFor(ride, legs, now, lat, lng, moving, nil)
+}
+
+// buildHUDFor is buildHUD for the signed-in trip-keeper: addr is the private
+// addresses by checkpoint ord (nil for none), which a private next stop's
+// navigator links go to.
+func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving bool, addr map[int]string) hudView {
 	h := hudView{Source: "plan", MilesDone: "—", MilesLeft: "—", ETA: "—", NextMiles: "—"}
 	if len(legs) == 0 {
 		return h
@@ -215,13 +222,11 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving b
 		if haveLine && haveBase {
 			h.NextMiles = hudMiles((alongs[nextIdx] - posAlong) * kmToMi)
 		}
-		// A private place is a snapped cell; Waze gets its name, never the cell.
-		if c.Precision == precisionFuzzed {
-			nav := mapLinks(0, 0, c.Name)
-			h.Waze, h.Google, h.Apple = nav.Waze, nav.Google, nav.Apple
-		} else {
-			nav := mapLinks(c.Lat, c.Lng, c.Name)
-			h.Waze, h.Google, h.Apple = nav.Waze, nav.Google, nav.Apple
+		// A private place is a snapped cell: its links go to its address when
+		// the trip-keeper has one, else its name, never the cell (stopNav).
+		nav := stopNav(c, addr)
+		h.Waze, h.Google, h.Apple = nav.Waze, nav.Google, nav.Apple
+		if c.Precision != precisionFuzzed {
 			la, ln := c.Lat, c.Lng
 			h.NextLat, h.NextLng = &la, &ln
 		}
@@ -250,12 +255,12 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving b
 }
 
 // hudData loads the ride and builds the view for one request.
-func (a *App) hudData(now time.Time, lat, lng *float64, moving bool) (hudView, []Leg, error) {
+func (a *App) hudData(now time.Time, lat, lng *float64, moving bool, addr map[int]string) (hudView, []Leg, error) {
 	rv, err := a.loadRide()
 	if err != nil {
 		return hudView{}, nil, err
 	}
-	return buildHUD(rv.Ride, rv.Legs, now, lat, lng, moving), rv.Legs, nil
+	return buildHUDFor(rv.Ride, rv.Legs, now, lat, lng, moving, addr), rv.Legs, nil
 }
 
 func parseFix(r *http.Request) (lat, lng *float64) {
@@ -277,7 +282,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 	// Aimless is not the plan: its screen is drawn without the ride's numbers.
 	if onRide && !aimless {
 		var err error
-		if h, _, err = a.hudData(time.Now(), nil, nil, false); err != nil {
+		if h, _, err = a.hudData(time.Now(), nil, nil, false, a.navAddresses(r)); err != nil {
 			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
 			return
 		}
@@ -323,7 +328,7 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 	if onRide && mode != modeAimless {
 		var err error
 		now := time.Now()
-		if h, legs, err = a.hudData(now, lat, lng, moving); err != nil {
+		if h, legs, err = a.hudData(now, lat, lng, moving, a.navAddresses(r)); err != nil {
 			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
 			return
 		}

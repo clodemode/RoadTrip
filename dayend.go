@@ -109,7 +109,7 @@ func googleDirVia(destPt, name string, via []string) string {
 
 // dayEnd builds the block for the leg being driven (the page's default leg).
 // nil when the leg's last stop is settled, or is the trip's start.
-func dayEnd(legs []Leg, leg *Leg, multi bool) *dayEndView {
+func dayEnd(legs []Leg, leg *Leg, multi bool, addr map[int]string) *dayEndView {
 	if leg == nil {
 		return nil
 	}
@@ -119,11 +119,12 @@ func dayEnd(legs []Leg, leg *Leg, multi bool) *dayEndView {
 	}
 	v := &dayEndView{LegSlug: leg.Slug, LegOrd: leg.Ord, Multi: multi, Name: term.Name}
 	v.nearLat, v.nearLng = lineMiddle(leg.Line)
-	// A private place is a snapped cell; every navigator gets its name, never the cell.
+	// A private place is a snapped cell; every navigator gets its address
+	// when the trip-keeper has one, else its name, never the cell.
 	destPt := ""
-	dest := mapLinks(0, 0, term.Name)
+	destText := stopNavText(*term, addr)
+	dest := stopNav(*term, addr)
 	if term.Precision != precisionFuzzed {
-		dest = mapLinks(term.Lat, term.Lng, term.Name)
 		destPt = pointText(term.Lat, term.Lng)
 	}
 	v.Waze, v.Google, v.Apple = dest.Waze, dest.Google, dest.Apple
@@ -135,7 +136,7 @@ func dayEnd(legs []Leg, leg *Leg, multi bool) *dayEndView {
 			v.Via = append(v.Via, rp.Name)
 			wps = append(wps, pointText(rp.Lat, rp.Lng))
 		}
-		v.Google = googleDirVia(destPt, term.Name, wps)
+		v.Google = googleDirVia(destPt, destText, wps)
 	}
 	byLeg := map[int][]int{}
 	for i := range legs {
