@@ -463,6 +463,8 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	data["SimOn"] = data["SimBanner"] != ""
 	// Whether the masthead links to Chester: signed in, and switched on.
 	data["ChesterOn"] = authed && a.chester != nil
+	// Whether the plan and ride pages link to Chester's route change.
+	data["RerouteOn"] = data["ChesterOn"] == true && a.hasRouteChoices()
 	data["CreatureName"] = CreatureName
 	data["CreatureTag"] = CreatureTag
 	data["CreatureAlt"] = CreatureAlt

@@ -56,6 +56,7 @@ type rerouteWorld struct {
 	started bool
 	evs     []rerouteEvent
 	save    *httptest.ResponseRecorder
+	page    string
 }
 
 func initChesterRerouteScenarios(t *testing.T, sc *godog.ScenarioContext) {
@@ -73,6 +74,13 @@ func initChesterRerouteScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^Chester will propose switching "([^"]*)" to "([^"]*)" because "([^"]*)"$`, w.willPropose)
 	sc.Step(`^Chester will (?:then )?say "([^"]*)"$`, w.willWrite)
 	sc.Step(`^the trip-keeper asks Chester about the road "([^"]*)"$`, w.ask)
+	sc.Step(`^the trip-keeper looks at the Chester page$`, func() error { return w.openPage("/chester") })
+	sc.Step(`^the trip-keeper looks at the plan page$`, func() error { return w.openPage("/plan") })
+	sc.Step(`^the page offers the "([^"]*)" button$`, func(label string) error { return w.pageHas(`data-preset="`+chesterReroutePreset+`"`, label, true) })
+	sc.Step(`^the page does not offer the "([^"]*)" button$`, func(label string) error { return w.pageHas(`data-preset="`+chesterReroutePreset+`"`, label, false) })
+	sc.Step(`^the page links to Chester's route change$`, func() error { return w.pageHas(`/chester?preset=reroute`, "", true) })
+	sc.Step(`^the page does not link to Chester's route change$`, func() error { return w.pageHas(`/chester?preset=reroute`, "", false) })
+	sc.Step(`^the trip-keeper taps the "([^"]*)" button$`, w.tapPreset)
 	sc.Step(`^Chester was told the route choices$`, func() error {
 		if w.block() == "" {
 			return fmt.Errorf("the plan block holds no ROUTE CHOICES")
@@ -87,6 +95,7 @@ func initChesterRerouteScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^Chester was told "([^"]*)" would change the whole trip by "([^"]*)"$`, w.toldDelta)
 	sc.Step(`^Chester was told "([^"]*)" is "([^"]*)"$`, w.toldState)
+	sc.Step(`^the first request to Chester holds "([^"]*)"$`, w.firstHas)
 	sc.Step(`^Chester was told "([^"]*)"$`, func(s string) error { return w.toldInTail(s) })
 	sc.Step(`^Chester was offered no propose tool$`, w.noProposeTool)
 	sc.Step(`^the answer carries a proposal for "([^"]*)" to "([^"]*)"$`, w.hasProposal)
@@ -194,12 +203,42 @@ func (w *rerouteWorld) willWrite(text string) error {
 	return nil
 }
 
-func (w *rerouteWorld) ask(q string) error {
+func (w *rerouteWorld) ask(q string) error { return w.askWith(url.Values{"q": {q}}) }
+
+func (w *rerouteWorld) tapPreset(label string) error {
+	for _, p := range chesterPresets {
+		if p.Label == label {
+			return w.askWith(url.Values{"preset": {p.ID}})
+		}
+	}
+	return fmt.Errorf("no preset is called %q", label)
+}
+
+func (w *rerouteWorld) openPage(path string) error {
+	w.build()
+	rec := doAs(w.t, w.app, w.cookie, "GET", path, nil)
+	if rec.Code != http.StatusOK {
+		return fmt.Errorf("%s answered %d", path, rec.Code)
+	}
+	w.page = rec.Body.String()
+	return nil
+}
+
+// pageHas is whether the page holds the marker (and the label beside it).
+func (w *rerouteWorld) pageHas(marker, label string, want bool) error {
+	got := strings.Contains(w.page, marker) && (label == "" || strings.Contains(w.page, ">"+label+"</button>"))
+	if got != want {
+		return fmt.Errorf("the page holding %q %q = %v, want %v", marker, label, got, want)
+	}
+	return nil
+}
+
+func (w *rerouteWorld) askWith(form url.Values) error {
 	w.build()
 	w.stub.mu.Lock()
 	w.stub.script = w.script
 	w.stub.mu.Unlock()
-	rec := askForm(w.t, w.app, url.Values{"q": {q}})
+	rec := askForm(w.t, w.app, form)
 	if rec.Code != http.StatusOK {
 		return fmt.Errorf("ask: %d %s", rec.Code, rec.Body.String())
 	}

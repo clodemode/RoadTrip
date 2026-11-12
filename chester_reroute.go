@@ -53,7 +53,7 @@ const chesterProposalShown = "The proposal card is on the page with a Save butto
 
 const chesterRoutePrompt = `
 
-Route choices. When the ride offers choices (ROUTE CHOICES in the plan) and the question bears on the route, call propose_route_choice once, with the option id, the choice id and a one-sentence why. The page shows it as a card; the trip-keeper decides by tapping Save, and you change nothing. Never propose a LOCKED choice: say that road is already driven and offer Route me here on a place card instead. Do not propose switching an IN PROGRESS option unless the traveller asks outright. Miles and hours there are the plan's estimate, not traffic.`
+Route choices. When the ride offers choices (ROUTE CHOICES in the plan) and the question bears on the route, call propose_route_choice once, with the option id, the choice id and a one-sentence why. The page shows it as a card; the trip-keeper decides by tapping Save, and you change nothing. Never propose a LOCKED choice: say that road is already driven and offer Route me here on a place card instead. Do not propose switching an IN PROGRESS option unless the traveller asks outright. Miles and hours there are the plan's estimate, not traffic. When there is no ROUTE CHOICES block, this trip has no planned route choices: if the traveller asks to change the route, say so in one plain sentence, and that a detour is Route me here on a place card or Add a stop on the Ride page.`
 
 func signed1(v float64) string {
 	v = math.Round(v*10) / 10
@@ -63,13 +63,25 @@ func signed1(v float64) string {
 	return fmt.Sprintf("%+.1f", v)
 }
 
+// routePlan is the active plan when it has route choices, else nil.
+func (a *App) routePlan() *planState {
+	st, err := a.loadPlan()
+	if err != nil || !st.HasFile || len(st.Doc.Options) == 0 {
+		return nil
+	}
+	return st
+}
+
+// hasRouteChoices is whether the active trip has route choices to switch among.
+func (a *App) hasRouteChoices() bool { return a.routePlan() != nil }
+
 // routeChoices builds the ROUTE CHOICES block and keeps what the validator
 // needs on cx. It is empty (and the tool is not offered) unless the active
 // ride has a trip file with options. No coordinate and nothing private goes
 // into it: ids, titles, labels, plan estimates and the guard's own reasons.
 func (a *App) routeChoices(cx *chesterContext, legs []Leg, di dayInfo) string {
-	st, err := a.loadPlan()
-	if err != nil || !st.HasFile || len(st.Doc.Options) == 0 {
+	st := a.routePlan()
+	if st == nil {
 		return ""
 	}
 	saved, start := st.savedChoices(), st.savedStart()
@@ -90,7 +102,8 @@ func (a *App) routeChoices(cx *chesterContext, legs []Leg, di dayInfo) string {
 
 	var b strings.Builder
 	b.WriteString("\n\nROUTE CHOICES. Switching one is proposed with propose_route_choice and decided by the trip-keeper's tap. " +
-		"Figures are the plan's own estimate, not traffic.")
+		"Figures are the plan's own estimate, not traffic. " +
+		"If the traveller asks to change the route and every other choice is LOCKED, say so in one plain sentence with the reason given there; do not talk around it and do not propose anything.")
 	force := st.Doc.inForce(saved)
 	for _, o := range st.Doc.Options {
 		if !force[o.ID] {

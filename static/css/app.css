@@ -445,6 +445,8 @@ body[data-leg="mammoth-lakes-to-san-jose"] { /* Mono Lake, Tioga, Central Valley
 /* --- Chester: the en-route helper and its log -------------------------------
    Read in a moving car by the passenger, so the answer is large, every target
    is at least 44px, and nothing scrolls sideways at phone width. */
+.ch-icon { width: 28px; height: 28px; flex: 0 0 auto; vertical-align: middle; }
+.ch-icon-head { width: 56px; height: 56px; display: block; margin-bottom: .4rem; }
 .ch-limits { margin: .4rem 0 0; padding: .6rem .8rem; border-left: 4px solid var(--rt-amber);
   background: rgba(255, 193, 7, .06); border-radius: 0 var(--ds-radius) var(--ds-radius) 0; font-size: .95rem; }
 .ch-form { display: flex; flex-direction: column; gap: 1rem; margin-top: .6rem; }
@@ -613,7 +615,6 @@ body.rt-shell { margin: 0; display: flex; flex-direction: column; height: 100dvh
 .rt-dock { flex: 0 0 auto; width: 100%; padding: 0 .5rem calc(.5rem + env(safe-area-inset-bottom)); background: #f3f4f6; border-top: 1px solid #d1d5db; box-sizing: border-box; }
 .rt-dock .drive-card { margin-top: .5rem; }
 .rt-toggle { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; flex: 1 1 auto; text-align: left; }
-.rt-charter { width: 28px; height: 28px; }
 .rt-chevron { margin-left: .25rem; transition: transform .15s; }
 .rt-toggle[aria-expanded="false"] .rt-chevron { transform: rotate(-90deg); }
 #rt-card-body[hidden] { display: none; }

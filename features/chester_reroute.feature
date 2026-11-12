@@ -122,3 +122,54 @@ Feature: Chester proposes a switch among the trip's planned route choices
     And the plan save response carries only status, selection and plan
     And the saved plan takes "valley" for "day1"
     And the log row's proposal outcome is "proposed"
+
+  # Kris, 2026-11-12: "Yesterday, I tried to ask Chester for a re-route but I
+  # think it failed. Is this done from Plan or Ride or Drive or Chester page?"
+  # A route change is now one plain button on the Chester page, and a plain
+  # link on the Plan page and the Ride page, shown only when the trip has route
+  # choices to switch among.
+
+  Scenario: The route change is offered on the Chester page only with route choices
+    Given the trip has route choices
+    When the trip-keeper looks at the Chester page
+    Then the page offers the "Change the route" button
+
+  Scenario: A trip with no route choices is not offered the route change
+    Given the trip has no route choices
+    When the trip-keeper looks at the Chester page
+    Then the page does not offer the "Change the route" button
+
+  Scenario: The Plan page links to the route change only with route choices
+    Given the trip has route choices
+    When the trip-keeper looks at the plan page
+    Then the page links to Chester's route change
+
+  Scenario: The Plan page of a trip with no route choices has no such link
+    Given the trip has no route choices
+    When the trip-keeper looks at the plan page
+    Then the page does not link to Chester's route change
+
+  Scenario: The route change button asks with the route choices in hand
+    Given the trip has route choices
+    And Chester will propose switching "day1" to "valley" because "It is the shorter road."
+    And Chester will then say "The valley road is shorter; tap Save to switch."
+    When the trip-keeper taps the "Change the route" button
+    Then Chester was told the route choices
+    And the first request to Chester holds "Weigh the route choices still open from here"
+    And the answer carries a proposal for "day1" to "valley"
+
+  Scenario: When every other choice is locked, Chester is told to say so with the reason
+    Given the trip has route choices
+    And a post is already made on leg 1
+    And day 1 has been driven to its last stop
+    And Chester will say "That road is already driven."
+    When the trip-keeper asks Chester about the road "Change my route for day one"
+    Then Chester was told "valley" is "LOCKED"
+    And the first request to Chester holds "every other choice is LOCKED, say so in one plain sentence with the reason given there"
+
+  Scenario: A trip with no route choices is told to say so plainly
+    Given the trip has no route choices
+    And Chester will say "This trip has no route choices."
+    When the trip-keeper asks Chester about the road "Change my route"
+    Then the first request to Chester holds "this trip has no planned route choices"
+    And Chester was told no route choices

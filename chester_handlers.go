@@ -33,6 +33,26 @@ var chesterPresets = []struct{ ID, Label, Question string }{
 	{"onway", "Things to do on the way today", "What are some good things to do or see on the way today, close to today's road? For each, say roughly how many extra minutes it adds."},
 	{"sleep", "Where to sleep tonight", "Where should we sleep tonight? Compare tonight's planned Stop with one or two towns a little before and after it on the same road, and say which have decent lodging inside our price band."},
 	{"howfar", "How far to tonight", "How far is it to tonight's stop, and roughly how long will it take? Say that it is an estimate."},
+	{chesterReroutePreset, "Change the route", "Weigh the route choices still open from here, and propose one switch if it is better. If none is open, say plainly that none is open and why: every other choice already driven, or the trip has no route choices."},
+}
+
+// chesterReroutePreset is the one preset that is offered only when the active
+// trip has route choices; see offeredPresets.
+const chesterReroutePreset = "reroute"
+
+// offeredPresets is the presets the Chester page shows: all of them, and the
+// route change only when the active trip has route choices to switch among.
+func (a *App) offeredPresets() []struct{ ID, Label, Question string } {
+	if a.hasRouteChoices() {
+		return chesterPresets
+	}
+	var out []struct{ ID, Label, Question string }
+	for _, p := range chesterPresets {
+		if p.ID != chesterReroutePreset {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func chesterPreset(id string) (string, bool) {
@@ -93,9 +113,17 @@ func (a *App) chesterPage(w http.ResponseWriter, r *http.Request) {
 // renderChester draws the Chester page; extra carries a refused preferences
 // form back to the page with what was typed and which field was wrong.
 func (a *App) renderChester(w http.ResponseWriter, r *http.Request, extra map[string]any) {
-	data := map[string]any{"Title": "Chester", "On": a.chester != nil, "Presets": chesterPresets}
+	data := map[string]any{"Title": "Chester", "On": a.chester != nil, "Presets": a.offeredPresets()}
 	if q := r.URL.Query().Get("q"); len(q) <= 1000 {
 		data["Prefill"] = q // the template sets it as text
+	}
+	// A link to /chester?preset=<id> opens the page with that question in the box.
+	if q, ok := chesterPreset(r.URL.Query().Get("preset")); ok && q != "" {
+		for _, p := range a.offeredPresets() {
+			if p.Question == q {
+				data["Prefill"] = q
+			}
+		}
 	}
 	if a.chester != nil {
 		cfg := a.chester.cfg
@@ -162,10 +190,11 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	preset := strings.TrimSpace(r.PostFormValue("preset"))
 	question := strings.TrimSpace(r.PostFormValue("q"))
-	var avoid map[int64]bool
+	var ask driveAsk
 	if drive {
 		preset = chesterDriveTracksPreset
-		question, avoid = a.driveTracksQuestion(a.userOf(r), time.Now())
+		ask = a.driveTracksQuestion(a.userOf(r), time.Now())
+		question = ask.question
 	} else if preset != "" {
 		q, ok := chesterPreset(preset)
 		if !ok {
@@ -178,7 +207,7 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	case question == "":
 		refuse(http.StatusBadRequest, chesterSaidEmpty)
 		return
-	case len(question) > maxChesterQuestion:
+	case len(question) > maxChesterQuestion && !drive: // the site's own words for a tap are not the traveller's to keep short
 		refuse(http.StatusBadRequest, chesterSaidLong)
 		return
 	}
@@ -246,11 +275,11 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	// The music library is offered only when RoadTracks is on.
 	var lib *chesterMusicLib
 	if a.tracks != nil {
-		lib = &chesterMusicLib{svc: a.tracks, melt: a.melt, one: drive, avoid: avoid}
+		lib = &chesterMusicLib{svc: a.tracks, melt: a.melt, one: drive, avoid: ask.avoid, artists: ask.artists}
 	}
 	res := a.chester.ask(r.Context(), mode, cx, question, lib, emit)
 	if drive {
-		a.driveTracksMelt(avoid, res)
+		a.driveTracksMelt(ask, res)
 	}
 	if res.Err == "" && !res.Synth && res.Answer != "" && !drive {
 		a.remember(user, question, res.Answer, res.Leanings, now)

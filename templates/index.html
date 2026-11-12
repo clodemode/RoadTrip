@@ -63,6 +63,7 @@
     <a class="btn btn-outline-dark" href="{{.Google}}" rel="noopener">Google Maps</a>
     <a class="btn btn-outline-dark" href="{{.Apple}}" rel="noopener">Apple Maps</a>
   </p>
+  {{if $.RerouteOn}}<p class="dayend-via"><a href="/chester?preset=reroute">Change the route: ask Chester</a></p>{{end}}
   {{if .CanAdd}}<details class="dayend-add"{{if or .Found .FindErr}} open{{end}}>
     <summary class="tap">Add a stop</summary>
     <form method="get" action="/" class="hud-dest">
