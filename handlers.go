@@ -163,6 +163,8 @@ func (a *App) routes() http.Handler {
 	// alternative. /plan.json is the same arithmetic as data.
 	mux.HandleFunc("GET /plan", a.planPage)
 	mux.HandleFunc("GET /plan.json", a.planJSON)
+	// What is playing and what played: open to a visitor, text only (plays.go).
+	mux.HandleFunc("GET /tracks.json", a.tracksJSON)
 	// The checklist: the active ride's steps and questions. Private text is
 	// read only for a signed-in request; /checklist.json never carries it.
 	// Both are driver-only (Kris, 2026-11-07).
@@ -958,6 +960,7 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	if sum, ok := a.store.ChecklistSummary(rv.Ride.Slug); ok {
 		data["Checklist"] = sum
 	}
+	data["NowPlaying"] = a.nowPlayingFor(rv.Ride.Slug, time.Now()) // nil: no plays, no chip
 	a.render(w, r, "index.html", data)
 }
 

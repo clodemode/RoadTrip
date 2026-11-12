@@ -32,6 +32,18 @@
 
 <div id="map" data-mode="ride"></div>
 
+{{/* What is playing and what played, for everyone (text only; plays.go). The
+     skeleton is drawn only for a ride that has plays; map.js moves it onto the
+     map as a corner control and keeps it fresh. */}}
+{{with .NowPlaying}}
+<aside class="np" id="np" aria-label="Music on this trip">
+  <p class="np-chip" id="np-chip"><span class="np-label" id="np-label">Currently playing</span> <span id="np-line"></span></p>
+  <button type="button" class="np-toggle" id="np-toggle" aria-expanded="false" aria-controls="np-panel">Listen Inn</button>
+  <div class="np-panel" id="np-panel" hidden></div>
+</aside>
+<script>window.RIDE_TRACKS = {{json .}};</script>
+{{end}}
+
 {{/* The day's end: the trip-keeper's first navigation target, with Add a stop.
      Signed-in only (DayEnd is built for a driver alone); a visitor's page has
      no navigator link and no place search. */}}
@@ -92,5 +104,6 @@
 </section>
 
 <script>window.RIDE = {{json .Map}};</script>
+<script defer src="/static/js/nowplaying.js?v={{.V}}"></script>
 <script defer src="/static/js/map.js?v={{.V}}"></script>
 {{template "foot" .}}

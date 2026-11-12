@@ -418,6 +418,25 @@ CREATE TABLE IF NOT EXISTS track_marks (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS track_marks_favourite
   ON track_marks(user, album_id, track_idx) WHERE kind = 'favourite';
+CREATE TABLE IF NOT EXISTS plays (
+  id         INTEGER PRIMARY KEY,
+  ride_slug  TEXT NOT NULL,
+  user       TEXT NOT NULL,
+  album_id   INTEGER NOT NULL,
+  album      TEXT NOT NULL DEFAULT '',
+  artist     TEXT NOT NULL DEFAULT '',
+  year       INTEGER NOT NULL DEFAULT 0,
+  track_idx  INTEGER NOT NULL DEFAULT 0,
+  title      TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  tz         TEXT NOT NULL DEFAULT 'UTC',
+  note       TEXT NOT NULL DEFAULT '',
+  lat        REAL,
+  lng        REAL,
+  start_key  INTEGER NOT NULL,
+  UNIQUE (user, album_id, track_idx, start_key)
+);
+CREATE INDEX IF NOT EXISTS plays_ride ON plays(ride_slug, started_at);
 `
 
 type Store struct{ db *sql.DB }
