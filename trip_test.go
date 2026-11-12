@@ -1180,8 +1180,10 @@ func TestTripRePushIsGuardedToo(t *testing.T) {
 		t.Fatal(err)
 	}
 	original, _ := os.ReadFile(tripPath(app.dataDir, fixtureSlug))
-	// The new document gives day 2 a different road.
+	// The new document gives day 2 a different road: another name for it is
+	// not enough (see plan_choice_after_a_driven_day.feature), so the line bends.
 	changed := bytes.Replace(fixtureTrip(t), []byte(`"slug": "day-2"`), []byte(`"slug": "day-2-detour"`), 1)
+	changed = bytes.Replace(changed, []byte(`[-103.0, 42.5]`), []byte(`[-103.0, 42.9]`), 1)
 	w := pushTrip(t, app, changed, "")
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "leg 2 holds 1 post") {
 		t.Fatalf("status %d, want 409 naming leg 2: %s", w.Code, w.Body.String())

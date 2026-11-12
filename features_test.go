@@ -36,6 +36,7 @@ func TestFeatures(t *testing.T) {
 				initChangeTripScenarios(t, sc)
 				initRoutingPointsScenarios(t, sc)
 				initNightForkScenarios(t, sc)
+				initPlanChoiceAfterDrivenDayScenarios(t, sc)
 				initMenuStateScenarios(t, sc)
 				initFinishCheckinScenarios(t, sc)
 				initTestDriveSwitchScenarios(t, sc)
