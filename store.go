@@ -486,7 +486,7 @@ func (s *Store) migrate() error {
 		"partial TEXT NOT NULL DEFAULT ''", "usd_estimated INTEGER NOT NULL DEFAULT 0",
 		"answer_synth INTEGER NOT NULL DEFAULT 0", "usage_json TEXT NOT NULL DEFAULT '[]'",
 		"user TEXT NOT NULL DEFAULT ''", "proposal TEXT NOT NULL DEFAULT ''",
-		"music TEXT DEFAULT '[]'",
+		"music TEXT DEFAULT '[]'", "podcasts TEXT DEFAULT '[]'",
 	}); err != nil {
 		return err
 	}

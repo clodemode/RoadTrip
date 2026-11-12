@@ -60,7 +60,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-14"
+	chesterPromptVersion = "chester-rt-15"
 
 	maxChesterQuestion = 1000
 )
@@ -642,11 +642,14 @@ type chesterContext struct {
 
 	// The planner state the route-choices block was built from, kept for the
 	// validator. Never sent anywhere.
-	plan    *planState
-	choices map[string]string // the saved choices
-	start   string            // the saved start date
-	locked  map[string]string // "option/choice" -> why the plan guard would refuse it
-	started map[string]bool   // option ids whose leg is being driven now
+	plan *planState
+	// podcasts is the podcast search; nil is it off (and Drive Tracks, which
+	// asks for one album, is never offered it).
+	podcasts *chesterPodcastLib
+	choices  map[string]string // the saved choices
+	start    string            // the saved start date
+	locked   map[string]string // "option/choice" -> why the plan guard would refuse it
+	started  map[string]bool   // option ids whose leg is being driven now
 }
 
 // coarseTown reads "Town, ST" out of a checkpoint name. Anything else gives
@@ -903,11 +906,15 @@ In plan mode, the question is usually about tomorrow. A longer answer is right: 
 
 // systemPromptFor is the system prompt: the music section is added only when
 // the library is on, so with it off the prompt is exactly the one it was.
-func systemPromptFor(music *chesterMusicLib) string {
-	if music == nil {
-		return chesterSystemPrompt
+func systemPromptFor(music *chesterMusicLib, pods bool) string {
+	out := chesterSystemPrompt
+	if music != nil {
+		out += chesterMusicPrompt
 	}
-	return chesterSystemPrompt + chesterMusicPrompt
+	if pods {
+		out += chesterPodcastPrompt
+	}
+	return out
 }
 
 // chesterToolName is the cards tool. Its input is the place cards.
@@ -1003,10 +1010,11 @@ func newChester(cfg *chesterConfig) *Chester {
 
 // chesterEvent is one line of the answer as the page receives it.
 type chesterEvent struct {
-	T      string             `json:"t"` // text | status | places | music | proposal | done | error
-	D      string             `json:"d,omitempty"`
-	Places []chesterCard      `json:"places,omitempty"`
-	Music  []chesterMusicCard `json:"music,omitempty"`
+	T        string               `json:"t"` // text | status | places | music | proposal | done | error
+	D        string               `json:"d,omitempty"`
+	Places   []chesterCard        `json:"places,omitempty"`
+	Music    []chesterMusicCard   `json:"music,omitempty"`
+	Podcasts []chesterPodcastCard `json:"podcasts,omitempty"`
 	// Proposal is a route switch for the trip-keeper to save or leave.
 	Proposal *chesterProposalCard `json:"proposal,omitempty"`
 	ID       int64                `json:"id,omitempty"`
@@ -1030,9 +1038,10 @@ type chesterResult struct {
 	// Synth is true when the model named places and wrote no words, even
 	// when asked again: Answer is then one fixed sentence the server built
 	// from the cards, and the row says it is not the model's.
-	Synth  bool
-	Places []chesterPlace
-	Music  []chesterMusicCard // albums recommended from the library, built by the server
+	Synth    bool
+	Places   []chesterPlace
+	Music    []chesterMusicCard   // albums recommended from the library, built by the server
+	Podcasts []chesterPodcastCard // the episode card, built by the server
 	// MusicDown is true when a library search could not reach the library.
 	MusicDown bool
 	// Proposal is the one route switch Chester proposed that the plan checks
@@ -1131,7 +1140,7 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 		// plan caches all three. The question and everything that changes by
 		// the minute come after it, in the user message.
 		System: []anthropic.BetaTextBlockParam{
-			{Text: systemPromptFor(music)},
+			{Text: systemPromptFor(music, cx.podcasts != nil)},
 			{Text: cx.Stable, CacheControl: anthropic.NewBetaCacheControlEphemeralParam()},
 		},
 		Messages: []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(
@@ -1149,6 +1158,11 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 	if music != nil {
 		tunes = newChesterMusicRun(music)
 		params.Tools = append(params.Tools, chesterMusicTools()...)
+	}
+	var casts *chesterPodcastRun
+	if cx.podcasts != nil {
+		casts = newChesterPodcastRun(cx.podcasts)
+		params.Tools = append(params.Tools, chesterPodcastTools()...)
 	}
 	if c.cfg.Fallback {
 		params.Fallbacks = anthropic.BetaFallbacksParamOfDefault()
@@ -1303,6 +1317,12 @@ rounds:
 				searched = true
 			} else if tunes != nil && b.Name == chesterShowMusicTool {
 				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, tunes.show(string(b.Input)), false))
+			} else if casts != nil && b.Name == chesterSearchPodcastsTool {
+				text, isErr := casts.search(ctx, string(b.Input))
+				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, text, isErr))
+				searched = true
+			} else if casts != nil && b.Name == chesterShowPodcastTool {
+				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, casts.show(string(b.Input)), false))
 			} else if b.Name == chesterToolName {
 				placeInputs = append(placeInputs, string(b.Input))
 				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, chesterCardsNowWrite, false))
@@ -1380,10 +1400,26 @@ rounds:
 			res.Notes = append(res.Notes, strconv.Itoa(tunes.drops)+" album reference(s) the music search had not returned were dropped")
 		}
 	}
+	if casts != nil {
+		res.Podcasts = casts.cards
+		if len(casts.cards) > 0 {
+			res.Notes = append(res.Notes, "showed a podcast episode card")
+		}
+		if casts.drops > 0 {
+			res.Notes = append(res.Notes, strconv.Itoa(casts.drops)+" podcast reference(s) the search had not returned were dropped")
+		}
+	}
 	switch {
 	case wrote():
-	case len(res.Places) == 0 && len(res.Music) == 0:
+	case len(res.Places) == 0 && len(res.Music) == 0 && len(res.Podcasts) == 0:
 		res.Err, res.ErrKind = chesterSaidUnfinishd, "empty"
+	case len(res.Places) == 0 && len(res.Music) == 0:
+		res.Synth = true
+		res.Notes = append(res.Notes, "the model picked a podcast episode and wrote no words; the answer shown was built by the site from the card")
+		said := chesterPodcastSynth(res.Podcasts)
+		answer.Reset()
+		answer.WriteString(said)
+		emit(chesterEvent{T: "text", D: said})
 	case len(res.Places) == 0:
 		res.Synth = true
 		res.Notes = append(res.Notes, "the model picked albums and wrote no words; the answer shown was built by the site from the cards")
@@ -1516,6 +1552,8 @@ type ChesterQuery struct {
 	Places    []chesterPlace  `json:"places"`
 	// Music is the album cards the question showed, as the page got them.
 	Music []chesterMusicCard `json:"music"`
+	// Podcasts is the episode card the question showed, as the page got it.
+	Podcasts []chesterPodcastCard `json:"podcasts"`
 	// Proposal is the route switch Chester proposed on this question, as
 	// {option, choice, why, outcome}; absent when it proposed none.
 	Proposal     json.RawMessage `json:"proposal,omitempty"`
@@ -1584,6 +1622,10 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 	if err != nil || q.Music == nil {
 		music = []byte("[]")
 	}
+	podcasts, err := json.Marshal(q.Podcasts)
+	if err != nil || q.Podcasts == nil {
+		podcasts = []byte("[]")
+	}
 	usage := q.UsageJSON
 	if len(usage) == 0 || !json.Valid(usage) {
 		usage = json.RawMessage("[]")
@@ -1591,12 +1633,12 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 	res, err := s.db.Exec(`INSERT INTO chester_queries
 	  (ride_slug,asked_at,tz,mode,preset,question,prompt_version,model,served_model,effort,first_ms,total_ms,
 	   tokens_in,tokens_out,cache_read,cache_write,searches,usd,answer,places,stop_reason,error,note,
-	   pos_lat,pos_lng,pos_source,pos_label,partial,usd_estimated,answer_synth,usage_json,user,proposal,music)
-	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	   pos_lat,pos_lng,pos_source,pos_label,partial,usd_estimated,answer_synth,usage_json,user,proposal,music,podcasts)
+	  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		q.Ride, q.AskedAt, q.TZ, q.Mode, q.Preset, q.Question, q.PromptVersion, q.Model, q.ServedModel, q.Effort,
 		q.FirstMS, q.TotalMS, q.TokensIn, q.TokensOut, q.CacheRead, q.CacheWrite, q.Searches, q.USD,
 		q.Answer, string(places), q.StopReason, q.Error, q.Note, q.PosLat, q.PosLng, q.PosSource, q.PosLabel,
-		q.Partial, q.USDEstimated, q.AnswerSynth, string(usage), q.User, string(q.Proposal), string(music))
+		q.Partial, q.USDEstimated, q.AnswerSynth, string(usage), q.User, string(q.Proposal), string(music), string(podcasts))
 	if err != nil {
 		return err
 	}
@@ -1607,18 +1649,18 @@ func (s *Store) InsertChesterQuery(q *ChesterQuery) error {
 const chesterCols = `id,ride_slug,asked_at,tz,mode,preset,question,prompt_version,model,served_model,effort,
   first_ms,total_ms,tokens_in,tokens_out,cache_read,cache_write,searches,usd,answer,places,stop_reason,error,note,
   pos_lat,pos_lng,pos_source,pos_label,verdict,checked_against,verdict_note,chester_value,reference_value,
-  value_unit,verdict_at,partial,usd_estimated,answer_synth,usage_json,user,proposal,COALESCE(music,'[]')`
+  value_unit,verdict_at,partial,usd_estimated,answer_synth,usage_json,user,proposal,COALESCE(music,'[]'),COALESCE(podcasts,'[]')`
 
 func scanChester(sc interface{ Scan(...any) error }) (ChesterQuery, error) {
 	var q ChesterQuery
-	var places, usage, proposal, music string
+	var places, usage, proposal, music, podcasts string
 	var first sql.NullInt64
 	var lat, lng, cv, rv sql.NullFloat64
 	err := sc.Scan(&q.ID, &q.Ride, &q.AskedAt, &q.TZ, &q.Mode, &q.Preset, &q.Question, &q.PromptVersion,
 		&q.Model, &q.ServedModel, &q.Effort, &first, &q.TotalMS, &q.TokensIn, &q.TokensOut, &q.CacheRead,
 		&q.CacheWrite, &q.Searches, &q.USD, &q.Answer, &places, &q.StopReason, &q.Error, &q.Note,
 		&lat, &lng, &q.PosSource, &q.PosLabel, &q.Verdict, &q.Checked, &q.VerdictNote, &cv, &rv, &q.Unit, &q.VerdictAt,
-		&q.Partial, &q.USDEstimated, &q.AnswerSynth, &usage, &q.User, &proposal, &music)
+		&q.Partial, &q.USDEstimated, &q.AnswerSynth, &usage, &q.User, &proposal, &music, &podcasts)
 	if err != nil {
 		return q, err
 	}
@@ -1646,6 +1688,9 @@ func scanChester(sc interface{ Scan(...any) error }) (ChesterQuery, error) {
 	}
 	if err := json.Unmarshal([]byte(music), &q.Music); err != nil || q.Music == nil {
 		q.Music = []chesterMusicCard{}
+	}
+	if err := json.Unmarshal([]byte(podcasts), &q.Podcasts); err != nil || q.Podcasts == nil {
+		q.Podcasts = []chesterPodcastCard{}
 	}
 	return q, nil
 }

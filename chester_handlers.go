@@ -33,6 +33,7 @@ var chesterPresets = []struct{ ID, Label, Question string }{
 	{"onway", "Things to do on the way today", "What are some good things to do or see on the way today, close to today's road? For each, say roughly how many extra minutes it adds."},
 	{"sleep", "Where to sleep tonight", "Where should we sleep tonight? Compare tonight's planned Stop with one or two towns a little before and after it on the same road, and say which have decent lodging inside our price band."},
 	{"howfar", "How far to tonight", "How far is it to tonight's stop, and roughly how long will it take? Say that it is an estimate."},
+	{"podcast", "A podcast for this stretch", "Find one podcast episode about the country we are driving through now, or will reach in the next two hours."},
 	{chesterReroutePreset, "Change the route", "Weigh the route choices still open from here, and propose one switch if it is better. If none is open, say plainly that none is open and why: every other choice already driven, or the trip has no route choices."},
 }
 
@@ -277,6 +278,10 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	if a.tracks != nil {
 		lib = &chesterMusicLib{svc: a.tracks, melt: a.melt, one: drive, avoid: ask.avoid, artists: ask.artists}
 	}
+	// Podcasts are offered on every question but Drive Tracks, which asks for one album.
+	if a.podcasts != nil && !drive {
+		cx.podcasts = &chesterPodcastLib{svc: a.podcasts, melt: a.melt}
+	}
 	res := a.chester.ask(r.Context(), mode, cx, question, lib, emit)
 	if drive {
 		a.driveTracksMelt(ask, res)
@@ -308,7 +313,7 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		TotalMS: res.TotalMS, TokensIn: used.In, TokensOut: used.Out,
 		CacheRead: used.CacheRead, CacheWrite: used.CacheWrite, Searches: used.Searches,
 		USD: usd, USDEstimated: estimated, UsageJSON: json.RawMessage(usageJSON),
-		Answer: res.Answer, AnswerSynth: res.Synth, Partial: res.Partial, Places: res.Places, Music: res.Music, StopReason: res.Stop,
+		Answer: res.Answer, AnswerSynth: res.Synth, Partial: res.Partial, Places: res.Places, Music: res.Music, Podcasts: res.Podcasts, StopReason: res.Stop,
 		Error: a.chester.stripKey(res.Err), Note: a.chester.stripKey(note), PosSource: "none",
 	}
 	// A first-word time is a time a word of the model's arrived. With no
@@ -340,6 +345,9 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(res.Music) > 0 {
 		emit(chesterEvent{T: "music", Music: res.Music})
+	}
+	if len(res.Podcasts) > 0 {
+		emit(chesterEvent{T: "podcasts", Podcasts: res.Podcasts})
 	}
 	if drive && len(res.Music) == 0 && res.MusicDown && res.Err == "" {
 		emit(chesterEvent{T: "error", D: driveTracksSaidDown})

@@ -15,7 +15,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var form = $('ch-form'), box = $('ch-q'), send = $('ch-send'),
       status = $('ch-status'), error = $('ch-error'), answer = $('ch-answer'),
-      places = $('ch-places'), music = $('ch-music'), proposal = $('ch-proposal'), meta = $('ch-meta'), speak = $('ch-speak'),
+      places = $('ch-places'), music = $('ch-music'), podcasts = $('ch-podcasts'), proposal = $('ch-proposal'), meta = $('ch-meta'), speak = $('ch-speak'),
       locate = $('ch-locate'), geo = $('ch-geo'), la = $('ch-lat'), ln = $('ch-lng');
   if (!form || !box || !send || !answer) return;
 
@@ -165,6 +165,41 @@
     return li;
   }
 
+  // A podcast card: the words are set as text, and the one button is a link the
+  // server built to the episode in Apple Podcasts, opened in a new tab.
+  function podcastCard(p) {
+    var li = document.createElement('li');
+    li.className = 'ch-place ch-podcast';
+    var kind = document.createElement('span');
+    kind.className = 'ch-kind';
+    kind.textContent = 'Podcast episode';
+    var name = document.createElement('b');
+    name.className = 'ch-place-name';
+    name.textContent = p.episode || '';
+    li.appendChild(kind);
+    li.appendChild(name);
+    var by = document.createElement('span');
+    by.className = 'muted';
+    by.textContent = (p.show || '') + ', ' + (p.minutes || 0) + ' minutes' + (p.year ? ', ' + p.year : '');
+    li.appendChild(by);
+    if (p.why) {
+      var why = document.createElement('p');
+      why.className = 'ch-why';
+      why.textContent = p.why;
+      li.appendChild(why);
+    }
+    if (/^https:\/\//i.test(p.href || '')) {
+      var a = document.createElement('a');
+      a.className = 'ch-play ch-podcast-open';
+      a.href = p.href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = p.label || 'Open in Apple Podcasts';
+      li.appendChild(a);
+    }
+    return li;
+  }
+
   // A route proposal: words as text only. Save posts the card's whole
   // selection to the existing plan save, so Chester changes nothing and the
   // plan's own guard decides; the answer is written into the card, in place.
@@ -238,6 +273,11 @@
         (ev.music || []).forEach(function (m) { music.appendChild(albumCard(m)); });
         music.hidden = !(ev.music || []).length;
         break;
+      case 'podcasts':
+        podcasts.textContent = '';
+        (ev.podcasts || []).forEach(function (p) { podcasts.appendChild(podcastCard(p)); });
+        podcasts.hidden = !(ev.podcasts || []).length;
+        break;
       case 'proposal':
         proposal.textContent = '';
         if (ev.proposal) proposal.appendChild(proposalCard(ev.proposal));
@@ -251,8 +291,9 @@
           answer.textContent = '';
           places.textContent = '';
           music.textContent = '';
+          podcasts.textContent = '';
           proposal.textContent = '';
-          hide(answer); hide(places); hide(music); hide(proposal);
+          hide(answer); hide(places); hide(music); hide(podcasts); hide(proposal);
           spoken = '';
         }
         show(error, ev.d);

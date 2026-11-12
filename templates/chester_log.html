@@ -71,6 +71,19 @@
       {{end}}
     </ul>
     {{end}}
+    {{if .Podcasts}}
+    <ul class="ch-places">
+      {{range .Podcasts}}
+      <li class="ch-place ch-podcast">
+        <span class="ch-kind">Podcast episode</span>
+        <b class="ch-place-name">{{.Episode}}</b>
+        <span class="muted">{{.Show}}, {{.Minutes}} minutes{{if .Year}}, {{.Year}}{{end}}</span>
+        {{with .Why}}<p class="ch-why">{{.}}</p>{{end}}
+        <p class="ch-links"><a class="ch-link" href="{{.Href}}" target="_blank" rel="noopener noreferrer nofollow">{{.Label}}</a></p>
+      </li>
+      {{end}}
+    </ul>
+    {{end}}
     <dl class="ch-facts">
       <div><dt>Model</dt><dd>{{.Model}}{{with .ServedModel}}, answered by {{.}}{{end}}</dd></div>
       <div><dt>Effort</dt><dd>{{.Effort}}</dd></div>
