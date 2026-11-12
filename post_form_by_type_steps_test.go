@@ -70,27 +70,19 @@ func initPostFormByTypeScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		}
 		return nil
 	})
-	sc.Step(`^the form has a "kind" radio for every post kind$`, func() error {
+	sc.Step(`^the form has a "kind" button for every post kind$`, func() error {
 		for _, k := range postKinds {
-			if !regexp.MustCompile(`<input[^>]*type="radio"[^>]*name="kind"[^>]*value="` + k.Value + `"[^>]*>`).MatchString(p.body) {
-				return fmt.Errorf("no kind radio for %q", k.Value)
+			if !regexp.MustCompile(`<button[^>]*type="submit"[^>]*name="kind"[^>]*value="` + k.Value + `"[^>]*>`).MatchString(p.body) {
+				return fmt.Errorf("no kind button for %q", k.Value)
 			}
 		}
 		return nil
 	})
-	sc.Step(`^the photo kind is the one selected$`, func() error {
-		n := 0
+	sc.Step(`^no kind is pre-selected$`, func() error {
 		for _, t := range inputTagRe.FindAllString(p.body, -1) {
-			if !strings.Contains(t, `name="kind"`) || !strings.Contains(t, "checked") {
-				continue
+			if strings.Contains(t, `name="kind"`) {
+				return fmt.Errorf("the form carries a kind field of its own: %s", t)
 			}
-			n++
-			if !strings.Contains(t, `value="photo"`) {
-				return fmt.Errorf("the selected kind is not photo: %s", t)
-			}
-		}
-		if n != 1 {
-			return fmt.Errorf("want exactly one kind selected, have %d", n)
 		}
 		return nil
 	})
@@ -158,10 +150,9 @@ func initPostFormByTypeScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		}
 		return nil
 	})
-	sc.Step(`^"Fuzz This" stays outside More options$`, func() error {
-		rest := detailsRe.ReplaceAllString(p.body, "")
-		if strings.Contains(detailsRe.FindString(p.body), "Fuzz This") || !strings.Contains(rest, `id="f-fuzz"`) {
-			return fmt.Errorf("Fuzz This is not in plain view")
+	sc.Step(`^"Fuzz This" is inside More options$`, func() error {
+		if d := detailsRe.FindString(p.body); !strings.Contains(d, "Fuzz This") || !strings.Contains(d, `id="f-fuzz"`) {
+			return fmt.Errorf("Fuzz This is not inside More options")
 		}
 		return nil
 	})

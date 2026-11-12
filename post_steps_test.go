@@ -64,6 +64,7 @@ func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) *
 	initFuzzThisScenarios(sc, p, s)
 	initSimStepsScenarios(sc, p, s)
 	initPostFormByTypeScenarios(sc, p)
+	initPostOneTapScenarios(sc, p)
 	initTracksTopScenarios(p.t, sc, p)
 	return s
 }

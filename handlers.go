@@ -1320,8 +1320,10 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// postForm is the one thumb-sized screen: photo, kind, title, body, leg,
-// checkpoint, zone, hide-location. Leg defaults to today's, zone follows the
+// postForm is the one thumb-sized screen: an optional title and note, then one
+// button per post kind (a photo kind's button is the file picker and posts the
+// photo as soon as it is chosen). Leg, zone, checkpoint, time, pin and the fuzz
+// toggle are under More options. Leg defaults to today's, zone follows the
 // last arrival, and picking a checkpoint re-selects its zone (see the inline
 // script in the template).
 func (a *App) postForm(w http.ResponseWriter, r *http.Request) {
@@ -1754,10 +1756,6 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 	if a.freeSvc().get(a.userOf(r)).Mode != modeTrip {
 		start = nil
 	}
-	kind := "photo"
-	if k := r.PostFormValue("kind"); validKind(k) {
-		kind = k
-	}
 	// A stop's own Check in (the Ride page, ?checkpoint=): the form opens on
 	// that stop, its leg and its zone, once the drive has started and while the
 	// stop is open. Opening it stamps nothing: the photo's position decides.
@@ -1786,7 +1784,6 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 		"Start":      start, "NextStop": nextStopName(rv.Legs),
 		"StartMode":  start != nil && r.URL.Query().Get("full") == "",
 		"SimAllowed": a.simAllowed,
-		"Kind":       kind,
 		// What the form needs to say, before posting, what will be published:
 		// the private cells the fuzz toggle pre-ticks itself for, and which way
 		// PIN_PRECISION tips that default. These are the ALREADY-FUZZED
