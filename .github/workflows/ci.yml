@@ -1,12 +1,16 @@
 # CI — once per merge to trunk, as the record.
 #
-# This runs the checks a deploy would run, so a red trunk is known BEFORE
-# anyone reaches for the deploy workflow. It never touches Fly and never needs
-# a secret: nothing here can reach the live ride.
+# This runs every check a release needs (.github/actions/gates) and builds the
+# production image. It is also the PROOF deploy.yml trusts: when a successful
+# run of this workflow exists for the exact commit being deployed, deploy.yml
+# does not run the suite a second time. So a red trunk is known BEFORE anyone
+# reaches for the deploy workflow. It never touches Fly and never needs a
+# secret: nothing here can reach the live ride.
 name: CI
 
-# Ruled 2026-11-05: the suite runs on local hosts before a push and in
-# deploy.yml's gates before a deploy; GitHub runs it once per merge as the record.
+# Ruled 2026-11-05: the suite runs on local hosts before a push; GitHub runs it
+# once per merge as the record. Ruled 2026-11-12: a deploy trusts that record
+# instead of running the suite again. No other trigger belongs here.
 on:
   push:
     branches: [trunk]
@@ -33,30 +37,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: gofmt
-        run: |
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "::error::gofmt needed on:"
-            echo "$unformatted"
-            gofmt -d .
-            exit 1
-          fi
-
-      - name: js syntax
-        # A browser drops the WHOLE script on one syntax error, and go test
-        # never parses JS: an unescaped apostrophe in hud.js killed every
-        # /driver control live on 2026-11-07. node ships on the runner.
-        run: for f in static/js/*.js; do node --check "$f" || exit 1; done
-
-      - name: go vet
-        run: go vet ./...
-
-      - name: go build
-        run: go build ./...
-
-      - name: go test
-        run: go test -race -count=1 -timeout 20m ./...
+      # gofmt, js syntax, js tests, vet, build, test: one definition, shared
+      # with deploy.yml's fallback gates.
+      - uses: ./.github/actions/gates
 
   image:
     name: docker build
