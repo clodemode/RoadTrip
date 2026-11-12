@@ -306,7 +306,7 @@ func initContinuousMusicScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		for _, want := range []string{`id="rt-toggle"`, `aria-expanded="false"`, `aria-controls="rt-card-body"`, `id="rt-card-body" hidden`, `/static/img/charter.svg`} {
+		for _, want := range []string{`id="rt-toggle"`, `aria-expanded="false"`, `aria-controls="rt-card-body"`, `id="rt-card-body" hidden`, `/static/img/chester.svg`} {
 			if !strings.Contains(string(b), want) {
 				return fmt.Errorf("the card has no %s", want)
 			}

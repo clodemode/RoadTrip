@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <svg viewBox="0 0 64 64" x="4" y="4" width="56" height="56" preserveAspectRatio="xMidYMid meet"><!-- CHESTER — PEEKING OVER THE TABLE: a capuchin pops up behind the table, paws on the top, tail curled up holding Porter's red ball ready to toss; jester cues only — the three-belled cap and Clode's red nose. Built with svg_create; GONZO pass via svg_element_modify (tail off the hip, ball cupped in the tail, cap inside the head). Picked by Kris 2026-09-03. -->
+  <path id="tail" d="M44 48 C58 44 63 32 57 24 C54 20 51.5 19.5 52 16 C52.5 11 57.5 8.5 60.5 12 C61.5 14 60 16.5 58 16.5" fill="none" stroke="#8b5a2b" stroke-width="4.6" stroke-linecap="round"/>
+  <path id="tail-line" d="M44 48 C58 44 63 32 57 24 C54 20 51.5 19.5 52 16 C52.5 11 57.5 8.5 60.5 12 C61.5 14 60 16.5 58 16.5" fill="none" stroke="#0b1020" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+  <circle id="ball" cx="55.5" cy="12" r="4.6" fill="#e03a2f" stroke="#0b1020" stroke-width="1.1"/>
+  <path id="body" d="M11 53 C11 43 19 40 28 40 C37 40 45 43 45 53 Z" fill="#8b5a2b" stroke="#0b1020" stroke-width="1.5"/>
+  <rect id="table-leg-l" x="5" y="57" width="4" height="7" fill="#a37a2c" stroke="#0b1020" stroke-width="1"/>
+  <rect id="table-leg-r" x="55" y="57" width="4" height="7" fill="#a37a2c" stroke="#0b1020" stroke-width="1"/>
+  <rect id="table-top" x="0.5" y="51.5" width="63" height="6" rx="1.5" fill="#c9a84c" stroke="#0b1020" stroke-width="1.2"/>
+  <line id="table-edge" x1="2" y1="53.5" x2="62" y2="53.5" stroke="#e6c96e" stroke-width="1"/>
+  <ellipse id="paw-l" cx="15" cy="52" rx="5.5" ry="3.3" fill="#f2c9a0" stroke="#0b1020" stroke-width="1.2"/>
+  <ellipse id="paw-r" cx="41" cy="52" rx="5.5" ry="3.3" fill="#f2c9a0" stroke="#0b1020" stroke-width="1.2"/>
+  <path id="paw-l-lines" d="M12 51 L12 54 M15 50.5 L15 54 M18 51 L18 54" stroke="#0b1020" stroke-width="0.8" fill="none"/>
+  <path id="paw-r-lines" d="M38 51 L38 54 M41 50.5 L41 54 M44 51 L44 54" stroke="#0b1020" stroke-width="0.8" fill="none"/>
+  <circle id="ear-l" cx="11" cy="28" r="5.8" fill="#8b5a2b" stroke="#0b1020" stroke-width="1.4"/>
+  <circle id="ear-r" cx="45" cy="28" r="5.8" fill="#8b5a2b" stroke="#0b1020" stroke-width="1.4"/>
+  <circle id="ear-l-in" cx="11.5" cy="28" r="2.9" fill="#f2c9a0"/>
+  <circle id="ear-r-in" cx="44.5" cy="28" r="2.9" fill="#f2c9a0"/>
+  <circle id="head" cx="28" cy="29" r="16.5" fill="#8b5a2b" stroke="#0b1020" stroke-width="1.5"/>
+  <path id="face" d="M15.5 31 C15.5 22 22 20 28 24 C34 20 40.5 22 40.5 31 C40.5 40 34 44 28 44 C22 44 15.5 40 15.5 31 Z" fill="#f2c9a0"/>
+  <path id="cap-l" d="M24 14 C17 14 12 10 8 5 C9.5 11.5 14 17 23 18.5 Z" fill="#7b3fe4" stroke="#0b1020" stroke-width="1"/>
+  <path id="cap-r" d="M32 14 C39 14 44 10 48 5 C46.5 11.5 42 17 33 18.5 Z" fill="#7b3fe4" stroke="#0b1020" stroke-width="1"/>
+  <path id="cap-m" d="M25 14 C25.5 8 26.5 4 28 1 C29.5 4 30.5 8 31 14 Z" fill="#f2b632" stroke="#0b1020" stroke-width="1"/>
+  <circle id="bell-l" cx="8" cy="4.5" r="2.4" fill="#f2b632" stroke="#0b1020" stroke-width="0.8"/>
+  <circle id="bell-m" cx="28" cy="1.8" r="1.8" fill="#7b3fe4" stroke="#0b1020" stroke-width="0.8"/>
+  <circle id="bell-r" cx="48" cy="4.5" r="2.4" fill="#f2b632" stroke="#0b1020" stroke-width="0.8"/>
+  <path id="cap-band" d="M12.5 17.5 Q28 11 43.5 17.5 L43.5 21 Q28 14.5 12.5 21 Z" fill="#f2b632" stroke="#0b1020" stroke-width="1"/>
+  <circle id="eye-l" cx="21.8" cy="29.5" r="2.3" fill="#422b0d"/>
+  <path id="eye-wink" d="M31 30 Q34.3 27.2 37.6 30" fill="none" stroke="#422b0d" stroke-width="1.8" stroke-linecap="round"/>
+  <circle id="nose" cx="28" cy="35" r="3.2" fill="#ff4900"/>
+  <path id="grin" d="M21.5 39 Q28 44 34.5 39" fill="none" stroke="#422b0d" stroke-width="1.7" stroke-linecap="round"/>
+</svg>
+</svg>

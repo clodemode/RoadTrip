@@ -60,7 +60,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-13"
+	chesterPromptVersion = "chester-rt-14"
 
 	maxChesterQuestion = 1000
 )

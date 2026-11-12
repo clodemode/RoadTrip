@@ -107,6 +107,9 @@ type App struct {
 	shellOff   bool // PLAYER_SHELL=0: plain pages, no player frame (the road fall-back)
 	// tracks is the RoadTracks search; nil is the feature off.
 	tracks *roadtracksSvc
+	// driveSeed draws the seed of one Drive Tracks tap; nil is random. A test
+	// fixes it so the angle a tap is given can be told in advance.
+	driveSeed func() uint64
 }
 
 // PIN_PRECISION values. See App.pinPrecision.

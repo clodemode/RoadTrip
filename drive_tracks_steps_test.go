@@ -40,6 +40,7 @@ type dtWorld struct {
 	tracksOn bool
 	moDown   bool
 	spent    bool
+	draws    []uint64
 	seed     []func()
 	mo       *moStub
 	stub     *apiStub
@@ -87,6 +88,16 @@ func initDriveTracksScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the search answer Chester got does not name "([^"]*)", "([^"]*)", "([^"]*)", "([^"]*)", "([^"]*)" or "([^"]*)"$`, func(a, b, c, d, e, f string) error { return w.searchAnswerLacks(a, b, c, d, e, f) })
 	sc.Step(`^the trouble record holds a drivetracks_pick for album (\d+) that avoided (\d+) albums and is not a repeat$`, w.meltPick)
 	sc.Step(`^the trouble record holds a drivetracks_no_pick$`, w.meltNoPick)
+
+	sc.Step(`^the search answer Chester got names no album by "([^"]*)"$`, w.searchAnswerNoArtist)
+	sc.Step(`^Drive Tracks picked "([^"]*)" by "([^"]*)" long ago and then twelve other artists on this trip$`, w.pickedBeyondWindow)
+	sc.Step(`^the draws for the taps are (\d+)(?: and (\d+))?$`, w.drawsAre)
+	sc.Step(`^the model will pick the first album and write "([^"]*)"$`, w.willPickFirst)
+	sc.Step(`^the driver taps Drive Tracks again$`, w.tap)
+	sc.Step(`^the two questions carry different angle sentences$`, func() error { return w.anglesCompare(false) })
+	sc.Step(`^the two questions carry the same angle sentence$`, func() error { return w.anglesCompare(true) })
+	sc.Step(`^both questions say to use where the car is$`, w.bothUseCar)
+	sc.Step(`^the trouble record holds a drivetracks_pick drawn with seed (\d+) and the angle "([^"]*)"$`, w.meltAngle)
 
 	sc.Step(`^the driver opens the driver screen$`, w.openDriver)
 	sc.Step(`^the driver taps Drive Tracks$`, w.tap)
@@ -144,6 +155,10 @@ func (w *dtWorld) build() error {
 	}
 	w.stub = newAPIStub(w.t, w.script...)
 	w.app = chesterApp(w.t, w.stub)
+	if len(w.draws) > 0 {
+		n := 0
+		w.app.driveSeed = func() uint64 { d := w.draws[n%len(w.draws)]; n++; return d }
+	}
 	if w.tracksOn {
 		w.app.tracks = newRoadtracks(rtKey, w.mo.srv.URL)
 	}
@@ -575,6 +590,118 @@ func (w *dtWorld) meltNoPick() error {
 	}
 	if recs[0]["stream"] != "errors" || recs[0]["reason"] == nil {
 		return fmt.Errorf("the drivetracks_no_pick record is %v", recs[0])
+	}
+	return nil
+}
+
+func (w *dtWorld) searchAnswerNoArtist(artist string) error {
+	got, err := w.searchAnswer()
+	if err != nil {
+		return err
+	}
+	if strings.Contains(got, " by "+artist) {
+		return fmt.Errorf("the search answer offered an album by %q: %q", artist, got)
+	}
+	return nil
+}
+
+// pickedBeyondWindow seeds one old pick and then twelve newer ones by twelve
+// other artists, all on the active trip.
+func (w *dtWorld) pickedBeyondWindow(album, artist string) error {
+	w.seed = append(w.seed, func() {
+		ride := w.app.activeSlug()
+		w.addRow(ChesterQuery{Ride: ride, AskedAt: utcString(time.Now().Add(-5 * 24 * time.Hour)), Preset: chesterDriveTracksPreset, Question: "earlier",
+			Music: []chesterMusicCard{{AlbumID: 90, Album: album, Artist: artist, Label: "Play"}}})
+		for i := 1; i <= driveArtistWindow; i++ {
+			w.addRow(ChesterQuery{Ride: ride, AskedAt: utcString(time.Now().Add(-time.Duration(driveArtistWindow-i+1) * time.Hour)), Preset: chesterDriveTracksPreset, Question: "earlier",
+				Music: []chesterMusicCard{{AlbumID: int64(200 + i), Album: "Record " + strconv.Itoa(i), Artist: "Band " + strconv.Itoa(i), Label: "Play"}}})
+		}
+	})
+	return nil
+}
+
+func (w *dtWorld) drawsAre(a, b string) error {
+	for _, s := range []string{a, b} {
+		if s != "" {
+			n, _ := strconv.ParseUint(s, 10, 64)
+			w.draws = append(w.draws, n)
+		}
+	}
+	return nil
+}
+
+// willPickFirst scripts one whole tap: search, show the first reference, write.
+func (w *dtWorld) willPickFirst(text string) error {
+	if err := w.willSearch("x"); err != nil {
+		return err
+	}
+	if err := w.willShow("Familiar", "m1"); err != nil {
+		return err
+	}
+	return w.willWrite(text)
+}
+
+// angleLine is the line of tap n's question that is the angle sentence: the
+// first request of that tap is request number n*chesterRounds.
+func (w *dtWorld) angleLine(tap int) (string, error) {
+	reqs := w.stub.requests()
+	if len(reqs) <= tap*chesterRounds {
+		return "", fmt.Errorf("tap %d never reached the model (%d requests)", tap, len(reqs))
+	}
+	var doc any
+	_ = json.Unmarshal(reqs[tap*chesterRounds].Body, &doc)
+	var all []string
+	strs(doc, &all)
+	for _, s := range all {
+		for _, line := range strings.Split(s, "\n") {
+			if strings.HasPrefix(line, "This time, ") {
+				return line, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("tap %d carried no angle sentence", tap)
+}
+
+func (w *dtWorld) anglesCompare(same bool) error {
+	a, err := w.angleLine(0)
+	if err != nil {
+		return err
+	}
+	b, err := w.angleLine(1)
+	if err != nil {
+		return err
+	}
+	if (a == b) != same {
+		return fmt.Errorf("the angles were %q and %q, want same=%v", a, b, same)
+	}
+	return nil
+}
+
+func (w *dtWorld) bothUseCar() error {
+	for tap := 0; tap < 2; tap++ {
+		var doc any
+		reqs := w.stub.requests()
+		if len(reqs) <= tap*chesterRounds {
+			return fmt.Errorf("tap %d never reached the model", tap)
+		}
+		_ = json.Unmarshal(reqs[tap*chesterRounds].Body, &doc)
+		var all []string
+		strs(doc, &all)
+		if !strings.Contains(strings.Join(all, "\n"), "Use where the car is") {
+			return fmt.Errorf("tap %d does not say to use where the car is", tap)
+		}
+	}
+	return nil
+}
+
+func (w *dtWorld) meltAngle(seed int, angle string) error {
+	recs, err := w.meltRecords("drivetracks_pick")
+	if err != nil {
+		return err
+	}
+	r := recs[0]
+	if r["seed"] != float64(seed) || r["angle_text"] != angle {
+		return fmt.Errorf("the drivetracks_pick record is %v", r)
 	}
 	return nil
 }
