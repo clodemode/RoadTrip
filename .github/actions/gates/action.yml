@@ -1,7 +1,7 @@
 name: gates
 description: >-
   The checks a release has to pass: gofmt, js syntax, js tests, go vet, go build
-  and go test -race. ONE definition, used by ci.yml (the record, once per merge
+  and go test (scenarios plain, the rest under -race). ONE definition, used by ci.yml (the record, once per merge
   to trunk) and by deploy.yml (only when no CI record proves the commit).
   Expects the repo checked out and Go set up.
 
@@ -40,4 +40,10 @@ runs:
 
     - name: go test
       shell: bash
-      run: go test -race -count=1 -timeout 20m ./...
+      # Two runs, ruled by Kris 2026-11-12 ("avoid the 9-16 minute suite"). The
+      # behaviour scenarios (TestFeatures) run WITHOUT the race detector: under it
+      # they took 9 to 16 minutes, without it the whole suite takes about 70 s.
+      # The race detector stays on every plain test, where the shared state is.
+      run: |
+        go test -count=1 -timeout 10m -run '^TestFeatures$' ./...
+        go test -race -count=1 -timeout 10m -skip '^TestFeatures$' ./...
