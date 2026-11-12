@@ -459,8 +459,6 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		data["SimBanner"] = a.simBanner(r)
 	}
 	data["SimOn"] = data["SimBanner"] != ""
-	// Whether the masthead links to /checklist: only for a ride that has one.
-	_, data["HasChecklist"] = a.store.ChecklistSummary(a.activeSlug())
 	// Whether the masthead links to Chester: signed in, and switched on.
 	data["ChesterOn"] = authed && a.chester != nil
 	data["CreatureName"] = CreatureName

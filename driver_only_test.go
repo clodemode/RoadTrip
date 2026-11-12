@@ -30,7 +30,8 @@ func TestChecklistAndGeoJSONAreDriverOnly(t *testing.T) {
 	}
 	// A signed-in driver (the push token is the same credential): links and 200s.
 	home = send(t, app, "GET", "/", testToken, "", nil).Body.String()
-	for _, want := range []string{`href="/checklist"`, `href="/route.geojson"`, "of 5 done"} {
+	// The GeoJSON is reached by its address only: Kris took it off the menu on 2026-11-12.
+	for _, want := range []string{`href="/checklist"`, "of 5 done"} {
 		if !strings.Contains(home, want) {
 			t.Errorf("a signed-in front page lacks %q", want)
 		}
