@@ -10,12 +10,19 @@
 #   fly tokens create deploy -a roadtrip-clodemode
 # then Settings → Secrets and variables → Actions → New repository secret.
 #
-#   mode=plan   every gate, and the image built on Fly's remote builder,
-#               WITHOUT releasing it. The default, so a slip of the finger
-#               does not reach the ride.
-#   mode=apply  the same gates, then the release, then an INDEPENDENT probe
-#               that the instance actually serves — a deploy's own verdict is
-#               not a state report.
+# LEAN: the gates (.github/actions/gates) are skipped ONLY when CI proved this
+# exact commit: a completed, successful run of ci.yml on trunk for github.sha.
+# Anything else (CI still running, red, cancelled, a different commit, or the
+# lookup itself failing) runs every gate here, exactly as before. The lean path
+# is taken on positive proof alone. So merge, wait for CI on trunk to go green,
+# then dispatch.
+#
+#   mode=plan   the gates (or the CI record), and the image built on Fly's
+#               remote builder, WITHOUT releasing it. The default, so a slip of
+#               the finger does not reach the ride.
+#   mode=apply  the gates (or the CI record), then the release, then an
+#               INDEPENDENT probe that the instance actually serves — a
+#               deploy's own verdict is not a state report.
 name: Deploy
 
 on:
@@ -30,6 +37,8 @@ on:
 
 permissions:
   contents: read
+  # Only to ask whether CI has a green run for this commit.
+  actions: read
 
 concurrency:
   # Never two releases at the same machine at once.
@@ -50,33 +59,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Fail closed: `proven` is true only when gh returned a successful ci.yml
+      # run on trunk whose head is exactly this commit. An in-progress run is
+      # not status=success, so it counts as no record. Any error, empty answer
+      # or surprise leaves proven=false and the gates run.
+      - name: look for a CI record of this commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          proven=false
+          if runs=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --branch trunk \
+                --commit "$GITHUB_SHA" --status success --limit 5 \
+                --json databaseId,url,conclusion,headSha); then
+            hit=$(printf '%s' "$runs" | jq -r --arg sha "$GITHUB_SHA" \
+              '[.[] | select(.headSha == $sha and .conclusion == "success")][0] | select(. != null) | "\(.databaseId) \(.url)"') || hit=""
+            if [ -n "$hit" ]; then
+              proven=true
+              echo "::notice title=lean::gates skipped; trusting CI run ${hit%% *} for $GITHUB_SHA: ${hit#* }"
+            fi
+          fi
+          if [ "$proven" != true ]; then
+            echo "::notice title=gates::no successful CI run on trunk for $GITHUB_SHA; running every gate here"
+          fi
+          echo "proven=$proven" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-go@v5
+        if: steps.ci.outputs.proven != 'true'
         with:
           go-version-file: go.mod
           cache: true
 
-      # --- Gates. The same checks CI runs, re-run here, because a deploy is
-      # dispatched against a ref and not against a CI run: "trunk was green
-      # yesterday" is not a statement about the commit being shipped.
-      - name: gate — gofmt
-        run: |
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "::error::gofmt needed on: $unformatted"
-            exit 1
-          fi
-
-      - name: gate — go vet
-        run: go vet ./...
-
-      - name: gate — js syntax
-        run: for f in static/js/*.js; do node --check "$f" || exit 1; done
-
-      - name: gate — js tests
-        run: node --test static/js/*_test.mjs
-
-      - name: gate — go test
-        run: go test -race -count=1 -timeout 20m ./...
+      - uses: ./.github/actions/gates
+        if: steps.ci.outputs.proven != 'true'
 
       - name: name the commit being shipped
         run: |

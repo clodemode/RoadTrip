@@ -874,32 +874,46 @@ The behaviour is stated in `features/sim_position.feature` and run by godog from
 
 Two GitHub Actions workflows, and the split between them is the point.
 
-**`CI`** (`.github/workflows/ci.yml`) runs on every push and pull request:
-`gofmt`, `go vet`, `go build`, `go test -race`, and a build of the production
-Docker image — because prod ships the *image*, so an image that does not build
-is a broken deploy however green the Go job is. It touches no secret and cannot
-reach the live ride.
+**`CI`** (`.github/workflows/ci.yml`) runs once per merge to trunk, as the
+record: `gofmt`, the JS syntax check and JS tests, `go vet`, `go build`,
+`go test -race`, and a build of the production Docker image — because prod ships
+the *image*, so an image that does not build is a broken deploy however green
+the Go job is. The checks live in one shared definition,
+`.github/actions/gates`. CI touches no secret and cannot reach the live ride.
 
 **`Deploy`** (`.github/workflows/deploy.yml`) is `workflow_dispatch` **only**.
 There is deliberately no push trigger: this site is live under someone's thumb
 from a car, and auto-releasing every commit would put an unreviewed build in
 front of the ride with no explicit go.
 
+Releasing is lean: the suite is not run again on GitHub when CI already proved
+the commit. Deploy asks GitHub whether `CI` has a completed, successful run on
+trunk for exactly the commit being deployed. If it does, the gates are skipped
+and the log names the CI run being trusted. If it does not (CI still running,
+red or cancelled, a different commit, or the lookup failed) every gate runs in
+the deploy, as before. The lean path is only ever taken on that positive proof.
+
+**The release run sheet:**
+
+1. Merge the PR.
+2. Wait for the `CI` run on trunk to go green.
+3. Dispatch `Deploy` with `apply`. Run `plan` first only if you want to see the
+   image build without releasing.
+
 ```bash
-# PLAN — every gate, and the image built on Fly's remote builder, WITHOUT
-# releasing it. The default, so a slip of the finger does not reach the ride.
+# PLAN — the gates (or the CI record), and the image built on Fly's remote
+# builder, WITHOUT releasing it. The default, so a slip of the finger does not
+# reach the ride.
 gh workflow run Deploy -R clodemode/RoadTrip --ref trunk -f mode=plan
 
-# APPLY — the same gates, the release, then an INDEPENDENT probe that the
-# instance serves. A deploy's own exit code is not a state report.
+# APPLY — the gates (or the CI record), the release, then an INDEPENDENT probe
+# that the instance serves. A deploy's own exit code is not a state report.
 gh workflow run Deploy -R clodemode/RoadTrip --ref trunk -f mode=apply
 ```
 
-The gates re-run in the deploy workflow rather than trusting CI: a deploy is
-dispatched against a ref, and "trunk was green yesterday" is not a statement
-about the commit being shipped. The probe hits `/healthz` on the `.fly.dev`
-host, which is the one path exempt from both the canonical-host 301 and the
-`SITE_VISIBILITY=private` gate — so it answers even while the site is closed.
+The probe hits `/healthz` on the `.fly.dev` host, which is the one path exempt
+from both the canonical-host 301 and the `SITE_VISIBILITY=private` gate — so it
+answers even while the site is closed.
 
 The image keeps the platform path standard: the binary is `/app/roadtrip`
 (`WORKDIR /app`) and everything persistent is under `/data`.
