@@ -150,9 +150,17 @@ func initPostFormByTypeScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		}
 		return nil
 	})
-	sc.Step(`^"Fuzz This" is inside More options$`, func() error {
-		if d := detailsRe.FindString(p.body); !strings.Contains(d, "Fuzz This") || !strings.Contains(d, `id="f-fuzz"`) {
-			return fmt.Errorf("Fuzz This is not inside More options")
+	sc.Step(`^"Fuzz This" is outside More options, under the title and note and above the type buttons$`, func() error {
+		if d := detailsRe.FindString(p.body); strings.Contains(d, "Fuzz This") || strings.Contains(d, `id="f-fuzz"`) {
+			return fmt.Errorf("Fuzz This is inside More options")
+		}
+		rest := detailsRe.ReplaceAllString(p.body, "")
+		fi, bi, ki := strings.Index(rest, `id="f-fuzz"`), strings.Index(rest, `id="f-body"`), strings.Index(rest, `name="kind"`)
+		if fi < 0 || bi < 0 || ki < 0 {
+			return fmt.Errorf("fuzz at %d, note at %d, first kind button at %d, all must be in plain view", fi, bi, ki)
+		}
+		if fi < bi || fi > ki {
+			return fmt.Errorf("Fuzz This is not between the note and the type buttons")
 		}
 		return nil
 	})

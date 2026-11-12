@@ -22,7 +22,7 @@ test('a refused or missing location reports an error and never throws', () => {
   assert.equal(err.code, 0);
 });
 
-const { carriesPhoto, noteBlocked, autoSubmit, sendDecision, FIX_WAIT_MS, locationReason } = createRequire(import.meta.url)('./post.js');
+const { carriesPhoto, noteBlocked, autoSubmit, changedInMore, sendDecision, FIX_WAIT_MS, locationReason } = createRequire(import.meta.url)('./post.js');
 
 test('every post type but a note carries a photo', () => {
   assert.equal(carriesPhoto('note'), false);
@@ -44,6 +44,12 @@ test('a chosen photo is posted at once, unless More options is open and was chan
   assert.equal(autoSubmit(true, false), true);   // opened and looked, changed nothing
   assert.equal(autoSubmit(false, true), true);   // changed, then closed: the page asks nothing more
   assert.equal(autoSubmit(true, true), false);
+  // Fuzz This sits outside More options: ticking it is no change in it.
+  const more = { contains: (n) => n === 'in-more' };
+  assert.equal(changedInMore(more, 'f-fuzz', true), false);
+  assert.equal(autoSubmit(true, changedInMore(more, 'f-fuzz', true)), true);
+  assert.equal(changedInMore(more, 'in-more', true), true);
+  assert.equal(changedInMore(more, 'in-more', false), false);  // the page's own defaults never count
 });
 
 test('a photo is sent once it is read and the phone has answered, held when the driver is posting by hand', () => {

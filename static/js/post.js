@@ -233,6 +233,12 @@
   // Post button is how a careful post is made.
   function autoSubmit(moreOpen, dirty) { return !(moreOpen && dirty); }
 
+  // changedInMore: a real tap or keystroke on a control inside More options.
+  // Fuzz This sits outside it, so ticking it never turns the one tap off.
+  function changedInMore(moreEl, target, trusted) {
+    return !!trusted && !!moreEl && !!target && moreEl.contains(target);
+  }
+
   var FIX_WAIT_MS = 2000;           // the most a post waits for the phone's position
 
   // sendDecision says what a chosen photo does next: 'hold' (the driver posts
@@ -255,7 +261,7 @@
   }
 
   if (typeof document === 'undefined') {                                  // node, for the parser check
-    if (typeof module !== 'undefined' && module.exports) module.exports = { paintThenSend: paintThenSend, exifGPS: exifGPS, exifTaken: exifTaken, photoAgeWords: photoAgeWords, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, carriesPhoto: carriesPhoto, noteBlocked: noteBlocked, autoSubmit: autoSubmit, sendDecision: sendDecision, FIX_WAIT_MS: FIX_WAIT_MS, locationReason: locationReason };
+    if (typeof module !== 'undefined' && module.exports) module.exports = { paintThenSend: paintThenSend, exifGPS: exifGPS, exifTaken: exifTaken, photoAgeWords: photoAgeWords, askLocation: askLocation, ladderChoice: ladderChoice, uploadingLabel: uploadingLabel, carriesPhoto: carriesPhoto, noteBlocked: noteBlocked, autoSubmit: autoSubmit, changedInMore: changedInMore, sendDecision: sendDecision, FIX_WAIT_MS: FIX_WAIT_MS, locationReason: locationReason };
     return;
   }
 
@@ -422,7 +428,7 @@
   if (more) {
     // Only a real tap or keystroke counts; the page's own defaults never do.
     ['input', 'change'].forEach(function (t) {
-      more.addEventListener(t, function (e) { if (e.isTrusted) dirty = true; });
+      more.addEventListener(t, function (e) { if (changedInMore(more, e.target, e.isTrusted)) dirty = true; });
     });
   }
 

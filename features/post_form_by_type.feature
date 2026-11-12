@@ -46,7 +46,7 @@ Feature: The post form opens on what is being posted
     Given the drive has started at A
     When kris opens the post form
     Then More options holds Leg, Zone, Checkpoint, When and Pin
-    And "Fuzz This" is inside More options
+    And "Fuzz This" is outside More options, under the title and note and above the type buttons
 
   Scenario: A Start with a hand-opened full form is still the same form
     When kris asks for the full form
