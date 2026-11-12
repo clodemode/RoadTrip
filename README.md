@@ -877,7 +877,7 @@ Two GitHub Actions workflows, and the split between them is the point.
 
 **`CI`** (`.github/workflows/ci.yml`) runs once per merge to trunk, as the
 record: `gofmt`, the JS syntax check and JS tests, `go vet`, `go build`,
-`go test -race`, and a build of the production Docker image — because prod ships
+`go test` (the behaviour scenarios plain, every other test under `-race`), and a build of the production Docker image — because prod ships
 the *image*, so an image that does not build is a broken deploy however green
 the Go job is. The checks live in one shared definition,
 `.github/actions/gates`. CI touches no secret and cannot reach the live ride.

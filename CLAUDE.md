@@ -24,7 +24,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 
 1. **There is no `manage.py` and no container in the ABOUT fleet.** roadtrip is not a Django TARGET_APP and has no compose service here. Build and test at the repo root:
    ```bash
-   go build ./... && go vet ./... && go test -race -count=1 ./...
+   go build ./... && go vet ./... && go test -count=1 ./...
    ```
 2. **`app_scope` is `roadtrip`** (ruled 2026-09-08). LORE homes in `roadtrip/LORE/<character>/<slug>.yaml`. Rows still reading `app_scope='bloodride'` are pre-ruling history.
 3. **Nothing private goes in the repo or the seed.** `$DATA_DIR/private.json` on the volume holds addresses and notes, keyed by ride and then by checkpoint ord (the top-level block is the first ride's), rendered only to the signed-in trip-keeper. Read one ride's entries with `privateData.forRide`, never the map directly. `git check-ignore` it before you commit anything near it.
@@ -74,10 +74,10 @@ The full environment table (`SITE_URL`, `SITE_VISIBILITY`, `PIN_PRECISION`, `RID
 
 Deterministic first, browser second:
 
-1. `go test -race -count=1 ./...` — the fixtures seed a throwaway SQLite from the embedded geojson. No service, no container, no network. With no Go toolchain on the host, run it in Docker:
+1. `go test -count=1 ./...` (about 70 s; CI adds `-race` on everything but the scenarios, which take 9 to 16 minutes under it) — the fixtures seed a throwaway SQLite from the embedded geojson. No service, no container, no network. With no Go toolchain on the host, run it in Docker:
    ```bash
    docker run --rm -v "$PWD":/src -v roadtrip-gomod:/go/pkg/mod -w /src golang:1.25 \
-     sh -c 'test -z "$(gofmt -l .)" && go vet ./... && go build ./... && go test -race -count=1 ./...'
+     sh -c 'test -z "$(gofmt -l .)" && go vet ./... && go build ./... && go test -count=1 ./...'
    ```
 2. Against a live instance, `GET /driver/posts.json` is the census — **every** post with its photo identity, signed-in only. `/route.geojson` (signed-in only) drops unpinned posts, so it cannot stand in for it. `GET /driver/rides.json` lists every ride with its row counts and which one is active; `GET /plan.json` is the active plan's days and totals. `GET /driver/checklist.json` is the checklist with its private text; `/checklist.json` is the same without private text (both signed-in only since 2026-11-07). `GET /driver/chester/log.json` is every question Chester was asked, with its cost and its verdict.
 3. `/healthz` answers on any host, even while `SITE_VISIBILITY=private` closes the rest of the site.
