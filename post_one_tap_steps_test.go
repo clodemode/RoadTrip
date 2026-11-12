@@ -30,6 +30,7 @@ type oneTapWorld struct {
 	p     *postWorld
 	title string
 	note  string
+	fuzz  bool
 }
 
 func initPostOneTapScenarios(sc *godog.ScenarioContext, p *postWorld) {
@@ -79,6 +80,15 @@ func initPostOneTapScenarios(sc *godog.ScenarioContext, p *postWorld) {
 	sc.Step(`^kris types the note "([^"]*)" and taps "([^"]*)" and picks a photo$`, func(n, label string) error {
 		w.note = n
 		return w.tap(label, true)
+	})
+	sc.Step(`^kris ticks Fuzz This on the post form$`, func() error {
+		r := doAs(p.t, p.sim.app, p.sim.cookies["kris"], "GET", "/driver/post", nil)
+		p.body = r.Body.String()
+		if strings.Contains(detailsRe.FindString(p.body), `id="f-fuzz"`) || !strings.Contains(detailsRe.ReplaceAllString(p.body, ""), `id="f-fuzz"`) {
+			return fmt.Errorf("Fuzz This is not on the form outside More options, so it cannot be ticked before the tap")
+		}
+		w.fuzz = true
+		return nil
 	})
 	sc.Step(`^kris taps "([^"]*)" with nothing typed$`, func(label string) error { return w.tap(label, false) })
 	sc.Step(`^kris types the note "([^"]*)" and taps "([^"]*)"$`, func(n, label string) error {
@@ -173,7 +183,7 @@ func initPostOneTapScenarios(sc *godog.ScenarioContext, p *postWorld) {
 	})
 	sc.Step(`^everything else on the form is inside More options$`, func() error {
 		d := detailsRe.FindString(p.body)
-		for _, n := range []string{`name="tz"`, `name="leg_id"`, `name="checkpoint_id"`, `name="when"`, `name="pin_source"`, `name="fuzz_location"`} {
+		for _, n := range []string{`name="tz"`, `name="leg_id"`, `name="checkpoint_id"`, `name="when"`, `name="pin_source"`} {
 			if !strings.Contains(d, n) {
 				return fmt.Errorf("More options does not hold %s", n)
 			}
@@ -231,6 +241,16 @@ func (w *oneTapWorld) tap(label string, withPhoto bool) error {
 			return err
 		}
 		_ = mw.WriteField(n, w.note)
+	}
+	if w.fuzz {
+		n, err := w.fieldName("f-fuzz")
+		if err != nil {
+			return err
+		}
+		_ = mw.WriteField(n, "1")
+		if fz, err := w.fieldName("f-fuzzset"); err == nil {
+			_ = mw.WriteField(fz, "1")
+		}
 	}
 	if withPhoto {
 		if p.photo == nil {

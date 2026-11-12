@@ -20,6 +20,14 @@
       <p class="muted small mb-2">Type a title or note first if you want one, then tap what you are posting.</p>
       <label class="form-label d-block mb-2">Title <span class="form-text">(optional)</span><input class="form-control" name="title" id="f-title" maxlength="140" autocomplete="off"></label>
       <label class="form-label d-block mb-0">Note <span class="form-text">(optional)</span><textarea class="form-control" name="body" id="f-body" rows="2"></textarea></label>
+      {{/* Outside More options (Kris): Fuzz This is ticked before the one tap, and
+           ticking it is not a change inside More options, so a photo pick still
+           posts by itself, fuzzed. */}}
+      <div class="pin-privacy mt-2">
+        <label class="form-check touch"><input class="form-check-input" type="checkbox" name="fuzz_location" id="f-fuzz" value="1">
+          <span><strong>Fuzz This</strong> <span class="muted small">&mdash; publish a 5 km cell, not the exact point. You can undo it after posting.</span></span></label>
+        <p class="muted small" id="pin-publishes">publishes as: &mdash;</p>
+      </div>
       <p class="error mb-0 mt-2" id="text-need" role="alert" hidden>Type a title or a note first, then tap Note.</p>
     </div>
     <fieldset class="kind-row" id="post-types"{{if .StartMode}} hidden{{end}}>
@@ -73,11 +81,6 @@
            pre-selected, and clears it once the driver touches the radio. Absent
            (no JS, or an older page) means the pin source, if sent, is a choice. */}}
       <input type="hidden" name="pin_auto" id="f-pinauto" value="">
-      <div class="pin-privacy">
-        <label class="form-check touch"><input class="form-check-input" type="checkbox" name="fuzz_location" id="f-fuzz" value="1">
-          <span><strong>Fuzz This</strong> <span class="muted small">&mdash; publish a 5 km cell, not the exact point. You can undo it after posting.</span></span></label>
-        <p class="muted small" id="pin-publishes">publishes as: &mdash;</p>
-      </div>
       <button type="submit" class="btn btn-primary btn-lg" id="btn-post">Post</button>
       </div>
     </details>

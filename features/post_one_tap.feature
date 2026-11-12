@@ -7,7 +7,8 @@ Feature: One tap posts
   optional note and one big button per post type. A button for a type that
   carries a photo is the file picker: the photo is posted the moment it is
   picked. A note posts on the tap. The rest of the form (zone, leg, stop,
-  time, pin, Fuzz This) is under More options, and a post the driver wants to
+  time, pin) is under More options; Fuzz This sits outside it, under the title and
+  note, so it can be ticked before the one tap, and a post the driver wants to
   make carefully still has a visible Post button there. Where the phone puts
   the pin, and what a private place does to it, are decided as before.
 
@@ -56,6 +57,12 @@ Feature: One tap posts
     Given the drive has started at A
     And stop B is a private place
     When kris taps "Photo" and picks a photo taken at B's exact point
+    Then the post is published as a fuzzed cell, not the exact point
+
+  Scenario: With Fuzz This ticked a one-tap photo is published fuzzed
+    Given the drive has started at A
+    When kris ticks Fuzz This on the post form
+    And kris taps "Photo" and picks a photo taken at B's exact point
     Then the post is published as a fuzzed cell, not the exact point
 
   Scenario: The old extra tap is gone
