@@ -1733,6 +1733,31 @@ func (s *Store) ChesterQueriesOf(user string) ([]ChesterQuery, error) {
 	return out, nil
 }
 
+// ChesterRecentOf is one driver's newest questions on one ride, newest
+// first, for the Earlier answers list on the Chester page. A driver sees only
+// their own rows, and no row from before drivers were told apart. The Drive
+// Tracks tap is a fixed button on the driver screen, not an ask made on the
+// Chester page, so it is left out.
+func (s *Store) ChesterRecentOf(user, ride string, limit int) ([]ChesterQuery, error) {
+	if user == "" || limit <= 0 {
+		return []ChesterQuery{}, nil
+	}
+	rows, err := s.db.Query(`SELECT `+chesterCols+` FROM chester_queries WHERE user=? AND ride_slug=? AND preset<>? ORDER BY id DESC LIMIT `+strconv.Itoa(limit), user, ride, chesterDriveTracksPreset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ChesterQuery{}
+	for rows.Next() {
+		c, err := scanChester(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // chesterOther is what an admin may see of another driver's question: when,
 // what it cost and its token counts. Never the words.
 type chesterOther struct {
