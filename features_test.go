@@ -47,6 +47,7 @@ func TestFeatures(t *testing.T) {
 				initPublicNowPlayingScenarios(t, sc)
 				initListenInnScenarios(t, sc)
 				initChesterPreferencesScenarios(t, sc)
+				initPhotoViewScenarios(sc, sw.p)
 			}()
 		},
 		Options: &godog.Options{

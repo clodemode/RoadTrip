@@ -199,7 +199,7 @@
       keyboard: false, zIndexOffset: 1000
     }).addTo(postLayer);
     var bits = ['<div class="popup">'];
-    if (p.thumb) bits.push('<a href="' + esc(p.full) + '"><img class="popup-photo" src="' + esc(p.thumb) + '" alt=""></a>');
+    if (p.thumb) bits.push('<a href="/photo/' + p.id + '"><img class="popup-photo" src="' + esc(p.thumb) + '" alt=""></a>');
     bits.push('<h3>' + (p.title ? esc(p.title) : esc(p.kind)) + '</h3>');
     bits.push('<p class="muted">' + esc(p.when) + '</p>');
     if (p.pin_source === 'checkpoint') {
