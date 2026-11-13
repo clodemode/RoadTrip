@@ -140,7 +140,62 @@ func (a *App) renderChester(w http.ResponseWriter, r *http.Request, extra map[st
 		data[k] = v
 	}
 	data["PrefsSaved"] = r.URL.Query().Get("saved") == "preferences"
+	if a.chester != nil {
+		data["Earlier"] = a.earlierAnswers(a.userOf(r))
+	}
 	a.render(w, r, "chester.html", data)
+}
+
+// chesterEarlierLimit is how many earlier asks the Chester page lists; the
+// log has the rest.
+const chesterEarlierLimit = 10
+
+// chesterEarlier is one earlier ask as the page shows it. Everything in it is
+// text the template escapes, except CardsJSON, which is data for chester.js
+// (an attribute value, escaped by the template) and never markup.
+type chesterEarlier struct {
+	AskedAt, TZ, Title, Answer, Error, Proposal string
+	CardsJSON                                   string
+}
+
+// earlierAnswers is the signed-in driver's own newest asks on the active ride.
+// A proposal is shown as words only: saving a stale route change is never
+// offered from here.
+func (a *App) earlierAnswers(user string) []chesterEarlier {
+	rows, err := a.store.ChesterRecentOf(user, a.activeSlug(), chesterEarlierLimit)
+	if err != nil {
+		log.Printf("ERROR chester earlier answers: %v", err)
+		return nil
+	}
+	out := make([]chesterEarlier, 0, len(rows))
+	for _, q := range rows {
+		e := chesterEarlier{AskedAt: q.AskedAt, TZ: q.TZ, Answer: q.Answer, Error: q.Error}
+		e.Title = strings.TrimSpace(q.Question)
+		for _, p := range chesterPresets {
+			if q.Preset != "" && p.ID == q.Preset {
+				e.Title = p.Label
+			}
+		}
+		if r := []rune(e.Title); len(r) > 70 {
+			e.Title = strings.TrimSpace(string(r[:70])) + "…"
+		}
+		if e.Title == "" {
+			e.Title = "A question"
+		}
+		if e.Answer == "" && e.Error == "" {
+			e.Error = "This question ended with no answer."
+		}
+		var pr struct{ Option, Choice, Why string }
+		if len(q.Proposal) > 0 && json.Unmarshal(q.Proposal, &pr) == nil && (pr.Option != "" || pr.Choice != "") {
+			e.Proposal = strings.TrimSpace("Chester proposed a route change: " + pr.Option + ", " + pr.Choice + ". " + pr.Why + " " + q.ProposalLine())
+		}
+		cards := map[string]any{"places": chesterCards(q.Places), "music": q.Music, "podcasts": q.Podcasts}
+		if b, err := json.Marshal(cards); err == nil {
+			e.CardsJSON = string(b)
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 // chesterAsk takes one question and streams the answer back, one JSON object

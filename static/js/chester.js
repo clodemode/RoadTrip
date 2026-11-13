@@ -12,11 +12,22 @@
  */
 (function () {
   'use strict';
+  var FRESH_MS = 60000;
+  // positionPlan decides what an ask does about the position: 'none' sends
+  // nothing and asks the phone nothing, 'use' sends the newest fix, 'ask'
+  // asks the phone again first.
+  function positionPlan(on, sim, geo, fixed, now) {
+    if (!on || sim || !geo) return 'none';
+    if (fixed && now - fixed.at < FRESH_MS) return 'use';
+    return 'ask';
+  }
+  if (typeof module !== 'undefined' && module.exports) module.exports = { positionPlan: positionPlan };
+  if (typeof document === 'undefined') return;
   var $ = function (id) { return document.getElementById(id); };
   var form = $('ch-form'), box = $('ch-q'), send = $('ch-send'),
       status = $('ch-status'), error = $('ch-error'), answer = $('ch-answer'),
       places = $('ch-places'), music = $('ch-music'), podcasts = $('ch-podcasts'), proposal = $('ch-proposal'), meta = $('ch-meta'), speak = $('ch-speak'),
-      locate = $('ch-locate'), geo = $('ch-geo'), la = $('ch-lat'), ln = $('ch-lng');
+      locate = $('ch-locate'), geo = $('ch-geo');
   if (!form || !box || !send || !answer) return;
 
   var busy = false;
@@ -45,27 +56,49 @@
     window.speechSynthesis.speak(new window.SpeechSynthesisUtterance(text));
   }
 
-  // --- the position: sent only when asked for, and said out loud -------------------
+  // --- the position: sent with every question unless turned off ---------------------
+  // On by default at every page load; nothing is stored in the browser. The
+  // server coarsens a point near a private place before anyone is told it.
   var simOn = form.getAttribute('data-sim') === '1';
-  if (locate && simOn) {
-    // A simulated drive is the phone: the server answers from its own copy of
-    // the car, so the button asks nothing and no coordinate is held here.
-    locate.textContent = 'Simulated position';
-    locate.disabled = true;
-    geo.textContent = 'Chester will use the simulated car, not the phone.';
-    la.value = ''; ln.value = '';
-  } else if (locate) {
-    locate.addEventListener('click', function () {
-      if (!navigator.geolocation) { geo.textContent = 'This browser has no position to give.'; return; }
-      geo.textContent = 'Asking the phone…';
-      navigator.geolocation.getCurrentPosition(function (p) {
-        la.value = p.coords.latitude.toFixed(4);
-        ln.value = p.coords.longitude.toFixed(4);
-        geo.textContent = 'Position ready. It goes with your next question only, coarsened near a private place.';
-      }, function () {
-        la.value = ''; ln.value = '';
-        geo.textContent = 'The phone did not give a position. Chester will use the last pinned post.';
-      }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+  var posOn = !simOn, fix = null, ASK_WAIT_MS = 5000;
+  var haveGeo = !!navigator.geolocation;
+
+  if (!form || !box || !send || !answer) return;
+
+  function say(t) { if (geo) geo.textContent = t; }
+  function setToggle() {
+    if (!locate || simOn) return;
+    locate.textContent = posOn ? locate.getAttribute('data-off-label') : locate.getAttribute('data-on-label');
+    locate.setAttribute('aria-pressed', posOn ? 'true' : 'false');
+  }
+  function rememberFix(p) {
+    fix = { lat: p.coords.latitude.toFixed(4), lng: p.coords.longitude.toFixed(4), at: Date.now() };
+  }
+  // getFix asks the phone once and calls back with a fix or null.
+  function getFix(wait, cb) {
+    var done = false;
+    function end(f) { if (!done) { done = true; cb(f); } }
+    var timer = setTimeout(function () { end(null); }, wait + 500);
+    navigator.geolocation.getCurrentPosition(function (p) {
+      clearTimeout(timer); rememberFix(p); end(fix);
+    }, function () { clearTimeout(timer); end(null); },
+    { enableHighAccuracy: false, timeout: wait, maximumAge: 0 });
+  }
+  function sayReady() { say('Your position goes with each question.'); }
+  function sayMissing() { say('The phone gave no position. Chester will use the last pinned post.'); }
+  if (!simOn) {
+    if (!haveGeo) { say('This browser has no position to give. Chester will use the last pinned post.'); }
+    else {
+      say('Asking the phone for your position…');
+      getFix(15000, function (f) { if (!posOn) return; if (f) sayReady(); else sayMissing(); });
+    }
+    if (locate) locate.addEventListener('click', function () {
+      posOn = !posOn;
+      setToggle();
+      if (!posOn) { say('Your position is not sent. Chester will use the last pinned post.'); return; }
+      if (!haveGeo) { say('This browser has no position to give. Chester will use the last pinned post.'); return; }
+      say('Asking the phone for your position…');
+      getFix(ASK_WAIT_MS, function (f) { if (!posOn) return; if (f) sayReady(); else sayMissing(); });
     });
   }
 
@@ -318,6 +351,22 @@
   // --- asking ----------------------------------------------------------------------------
   function ask(preset) {
     if (busy) return;
+    var plan = positionPlan(posOn, simOn, haveGeo, fix, Date.now());
+    if (plan === 'ask') {
+      // Not locked yet or too old: ask the phone, wait a few seconds at most, then send either way.
+      if (!preset && !box.value.trim()) { fail('Ask a question first.'); box.focus(); return; }
+      busy = true; send.disabled = true; show(status, 'Asking the phone for your position…');
+      getFix(ASK_WAIT_MS, function (f) {
+        busy = false; send.disabled = false;
+        if (f) sayReady(); else sayMissing();
+        go(preset, f);
+      });
+      return;
+    }
+    go(preset, plan === 'use' ? fix : null);
+  }
+  function go(preset, f) {
+    if (busy) return;
     var body = new URLSearchParams();
     var mode = form.querySelector('input[name="mode"]:checked');
     body.set('mode', mode ? mode.value : 'quick');
@@ -328,13 +377,7 @@
       if (!box.value.trim()) { fail('Ask a question first.'); box.focus(); return; }
       body.set('q', box.value);
     }
-    if (la.value && ln.value) {
-      // A position goes with one question and is then forgotten: the car moves,
-      // and an old point sent as "just now" would be a quiet lie.
-      body.set('lat', la.value); body.set('lng', ln.value);
-      la.value = ''; ln.value = '';
-      if (geo) geo.textContent = 'Sent with that question. Tap again before the next one to send a fresh position.';
-    }
+    if (f) { body.set('lat', f.lat); body.set('lng', f.lng); }
 
     busy = true;
     send.disabled = true;
@@ -342,8 +385,9 @@
     answer.textContent = '';
     places.textContent = '';
     music.textContent = '';
+    podcasts.textContent = '';
     proposal.textContent = '';
-    hide(answer); hide(places); hide(music); hide(proposal); hide(error); hide(meta);
+    hide(answer); hide(places); hide(music); hide(podcasts); hide(proposal); hide(error); hide(meta);
     show(status, 'Asking…');
     if (canSpeak) window.speechSynthesis.cancel();
 
@@ -387,6 +431,21 @@
       send.disabled = false;
     });
   }
+
+  // --- earlier answers: the same card builders, handed the stored JSON ---------------
+  // No Save is built for a proposal here: a stale route change is not offered.
+  Array.prototype.forEach.call(document.querySelectorAll('.ch-earlier-cards'), function (box) {
+    var d;
+    try { d = JSON.parse(box.getAttribute('data-cards') || '{}'); } catch (e) { return; }
+    [['places', card], ['music', albumCard], ['podcasts', podcastCard]].forEach(function (g) {
+      var list = d[g[0]] || [];
+      if (!list.length) return;
+      var ul = document.createElement('ul');
+      ul.className = 'ch-places';
+      list.forEach(function (x) { ul.appendChild(g[1](x)); });
+      box.appendChild(ul);
+    });
+  });
 
   form.addEventListener('submit', function (e) { e.preventDefault(); ask(''); });
   Array.prototype.forEach.call(form.querySelectorAll('.ch-preset'), function (b) {
