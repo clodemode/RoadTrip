@@ -11,8 +11,8 @@
   {{/* The photo is shown for recognition only — this screen edits metadata,
        never content. Replacing a photo means deleting the post and posting it
        again, which keeps the content-addressed media store append-only. */}}
-  {{with .Post.Photo}}
-  <a class="post-photo post-edit-photo" href="/media/{{.Path}}">
+  {{$pid := .Post.ID}}{{with .Post.Photo}}
+  <a class="post-photo post-edit-photo" href="/photo/{{$pid}}">
     <img src="/media/{{.ThumbPath}}" alt="" loading="lazy">
   </a>
   {{end}}
