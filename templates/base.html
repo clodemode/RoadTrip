@@ -111,8 +111,8 @@
 
 {{define "post_card"}}
 <article class="post card kind-{{.Kind}}" id="post-{{.ID}}">
-  {{with .Photo}}
-  <a class="post-photo" href="/media/{{.Path}}">
+  {{$pid := .ID}}{{with .Photo}}
+  <a class="post-photo" href="/photo/{{$pid}}">
     <img src="/media/{{.ThumbPath}}" alt="" loading="lazy">
   </a>
   {{end}}
