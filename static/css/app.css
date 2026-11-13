@@ -653,3 +653,16 @@ body.rt-shell { margin: 0; display: flex; flex-direction: column; height: 100dvh
 .ch-pref .form-control { min-height: 48px; font-weight: 400; font-size: 1rem; }
 .ch-pref-wide { grid-column: 1 / -1; }
 .ch-prefs-ok { color: var(--rt-ok); font-weight: 600; }
+.ch-position { padding: .7rem .9rem; background: var(--ds-surface); border: 1px solid var(--ds-hairline); border-radius: .5rem; }
+.ch-geo { flex: 1 1 14rem; font-size: 1.05rem; }
+.ch-earlier { margin-top: 1.4rem; }
+.ch-earlier-list { list-style: none; margin: .4rem 0; padding: 0; display: grid; gap: .5rem; }
+.ch-earlier-item { padding: .6rem .8rem; background: var(--ds-surface); border: 1px solid var(--ds-hairline); border-radius: .5rem; }
+.ch-earlier-item summary { min-height: 44px; display: flex; align-items: center; gap: .6rem; cursor: pointer; }
+.ch-earlier-answer { font-size: 1.1rem; }
+
+/* The photo viewer: one whole picture, fitted to the screen (appended). */
+.photo-view { max-width: 1000px; margin: 0 auto; padding: .5rem 16px 1rem; }
+.photo-view-fit { display: block; margin: 0 auto; max-width: 100%; max-height: 78vh; max-height: 78dvh; width: auto; height: auto; object-fit: contain; border-radius: var(--ds-radius); }
+.photo-view-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .6rem 0; }
+.photo-view-links a { display: inline-flex; align-items: center; min-height: 44px; }

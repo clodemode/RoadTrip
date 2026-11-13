@@ -157,6 +157,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /{$}", a.index)
 	mux.HandleFunc("GET /legs/{slug}", a.legPage)
 	mux.HandleFunc("GET /photos", a.photos)
+	mux.HandleFunc("GET /photo/{id}", a.photoView)
 	// Driver-only (Kris, 2026-11-07): the cookie or the PUSH_TOKEN bearer.
 	mux.Handle("GET /route.geojson", a.requireRide(a.routeGeoJSON))
 	// The planner: the active ride's days and, for a trip with options, every
@@ -3258,4 +3259,40 @@ func backTo(r *http.Request, fallback string) string {
 		return fallback
 	}
 	return path.Clean(ref.Path)
+}
+
+// photoView is the page a tapped photo opens: the picture whole, fitted to the
+// screen, with a way back and a link to the original. It answers exactly what
+// the timeline shows a visitor: a post with a photo, on a leg of the ride the
+// site shows. Anything else is a 404, the same as no such post. It reads
+// nothing from the photo but its path and the post's public words: no pin, no
+// coordinates, no EXIF.
+func (a *App) photoView(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	rv, err := a.loadRide()
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	post, err := a.store.Post(id)
+	if err != nil || post.Photo == nil || !legInRide(rv.Legs, post.LegID) {
+		http.NotFound(w, r)
+		return
+	}
+	a.render(w, r, "photo.html", map[string]any{
+		"Title": "Photo", "Ride": rv.Ride, "PageLeg": post.LegSlug,
+		"P": post, "Photo": post.Photo})
+}
+
+func legInRide(legs []Leg, id int64) bool {
+	for _, l := range legs {
+		if l.ID == id {
+			return true
+		}
+	}
+	return false
 }

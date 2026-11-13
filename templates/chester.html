@@ -12,6 +12,11 @@
 </div></section>
 {{else}}
 <form id="ch-form" class="ch-form" method="post" action="/chester/ask" autocomplete="off"{{if .SimOn}} data-sim="1"{{end}}>
+  <div class="ch-row ch-position">
+    <span id="ch-geo" class="ch-geo" role="status">{{if .SimOn}}Chester will use the simulated car, not the phone.{{else}}Your position goes with each question.{{end}}</span>
+    <button type="button" id="ch-locate" class="btn btn-outline-secondary ch-tap" aria-pressed="true" data-on-label="Send my position" data-off-label="Ask without my position"{{if .SimOn}} disabled{{end}}>{{if .SimOn}}Simulated position{{else}}Ask without my position{{end}}</button>
+  </div>
+
   <fieldset class="ch-presets">
     <legend>Ask in one tap</legend>
     {{range .Presets}}<button type="button" class="btn btn-outline-primary ch-preset" data-preset="{{.ID}}" data-question="{{.Question}}">{{.Label}}</button>
@@ -31,12 +36,6 @@
   </fieldset>
 
   <div class="ch-row">
-    <button type="button" id="ch-locate" class="btn btn-outline-secondary ch-tap">Send my position</button>
-    <span id="ch-geo" class="muted small" role="status">Not sent. Chester will use the last pinned post.</span>
-    <input type="hidden" name="lat" id="ch-lat"><input type="hidden" name="lng" id="ch-lng">
-  </div>
-
-  <div class="ch-row">
     <button type="submit" id="ch-send" class="btn btn-primary btn-lg ch-tap">Ask</button>
     <label class="form-check touch ch-tap"><input class="form-check-input" type="checkbox" id="ch-speak"> Read the answer aloud</label>
   </div>
@@ -51,6 +50,23 @@
   <ul id="ch-podcasts" class="ch-places" hidden></ul>
   <ul id="ch-proposal" class="ch-places" hidden></ul>
   <p id="ch-meta" class="muted small" hidden></p>
+</section>
+
+<section class="ch-earlier" aria-labelledby="ch-earlier-h">
+  <h2 id="ch-earlier-h" class="h5">Earlier answers</h2>
+  {{if .Earlier}}
+  <ul class="ch-earlier-list">
+    {{range .Earlier}}<li><details class="ch-earlier-item">
+      <summary><time datetime="{{.AskedAt}}">{{local .AskedAt .TZ}}</time> {{.Title}}</summary>
+      {{if .Answer}}<div class="ch-answer ch-earlier-answer">{{.Answer}}</div>{{end}}
+      {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+      {{if .Proposal}}<p class="ch-why">{{.Proposal}}</p>{{end}}
+      <div class="ch-earlier-cards" data-cards="{{.CardsJSON}}"></div>
+    </details></li>
+    {{end}}
+  </ul>
+  {{else}}<p class="muted">Nothing asked on this ride yet.</p>{{end}}
+  <p><a href="/driver/chester/log">The rest are in the log</a></p>
 </section>
 
 <section class="ch-prefs card" aria-labelledby="ch-prefs-h">

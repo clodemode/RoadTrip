@@ -1,6 +1,6 @@
 {{template "head" .}}
 <section class="page-head">
-  <p class="muted figure">{{.Total}} photo{{if ne .Total 1}}s{{end}}, grouped by leg. Tap one for the original.</p>
+  <p class="muted figure">{{.Total}} photo{{if ne .Total 1}}s{{end}}, grouped by leg. Tap one to see it whole.</p>
 </section>
 
 {{if not .Groups}}<p class="muted">No photos yet.</p>{{end}}
@@ -11,7 +11,7 @@
   <div class="gallery">
   {{range .Posts}}
     <figure>
-      <a href="/media/{{.Photo.Path}}"><img src="/media/{{.Photo.ThumbPath}}" alt="{{.Title}}" loading="lazy"></a>
+      <a href="/photo/{{.ID}}"><img src="/media/{{.Photo.ThumbPath}}" alt="{{.Title}}" loading="lazy"></a>
       <figcaption>{{if .Title}}{{.Title}} &middot; {{end}}{{local .OccurredAt .TZ}}</figcaption>
     </figure>
   {{end}}
