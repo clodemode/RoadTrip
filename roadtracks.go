@@ -59,11 +59,21 @@ type trackAlbum struct {
 	URL         string `json:"url"`
 }
 
-// search asks MusicOrgan. Every error is a word or two, never the URL or key.
-func (s *roadtracksSvc) search(ctx context.Context, q string) ([]trackAlbum, error) {
+// roadtracksBoxLimit is how many albums the /driver search box asks for, and
+// roadtracksMaxLimit the most the library hands back for one search. The
+// library cuts its answer, in album-title order, before RoadTrip drops the
+// albums it cannot play, so Chester asks for the most it can get.
+const (
+	roadtracksBoxLimit = 25
+	roadtracksMaxLimit = 50
+)
+
+// search asks MusicOrgan for up to limit albums. Every error is a word or
+// two, never the URL or key.
+func (s *roadtracksSvc) search(ctx context.Context, q string, limit int) ([]trackAlbum, error) {
 	ctx, cancel := context.WithTimeout(ctx, roadtracksTimeout)
 	defer cancel()
-	u := s.base + "/api/roadtracks/search?limit=25&q=" + url.QueryEscape(q)
+	u := s.base + "/api/roadtracks/search?limit=" + strconv.Itoa(limit) + "&q=" + url.QueryEscape(q)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, errors.New("error")
@@ -126,7 +136,7 @@ func (a *App) roadtracksSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t0 := time.Now()
-	albums, err := a.tracks.search(r.Context(), q)
+	albums, err := a.tracks.search(r.Context(), q, roadtracksBoxLimit)
 	ms := time.Since(t0).Milliseconds()
 	if err != nil {
 		a.melt.Error("roadtracks_search", map[string]any{"qlen": len(q), "count": 0, "status": http.StatusBadGateway, "ms": ms, "reason": tracksReason(err)})

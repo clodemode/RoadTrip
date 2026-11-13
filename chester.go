@@ -49,7 +49,11 @@ const (
 	chesterPlan  = "plan"
 
 	chesterDefaultModel = "claude-opus-5-5"
-	chesterDefaultUSD   = 5.0
+	// chesterDefaultBackup is the model a question is asked again on, once,
+	// when the API answered the first model with a 5xx or 529 before any of
+	// the answer began (CHESTER_MODEL_BACKUP; "off" turns it off).
+	chesterDefaultBackup = "claude-sonnet-5-5"
+	chesterDefaultUSD    = 5.0
 	// chesterMaxDailyUSD is the most the daily limit may be set to. A limit
 	// above it is taken for a slip of the hand (1e308 is a number too), and a
 	// limit that is not a limit is worse than Chester being off.
@@ -60,7 +64,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-15"
+	chesterPromptVersion = "chester-rt-16"
 
 	maxChesterQuestion = 1000
 )
@@ -97,6 +101,10 @@ type chesterMode struct {
 	MaxTokens int64         // thinking counts toward it, so it is not small
 	Timeout   time.Duration // the whole question, searches included
 	MaxPlaces int
+	// Backup is the model a request is sent to once more when the API
+	// answered Model with a 5xx or 529 before the answer began; "" is none.
+	// It is one setting for both modes (CHESTER_MODEL_BACKUP).
+	Backup string
 }
 
 type chesterConfig struct {
@@ -176,6 +184,15 @@ func chesterConfigFrom(getenv func(string) string) (cfg *chesterConfig, why stri
 		cfg.Fallback = false
 	default:
 		return nil, "CHESTER_FALLBACK must be default or off"
+	}
+	// The backup model is a setting like the other two and is checked the
+	// same way; "off" means a 5xx is said plainly, as it always was.
+	if b := get("CHESTER_MODEL_BACKUP", chesterDefaultBackup); !strings.EqualFold(b, "off") {
+		if !chesterSearchModel(b) {
+			return nil, "CHESTER_MODEL_BACKUP names a model the web search tool (" + chesterSearchTool +
+				") is not documented for; it must be off or one of " + strings.Join(chesterSearchModels, ", ")
+		}
+		cfg.Quick.Backup, cfg.Plan.Backup = b, b
 	}
 	if cfg.baseURL != "" {
 		if u, err := url.Parse(cfg.baseURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -448,7 +465,9 @@ func (m chesterMode) roundCeilingUSD(served string) float64 {
 // against it, so a question is refused while it could still overshoot.
 // What a question reads is not in it: that has no bound to state up front.
 func (m chesterMode) worstUSD() float64 {
-	return chesterRounds * (m.roundCeilingUSD("") + float64(m.MaxUses)*chesterSearchUSD)
+	// A round may be answered by the backup model, so each is priced at the
+	// dearer of the two.
+	return chesterRounds * (m.roundCeilingUSD(m.Backup) + float64(m.MaxUses)*chesterSearchUSD)
 }
 
 // --- places -----------------------------------------------------------------------------
@@ -1077,6 +1096,23 @@ const (
 // its places and has yet to write its answer.
 const chesterRounds = 3
 
+// chesterNoMoreSearches is what every search the round before the last is
+// answered with, beside its results. The last round is for picking and
+// writing: the search tools are withdrawn from it where the model allows that
+// (chesterToolChangeModels), and a model that spent every round searching
+// still ends in a card or a plain sentence, never an empty error (2026-11-13:
+// four Drive Tracks asks in a row ended "stopped before finishing" after
+// twelve searches each).
+const chesterNoMoreSearches = "No more searches: this is the last turn. Pick from what you found, or say plainly that nothing fits."
+
+// chesterToolChangeModels are the models that take a mid-conversation system
+// message withdrawing a tool (beta mid-conversation-tool-changes-2026-07-01).
+// Withdrawing a tool by editing the tools list instead would break the cache
+// and the thinking already sent back; a model not listed gets only the words.
+var chesterToolChangeModels = map[string]bool{
+	"claude-opus-5-5": true, "claude-opus-5": true, "claude-opus-4-8": true, "claude-sonnet-5-5": true,
+}
+
 // chesterCardsNowWrite is what the show_places tool is answered with when
 // its cards came with no words, which is the usual order: the prompt asks for
 // the cards first and the answer after. The default model returns text
@@ -1186,7 +1222,7 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 		return res
 	}
 
-	whole := false
+	whole, backedUp, backupSaid := false, false, false
 rounds:
 	for round := 0; round < chesterRounds; round++ {
 		stream := c.client.Beta.Messages.NewStreaming(ctx, params)
@@ -1198,7 +1234,7 @@ rounds:
 		began, counted := false, false
 		// used is this request as the API counts it: its two usage objects,
 		// kept as they arrive.
-		used := chesterRequestUsage{Asked: m.Model, MaxTokens: m.MaxTokens}
+		used := chesterRequestUsage{Asked: string(params.Model), MaxTokens: m.MaxTokens}
 		for stream.Next() {
 			ev := stream.Current()
 			if err := msg.Accumulate(ev); err != nil {
@@ -1264,6 +1300,24 @@ rounds:
 		if string(msg.Model) != "" && string(msg.Model) != m.Model {
 			res.Served = string(msg.Model)
 		}
+		// The API answered with a 5xx or 529 before any of the answer began
+		// (the SDK's own retries already spent, and nothing charged): the same
+		// request goes once to the backup model. A second failure is said
+		// plainly, as it always was.
+		var down *anthropic.Error
+		if err != nil && !began && !backedUp && m.Backup != "" && m.Backup != string(params.Model) &&
+			ctx.Err() == nil && errors.As(err, &down) && down.StatusCode >= 500 {
+			backedUp = true
+			res.Notes = append(res.Notes, "the first model ("+string(params.Model)+") was unavailable (API "+
+				strconv.Itoa(down.StatusCode)+"), so the question was asked again on the backup model ("+m.Backup+")")
+			params.Model = anthropic.Model(m.Backup)
+			round--
+			continue
+		}
+		if backedUp && counted && !backupSaid {
+			backupSaid = true
+			res.Notes = append(res.Notes, "the backup model answered ("+firstOf(string(msg.Model), m.Backup)+")")
+		}
 		if err != nil {
 			res.Err, res.ErrKind = chesterSayError(ctx, err, m.Timeout)
 			return finish()
@@ -1303,6 +1357,15 @@ rounds:
 
 		// Past here the turn is whole, so its tool calls can be believed.
 		var results []anthropic.BetaContentBlockParamUnion
+		// lastNext is true when the round this turn's tool results go to is
+		// the last one allowed: every search is told so.
+		lastNext := round+1 == chesterRounds-1
+		said := func(text string) string {
+			if lastNext {
+				return text + "\n" + chesterNoMoreSearches
+			}
+			return text
+		}
 		// searched is true when this turn called search_music: its result is
 		// what the model is waiting for, so the next round is owed whether or
 		// not words came with it.
@@ -1313,13 +1376,13 @@ rounds:
 			}
 			if tunes != nil && b.Name == chesterSearchMusicTool {
 				text, isErr := tunes.search(ctx, string(b.Input))
-				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, text, isErr))
+				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, said(text), isErr))
 				searched = true
 			} else if tunes != nil && b.Name == chesterShowMusicTool {
 				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, tunes.show(string(b.Input)), false))
 			} else if casts != nil && b.Name == chesterSearchPodcastsTool {
 				text, isErr := casts.search(ctx, string(b.Input))
-				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, text, isErr))
+				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, said(text), isErr))
 				searched = true
 			} else if casts != nil && b.Name == chesterShowPodcastTool {
 				results = append(results, anthropic.NewBetaToolResultBlock(b.ID, casts.show(string(b.Input)), false))
@@ -1360,6 +1423,9 @@ rounds:
 			// request is not spent.
 			if (!wrote() || searched) && len(results) > 0 && round < chesterRounds-1 {
 				params.Messages = append(params.Messages, msg.ToParam(), anthropic.NewBetaUserMessage(results...))
+				if lastNext {
+					chesterWithdrawSearches(&params, tunes != nil, casts != nil)
+				}
 				continue
 			}
 		}
@@ -1411,6 +1477,16 @@ rounds:
 	}
 	switch {
 	case wrote():
+	case len(res.Places) == 0 && len(res.Music) == 0 && len(res.Podcasts) == 0 && tunes != nil && tunes.searches > 0 && !tunes.down:
+		// The model searched the library and picked nothing. That is said
+		// truthfully, as the site's own sentence, never as an error.
+		res.Synth = true
+		res.Notes = append(res.Notes, "the model searched the music library "+strconv.Itoa(tunes.searches)+
+			" time(s) and picked no album; the answer shown was built by the site")
+		said := chesterMusicNone(tunes.searches, len(tunes.refs))
+		answer.Reset()
+		answer.WriteString(said)
+		emit(chesterEvent{T: "text", D: said})
 	case len(res.Places) == 0 && len(res.Music) == 0 && len(res.Podcasts) == 0:
 		res.Err, res.ErrKind = chesterSaidUnfinishd, "empty"
 	case len(res.Places) == 0 && len(res.Music) == 0:
@@ -1440,6 +1516,28 @@ rounds:
 		emit(chesterEvent{T: "text", D: said})
 	}
 	return finish()
+}
+
+// chesterWithdrawSearches takes the search tools away from the last round. The
+// tools list is never edited (that would break the cache and the thinking sent
+// back): a system message at the end of the conversation withdraws them, on a
+// model that takes one, and says why in words either way.
+func chesterWithdrawSearches(params *anthropic.BetaMessageNewParams, music, pods bool) {
+	if !music && !pods || !chesterToolChangeModels[string(params.Model)] {
+		return
+	}
+	blocks := []anthropic.BetaSystemMessageParamContentUnion{{OfText: &anthropic.BetaTextBlockParam{Text: chesterNoMoreSearches}}}
+	for _, t := range []struct {
+		on   bool
+		name string
+	}{{music, chesterSearchMusicTool}, {pods, chesterSearchPodcastsTool}} {
+		if t.on {
+			blocks = append(blocks, anthropic.BetaSystemMessageParamContentUnion{OfToolRemoval: &anthropic.BetaRequestToolRemovalBlockParam{
+				Tool: anthropic.BetaRequestToolRemovalBlockToolUnionParam{OfToolReference: &anthropic.BetaToolChangeToolReferenceParam{Name: t.name}}}})
+		}
+	}
+	params.Messages = append(params.Messages, anthropic.NewBetaSystemMessage(anthropic.BetaSystemMessageOutputConfigParam{}, blocks...))
+	params.Betas = append(params.Betas, anthropic.AnthropicBetaMidConversationToolChanges2026_07_01)
 }
 
 // chesterNeverSent reports whether a request failed before it left: the

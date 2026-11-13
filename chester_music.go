@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -74,6 +75,9 @@ type chesterMusicRun struct {
 	cards []chesterMusicCard
 	shown map[string]bool
 	drops int
+	// searches is how many searches this question ran, for the plain sentence
+	// when the model searched and picked nothing.
+	searches int
 	// down is set when a search could not reach the library.
 	down bool
 }
@@ -93,7 +97,8 @@ func (m *chesterMusicRun) limit() int {
 func chesterMusicTools() []anthropic.BetaToolUnionParam {
 	return []anthropic.BetaToolUnionParam{
 		clientTool(chesterSearchMusicTool,
-			"Search the music library for albums by artist or album title. It matches names only, so a mood or genre finds nothing. "+
+			"Search the music library for albums by artist or album title. It matches names only, so a mood or genre finds nothing, "+
+				"and one search is one name: an artist or an album title, never both together. "+
 				"Several searches may go in one turn. "+
 				"It returns up to "+strconv.Itoa(chesterMusicResults)+" albums, each with a reference such as m1. "+
 				"Recommend only albums it returns.",
@@ -133,12 +138,14 @@ func (m *chesterMusicRun) search(ctx context.Context, raw string) (string, bool)
 		return "Give a short search, such as an artist or an album.", true
 	}
 	q := cleanLine(in.Query, 80)
-	albums, err := m.lib.svc.search(ctx, q)
+	m.searches++
+	albums, err := m.searchLib(ctx, q)
 	if err != nil {
 		m.lib.melt.Event("chester_music_search", map[string]any{"qlen": len(q), "count": 0, "status": 502})
 		m.down = true
 		return chesterMusicDown, true
 	}
+	matched := len(albums)
 	// An album the library says it cannot play is never offered: it is dropped
 	// before any reference is numbered, so the model cannot pick it.
 	// So is an album already played on this trip and any album by an artist
@@ -159,15 +166,22 @@ func (m *chesterMusicRun) search(ctx context.Context, raw string) (string, bool)
 	if len(albums) > chesterMusicResults {
 		albums = albums[:chesterMusicResults]
 	}
-	m.lib.melt.Event("chester_music_search", map[string]any{"qlen": len(q), "count": len(albums), "status": 200})
+	// What became of the matches is counted, never named: a search that
+	// matched albums the library cannot play reads differently from one that
+	// matched nothing at all.
+	m.lib.melt.Event("chester_music_search", map[string]any{"qlen": len(q), "count": len(albums), "status": 200,
+		"matched": matched, "unplayable": matched - avoided - steered - len(playable), "avoided": avoided, "steered": steered})
 	if len(albums) == 0 && avoided > 0 {
 		return driveTracksAllPlayed, false
 	}
 	if len(albums) == 0 && steered > 0 {
 		return driveTracksAllSteered, false
 	}
+	if len(albums) == 0 && matched > 0 {
+		return "The library has albums that match, but none of them can be played right now. Search a different artist.", false
+	}
 	if len(albums) == 0 {
-		return "No playable album in the library matched. Say so, or try one different search.", false
+		return "No album in the library matched that name. The library matches an artist or an album title, one at a time, not both together. Search a different artist.", false
 	}
 	var b strings.Builder
 	for _, a := range albums {
@@ -184,6 +198,62 @@ func (m *chesterMusicRun) search(ctx context.Context, raw string) (string, bool)
 		b.WriteString("\n")
 	}
 	return b.String(), false
+}
+
+// searchLib asks the library for as many albums as it will give, since the
+// albums it cannot play and the ones to avoid are dropped after its own cut.
+// A search that matched nothing is tried once more in another spelling of the
+// same name: "&" for "and" or the other way, and the artist alone when the
+// model put an artist and an album title in one search (the library matches
+// the whole search inside one name, so "Lucinda Williams - Car Wheels" or
+// "Robert Plant and Alison Krauss" find nothing as typed).
+func (m *chesterMusicRun) searchLib(ctx context.Context, q string) ([]trackAlbum, error) {
+	albums, err := m.lib.svc.search(ctx, q, roadtracksMaxLimit)
+	if err != nil || len(albums) > 0 {
+		return albums, err
+	}
+	for _, alt := range musicSpellings(q) {
+		if albums, err = m.lib.svc.search(ctx, alt, roadtracksMaxLimit); err != nil || len(albums) > 0 {
+			return albums, err
+		}
+	}
+	return albums, nil
+}
+
+var musicAnd = regexp.MustCompile(`(?i)\s+and\s+`)
+
+// musicSpellings are the other spellings of a search that found nothing, at
+// most two, each different from the search and from each other.
+func musicSpellings(q string) []string {
+	var out []string
+	add := func(s string) {
+		s = strings.Join(strings.Fields(s), " ")
+		if s == "" || strings.EqualFold(s, q) || len(out) >= 2 {
+			return
+		}
+		for _, o := range out {
+			if strings.EqualFold(o, s) {
+				return
+			}
+		}
+		out = append(out, s)
+	}
+	switch {
+	case strings.Contains(q, "&"):
+		add(strings.ReplaceAll(q, "&", " and "))
+	case musicAnd.MatchString(q):
+		add(musicAnd.ReplaceAllString(q, " & "))
+	}
+	// "Artist - Album", "Album by Artist", "Artist: Album".
+	for _, sep := range []string{" - ", " – ", ": "} {
+		if i := strings.Index(q, sep); i > 0 {
+			add(q[:i])
+		}
+	}
+	if i := strings.Index(strings.ToLower(q), " by "); i > 0 {
+		add(q[i+4:])
+	}
+	return out
 }
 
 // show runs show_music: each reference becomes a card if, and only if, this
@@ -230,4 +300,22 @@ func chesterMusicSynth(cs []chesterMusicCard) string {
 	}
 	return "Chester picked " + strconv.Itoa(len(names)) + " albums and wrote nothing about them: " +
 		strings.Join(names, "; ") + ". The cards below say why."
+}
+
+// chesterMusicNone is the sentence the page shows when the model searched the
+// library and picked no album: how many searches ran and how many albums they
+// offered, never an album the model did not pick.
+func chesterMusicNone(searches, found int) string {
+	tries := strconv.Itoa(searches) + " searches"
+	if searches == 1 {
+		tries = "one search"
+	}
+	switch found {
+	case 0:
+		return "Chester searched the music library (" + tries + ") and found no album it could play that has not been played lately. Ask again, or name an artist."
+	case 1:
+		return "Chester searched the music library (" + tries + ") and found one album, but did not pick it for this stretch. Ask again, or name an artist."
+	}
+	return "Chester searched the music library (" + tries + ") and found " + strconv.Itoa(found) +
+		" albums, but picked none of them for this stretch. Ask again, or name an artist."
 }
