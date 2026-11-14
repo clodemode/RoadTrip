@@ -28,6 +28,7 @@ type ttStub struct {
 	alongBody            map[string]string // by query word; "500" is a failure
 	mu                   sync.Mutex
 	alongReq             []string
+	alongHours           []string               // the openingHours param of each along-route call
 	alongPts             [][]map[string]float64 // route points each along-route call carried
 	sawKey               atomic.Bool
 }
@@ -60,6 +61,7 @@ func newTT(t *testing.T) *ttStub {
 			s.mu.Lock()
 			s.alongReq = append(s.alongReq, q+"|"+r.URL.Query().Get("maxDetourTime"))
 			s.alongPts = append(s.alongPts, b.Route.Points)
+			s.alongHours = append(s.alongHours, r.URL.Query().Get("openingHours"))
 			s.mu.Unlock()
 			body, known := s.alongBody[q]
 			if !known {
@@ -364,7 +366,7 @@ func TestFreePicksSpanTheCategoriesHonestStatesAndCost(t *testing.T) {
 		t.Fatal("TomTom was never sent the key")
 	}
 	for _, q := range tt.alongReq {
-		if !strings.HasSuffix(q, "|900") {
+		if !strings.HasSuffix(q, "|600") {
 			t.Errorf("detour cap not sent: %s", q)
 		}
 	}
@@ -931,8 +933,8 @@ func TestAimlessPicksAreLoggedAsNearbyPicksUnderTheNewPromptVersion(t *testing.T
 		t.Fatalf("picks: %+v", o)
 	}
 	rows := chesterRows(t, app)
-	if len(rows) != 1 || !strings.HasPrefix(rows[0].Question, "nearby picks: ") || rows[0].PromptVersion != "freelance-picks-4" {
-		t.Fatalf("an Aimless picks call is logged as nearby picks under freelance-picks-4: %+v", rows)
+	if len(rows) != 1 || !strings.HasPrefix(rows[0].Question, "nearby picks: ") || rows[0].PromptVersion != "freelance-picks-5" {
+		t.Fatalf("an Aimless picks call is logged as nearby picks under freelance-picks-5: %+v", rows)
 	}
 	if raw := string(stub.requests()[0].Body); !strings.Contains(raw, "near the car when there is no route") {
 		t.Fatal("the picks prompt must say it also serves a drive with no route")

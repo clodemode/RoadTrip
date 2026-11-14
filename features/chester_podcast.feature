@@ -1,22 +1,37 @@
 Feature: Chester finds a podcast episode that fits the place and shows it as a card
   Kris, 2026-11-12: Chester can search Apple's free podcast search (no key) and
   recommend one episode as a card whose button opens it in Apple Podcasts. The
-  server drops clips and marathons (under 15 minutes or over 2 hours) and any
+  server drops clips and marathons (under 5 minutes or over 30 minutes) and any
   episode whose link is not on apple.com, so the model chooses only from
   episodes worth a drive. The model never sees an address: it names an episode
   by a short reference from this question's own search and the server builds
   the card. The search is told words only, never a coordinate.
 
   Background:
-    Given the podcast search holds the episode "Valley Voices" "How the TVA changed the river" of 40 minutes at "https://podcasts.apple.com/us/podcast/tva/id1?i=100"
+    Given the podcast search holds the episode "Valley Voices" "How the TVA changed the river" of 20 minutes at "https://podcasts.apple.com/us/podcast/tva/id1?i=100"
 
-  Scenario: A 5 minute episode is dropped
-    Given the podcast search also holds the episode "Quick Facts" "TVA in a flash" of 5 minutes at "https://podcasts.apple.com/us/podcast/flash/id2?i=101"
+  Scenario: A 3 minute episode is dropped
+    Given the podcast search also holds the episode "Quick Facts" "TVA in a flash" of 3 minutes at "https://podcasts.apple.com/us/podcast/flash/id2?i=101"
     And Chester will search podcasts for "Tennessee Valley Authority history"
     And Chester will then answer "Here is one."
     When the traveller asks Chester for "a podcast about the TVA"
     Then Chester was told about "How the TVA changed the river"
     And Chester was not told about "TVA in a flash"
+
+  Scenario: A 12 minute episode is kept
+    Given the podcast search also holds the episode "Short Reads" "TVA in twelve minutes" of 12 minutes at "https://podcasts.apple.com/us/podcast/twelve/id4?i=103"
+    And Chester will search podcasts for "Tennessee Valley Authority history"
+    And Chester will then answer "Here is one."
+    When the traveller asks Chester for "a podcast about the TVA"
+    Then Chester was told about "TVA in twelve minutes"
+
+  Scenario: A 45 minute episode is dropped
+    Given the podcast search also holds the episode "Long Reads" "TVA the long way" of 45 minutes at "https://podcasts.apple.com/us/podcast/long/id5?i=104"
+    And Chester will search podcasts for "Tennessee Valley Authority history"
+    And Chester will then answer "Here is one."
+    When the traveller asks Chester for "a podcast about the TVA"
+    Then Chester was told about "How the TVA changed the river"
+    And Chester was not told about "TVA the long way"
 
   Scenario: A 250 minute episode is dropped
     Given the podcast search also holds the episode "Sleep Tracks" "TVA all night" of 250 minutes at "https://podcasts.apple.com/us/podcast/night/id3?i=102"
@@ -33,14 +48,14 @@ Feature: Chester finds a podcast episode that fits the place and shows it as a c
     When the traveller asks Chester for "a podcast about the TVA"
     Then the answer carries one podcast card
     And the card names the show "Valley Voices" and the episode "How the TVA changed the river"
-    And the card says 40 minutes and "It is about the river this road follows."
+    And the card says 20 minutes and "It is about the river this road follows."
     And the card's button is "Open in Apple Podcasts" and opens "https://podcasts.apple.com/us/podcast/tva/id1?i=100"
     And the podcast answer was written after the last tool call
     And the page builds the button as a new-tab link
 
   Scenario: A result whose link is not on apple.com is dropped
-    Given the podcast search also holds the episode "Elsewhere" "A lookalike link" of 45 minutes at "https://podcasts.apple.com.evil.example/x"
-    And the podcast search also holds the episode "Elsewhere" "A plain http link" of 45 minutes at "http://podcasts.apple.com/x"
+    Given the podcast search also holds the episode "Elsewhere" "A lookalike link" of 20 minutes at "https://podcasts.apple.com.evil.example/x"
+    And the podcast search also holds the episode "Elsewhere" "A plain http link" of 20 minutes at "http://podcasts.apple.com/x"
     And Chester will search podcasts for "Tennessee Valley Authority history"
     And Chester will then answer "Here is one."
     When the traveller asks Chester for "a podcast about the TVA"
