@@ -42,5 +42,9 @@ func (a *App) navAddresses(r *http.Request) map[int]string {
 	if err != nil {
 		return nil
 	}
-	return pd.forRide(a.activeSlug(), a.rideSlug).addressByOrd()
+	rv, err := a.loadRide()
+	if err != nil {
+		return nil
+	}
+	return pd.forRide(a.activeSlug(), a.rideSlug).onPlan(rv.Legs).addressByOrd()
 }
