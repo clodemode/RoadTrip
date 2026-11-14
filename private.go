@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // Private overlay — the EagleLakeRocks dedications pattern.
@@ -32,6 +33,11 @@ const privateFile = "private.json"
 type privateCheckpoint struct {
 	Address string `json:"address"`
 	Notes   string `json:"notes"`
+	// For is the name of the stop the entry was filed for. A route choice can
+	// put another stop under the same number, so an entry that names its stop
+	// is shown only against a stop of that name (onPlan). Empty means the
+	// number alone decides, as it always did.
+	For string `json:"for,omitempty"`
 }
 
 // privateRide is one ride's entries, keyed by checkpoint ord.
@@ -169,4 +175,25 @@ func savePrivate(dataDir string, pd privateData) error {
 		return err
 	}
 	return os.Rename(name, filepath.Join(dataDir, privateFile))
+}
+
+// onPlan is the entries that belong to THIS plan's stops. An entry with no
+// For belongs to whatever stop holds its number; an entry with a For belongs
+// only to a stop of that name (case aside), and is out of sight, though not
+// out of the file, while another stop holds its number. A route choice can do
+// that: a visit on the way takes number 7 and the finish becomes 8.
+func (pr privateRide) onPlan(legs []Leg) privateRide {
+	names := map[string]string{}
+	for _, l := range legs {
+		for _, c := range l.Checkpoints {
+			names[strconv.Itoa(c.Ord)] = c.Name
+		}
+	}
+	out := privateRide{Checkpoints: map[string]privateCheckpoint{}}
+	for k, v := range pr.Checkpoints {
+		if v.For == "" || strings.EqualFold(strings.TrimSpace(v.For), names[k]) {
+			out.Checkpoints[k] = v
+		}
+	}
+	return out
 }

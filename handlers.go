@@ -1781,7 +1781,7 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 		"CheckinCP": checkinCP, "CheckinID": checkinID,
 		"Title": "Post", "Ride": rv.Ride, "Legs": rv.Legs, "Kinds": postKinds,
 		// This ride's addresses and no other's: an ord means nothing without its ride.
-		"Private":      pd.forRide(rv.Ride.Slug, a.rideSlug).addressByOrd(),
+		"Private":      pd.forRide(rv.Ride.Slug, a.rideSlug).onPlan(rv.Legs).addressByOrd(),
 		"DefaultLegID": dlID, "DefaultLeg": dl, "DefaultTZ": tz, "Zones": zones(rv.Legs, tz),
 		"Day": di, "Error": errMsg, "Notice": r.URL.Query().Get("notice"),
 		"NoticePost": a.noticePost(r, rv.Ride.Slug),
@@ -2857,7 +2857,7 @@ func (a *App) lodgingForm(w http.ResponseWriter, r *http.Request) {
 	}
 	a.render(w, r, "lodging.html", map[string]any{
 		"Title": "Lodging", "Ride": rv.Ride, "Legs": rv.Legs,
-		"Private": pd.forRide(rv.Ride.Slug, a.rideSlug).byOrd(),
+		"Private": pd.forRide(rv.Ride.Slug, a.rideSlug).onPlan(rv.Legs).byOrd(),
 		"Error":   r.URL.Query().Get("error"),
 		"Saved":   r.URL.Query().Get("saved") != "",
 	})
@@ -2890,17 +2890,30 @@ func (a *App) lodgingSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	block := map[string]privateCheckpoint{}
+	own := pd.forRide(rv.Ride.Slug, a.rideSlug)
+	shown := own.onPlan(rv.Legs).Checkpoints
 	for _, l := range rv.Legs {
 		for _, c := range l.Checkpoints {
 			key := strconv.Itoa(c.Ord)
 			e := privateCheckpoint{
 				Address: strings.TrimSpace(r.PostFormValue("address-" + key)),
 				Notes:   strings.TrimSpace(r.PostFormValue("notes-" + key)),
+				For:     shown[key].For,
 			}
 			if e.Address == "" && e.Notes == "" {
 				continue // an empty entry is an absent entry
 			}
 			block[key] = e
+		}
+	}
+	// An entry filed for a stop this plan does not have at that number is not on
+	// the form, so it is not in the post: it is kept, unless the form filed
+	// something of its own under that number.
+	for k, e := range own.Checkpoints {
+		if _, onForm := shown[k]; !onForm {
+			if _, taken := block[k]; !taken {
+				block[k] = e
+			}
 		}
 	}
 	pd.setRide(rv.Ride.Slug, a.rideSlug, block)
@@ -3081,7 +3094,7 @@ func (a *App) postEditForm(w http.ResponseWriter, r *http.Request) {
 	}
 	data := map[string]any{
 		"Title": "Edit post", "Ride": rv.Ride, "Legs": rv.Legs, "Kinds": postKinds,
-		"Private": pd.forRide(rv.Ride.Slug, a.rideSlug).addressByOrd(), "Post": post,
+		"Private": pd.forRide(rv.Ride.Slug, a.rideSlug).onPlan(rv.Legs).addressByOrd(), "Post": post,
 		// The picker shows the stored instant read back in the post's OWN
 		// zone, which is the wall clock the driver saw when they posted.
 		"When": localFmt(post.OccurredAt, post.TZ, fmtInput),

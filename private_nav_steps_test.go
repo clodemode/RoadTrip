@@ -22,6 +22,7 @@ type privNavWorld struct {
 	// visitor holds every body a visitor read.
 	visitor map[string]string
 	addr    string
+	admin   map[string]string
 }
 
 func initPrivateNavScenarios(sc *godog.ScenarioContext, p *postWorld) {
@@ -31,6 +32,21 @@ func initPrivateNavScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		return ctx, nil
 	})
 	sc.Step(`^([ABCD]) has the private address "([^"]*)"$`, w.setAddress)
+	sc.Step(`^([ABCD]) has the private address "([^"]*)" filed for its own name$`, func(s, addr string) error {
+		return w.setAddressFor(s, addr, w.name(s))
+	})
+	sc.Step(`^([ABCD]) has the private address "([^"]*)" filed for the stop "([^"]*)"$`, w.setAddressFor)
+	sc.Step(`^kris opens the post form and the Lodging screen$`, w.openAdmin)
+	sc.Step(`^neither shows the address$`, func() error {
+		for path, body := range w.admin {
+			if carries(body, w.addr) {
+				return fmt.Errorf("%s shows the address", path)
+			}
+		}
+		return nil
+	})
+	sc.Step(`^kris saves the Lodging screen as it stands$`, w.saveLodging)
+	sc.Step(`^the overlay still holds the address filed for "([^"]*)"$`, w.overlayHolds)
 	sc.Step(`^kris reads the driver screen's navigation$`, w.readHUD)
 	sc.Step(`^the driver links for Waze, Google Maps and Apple Maps carry the address of ([ABCD])$`, func(s string) error {
 		return w.hudLinksCarry(true, "")
@@ -81,7 +97,9 @@ func initPrivateNavScenarios(sc *godog.ScenarioContext, p *postWorld) {
 
 func (w *privNavWorld) name(s string) string { return w.n.p.cps[strings.Index("ABCD", s)].Name }
 
-func (w *privNavWorld) setAddress(s, addr string) error {
+func (w *privNavWorld) setAddress(s, addr string) error { return w.setAddressFor(s, addr, "") }
+
+func (w *privNavWorld) setAddressFor(s, addr, forName string) error {
 	app := w.n.p.sim.app
 	rv, err := app.loadRide()
 	if err != nil {
@@ -96,7 +114,7 @@ func (w *privNavWorld) setAddress(s, addr string) error {
 	for k, v := range pd.forRide(rv.Ride.Slug, app.rideSlug).Checkpoints {
 		cps[k] = v
 	}
-	cps[strconv.Itoa(cp.Ord)] = privateCheckpoint{Address: addr}
+	cps[strconv.Itoa(cp.Ord)] = privateCheckpoint{Address: addr, For: forName}
 	pd.setRide(rv.Ride.Slug, app.rideSlug, cps)
 	w.addr = addr
 	return savePrivate(app.dataDir, pd)
@@ -179,4 +197,61 @@ func (w *privNavWorld) visitorReads() error {
 		w.visitor[p] = rec.Body.String()
 	}
 	return nil
+}
+
+func (w *privNavWorld) openAdmin() error {
+	w.admin = map[string]string{}
+	for _, p := range []string{"/driver/post", "/driver/lodging"} {
+		rec := doAs(w.n.p.t, w.n.p.sim.app, w.n.p.sim.cookies["kris"], "GET", p, nil)
+		if rec.Code != 200 {
+			return fmt.Errorf("%s answered %d", p, rec.Code)
+		}
+		w.admin[p] = rec.Body.String()
+	}
+	return nil
+}
+
+// saveLodging posts the Lodging form the way the page would: every stop's
+// address and notes as the screen shows them.
+func (w *privNavWorld) saveLodging() error {
+	app := w.n.p.sim.app
+	rv, err := app.loadRide()
+	if err != nil {
+		return err
+	}
+	pd, err := loadPrivate(app.dataDir)
+	if err != nil {
+		return err
+	}
+	shown := pd.forRide(rv.Ride.Slug, app.rideSlug).onPlan(rv.Legs).byOrd()
+	form := url.Values{}
+	for _, l := range rv.Legs {
+		for _, c := range l.Checkpoints {
+			form.Set("address-"+strconv.Itoa(c.Ord), shown[c.Ord].Address)
+			form.Set("notes-"+strconv.Itoa(c.Ord), shown[c.Ord].Notes)
+		}
+	}
+	rec := doAs(w.n.p.t, app, w.n.p.sim.cookies["kris"], "POST", "/driver/lodging", form)
+	if rec.Code != 303 {
+		return fmt.Errorf("the Lodging save answered %d", rec.Code)
+	}
+	return nil
+}
+
+func (w *privNavWorld) overlayHolds(forName string) error {
+	app := w.n.p.sim.app
+	rv, err := app.loadRide()
+	if err != nil {
+		return err
+	}
+	pd, err := loadPrivate(app.dataDir)
+	if err != nil {
+		return err
+	}
+	for _, e := range pd.forRide(rv.Ride.Slug, app.rideSlug).Checkpoints {
+		if e.For == forName && e.Address == w.addr {
+			return nil
+		}
+	}
+	return fmt.Errorf("the overlay no longer holds the address filed for %q", forName)
 }

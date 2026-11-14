@@ -47,3 +47,28 @@ Feature: The signed-in trip-keeper navigates to a private stop's own address
     Given B has the private address "7 Quill Hollow Lane, Pemberwick"
     When kris reads the driver screen's navigation
     Then the driver links go to B by its coordinates
+
+  # Kris, 2026-11-13. A route choice can put a different stop under the same
+  # number (a visit on the way pushes the finish from stop 7 to stop 8 and takes
+  # number 7 itself). An address may therefore say which stop it was filed for;
+  # it is shown only against a stop of that name. An entry with no name behaves as
+  # before, by its number alone.
+  Scenario: An address filed for a named stop shows against that stop
+    Given B is a private place
+    And B has the private address "7 Quill Hollow Lane, Pemberwick" filed for its own name
+    When kris reads the driver screen's navigation
+    Then the driver links for Waze, Google Maps and Apple Maps carry the address of B
+
+  Scenario: An address filed for another stop does not show against the stop that took its number
+    Given B is a private place
+    And B has the private address "7 Quill Hollow Lane, Pemberwick" filed for the stop "Elsewhere Corners"
+    When kris reads the driver screen's navigation
+    Then the driver links go to B by its name and carry no coordinates
+
+  Scenario: An address filed for another stop is not on the post form or the Lodging screen, and a Lodging save keeps it
+    Given B is a private place
+    And B has the private address "7 Quill Hollow Lane, Pemberwick" filed for the stop "Elsewhere Corners"
+    When kris opens the post form and the Lodging screen
+    Then neither shows the address
+    When kris saves the Lodging screen as it stands
+    Then the overlay still holds the address filed for "Elsewhere Corners"
