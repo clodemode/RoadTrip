@@ -46,6 +46,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 | `main.go`, `store.go`, `handlers.go`, `auth.go`, `photo.go`, `private.go` | the whole app — Go sources at the repo root, no code subdirectory |
 | `trip.go`, `plan_handlers.go`, `convert.go` | trips on the volume and the planner: the trip file and its options, `/plan`, `/driver/trip`, `/driver/plan`, `/driver/ride/active`, and the `-convert` flag |
 | `chester.go`, `chester_handlers.go` | Chester, the en-route helper: settings, the price table, what the API is told, the place cards, the one request, the log and its summary; `/chester`, `/chester/ask`, `/driver/chester/log`, `/driver/chester/log.json`, `/driver/chester/log/{id}` |
+| `trail_points.go` | Trail points: a Chester ask and a track play, when the phone sent a position, each store one published point (through `publishPosition`, never raw) on the ride; `driven()` reads them beside the posts for the been-here line, `trailNear` for an old photo. Not a post |
 | `freelance.go` | FreeLance: Destined on `/driver`: per-user mode and destination in memory (never the plan), TomTom search/route/along-route, the HUD view and "Find picks" with one Chester call logged as mode `picks`; `POST /driver/freelance/{mode,dest,picks}` |
 | `seed/*.geojson` | RWGPS-import shape: one `LineString` per leg; `Point` features `kind=checkpoint` (each with its own `tz`) and `kind=candidate`. The embedded history; nothing is added here |
 | `testdata/` | synthetic fixtures (invented places), each marked `"synthetic": true` |

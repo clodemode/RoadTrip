@@ -403,6 +403,17 @@ CREATE TABLE IF NOT EXISTS plays (
   UNIQUE (user, album_id, track_idx, start_key)
 );
 CREATE INDEX IF NOT EXISTS plays_ride ON plays(ride_slug, started_at);
+CREATE TABLE IF NOT EXISTS trail_points (
+  id         INTEGER PRIMARY KEY,
+  ride_slug  TEXT NOT NULL,
+  leg_id     INTEGER NOT NULL,
+  occurred_at TEXT NOT NULL,
+  tz         TEXT NOT NULL DEFAULT 'UTC',
+  lat        REAL NOT NULL,
+  lng        REAL NOT NULL,
+  source     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS trail_points_ride ON trail_points(ride_slug, occurred_at);
 `
 
 type Store struct{ db *sql.DB }

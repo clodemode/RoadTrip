@@ -970,7 +970,7 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 		"Day": di, "PageLeg": pageLeg, "Multi": len(rv.Legs) > 1,
 		"NextID": nextOpenID(rv.Legs), "DriveStarted": driveStarted(rv.Legs),
 		"NavLegID": navLegID, "NavAddr": a.navAddresses(r),
-		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
+		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, a.withTrail(rv.Ride.Slug, posts)), plannedStarts(rv.Legs, a.withTrail(rv.Ride.Slug, posts))), bars)}
 	// The day's end and Add a stop: the trip-keeper's, and nobody else's. A
 	// visitor's page carries no navigator link and no place search.
 	// A finished ride has no day's end to navigate to: the page is a record.
@@ -1026,7 +1026,7 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 		"NavLegID": navLegID, "NavAddr": a.navAddresses(r), "DriveStarted": driveStarted(rv.Legs),
 		// The tracks are computed over the whole ride so this leg's own track
 		// still begins where the day before it ended.
-		"Map":     withHours(buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars),
+		"Map":     withHours(buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, a.withTrail(rv.Ride.Slug, posts)), plannedStarts(rv.Legs, a.withTrail(rv.Ride.Slug, posts))), bars),
 		"PageLeg": leg.Slug})
 }
 
@@ -1214,7 +1214,7 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 	// The actual track, one LineString per leg that has one. It is a separate
 	// feature rather than a replacement for the planned leg: both are true, and
 	// the difference between them is the interesting part.
-	tracks, planned := driven(rv.Legs, posts)
+	tracks, planned := driven(rv.Legs, a.withTrail(rv.Ride.Slug, posts))
 	for _, l := range rv.Legs {
 		pts, ok := tracks[l.ID]
 		if !ok {
