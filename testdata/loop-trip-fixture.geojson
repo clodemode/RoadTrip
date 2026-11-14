@@ -1,0 +1,106 @@
+{
+ "type": "FeatureCollection",
+ "synthetic": true,
+ "name": "Mill Loop, a fixture trip with invented places that ends where it began",
+ "ride": {
+  "slug": "loop-fixture",
+  "name": "Mill Loop",
+  "start_date": "2030-06-01",
+  "mode": "CAR"
+ },
+ "avg_mph": 60,
+ "long_day_hours": 9.5,
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 1,
+    "day": 1,
+    "slug": "day-1-loop",
+    "name": "Mill Start \u2192 Mill Start",
+    "est_miles": 150
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -100.0,
+      40.0
+     ],
+     [
+      -100.0,
+      40.5
+     ],
+     [
+      -99.5,
+      40.5
+     ],
+     [
+      -99.5,
+      40.0
+     ],
+     [
+      -100.0,
+      40.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 1,
+    "leg": 1,
+    "name": "Mill Start",
+    "label": "Start",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.0,
+     40.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "order": 2,
+    "leg": 1,
+    "name": "Mill Home",
+    "label": "Finish",
+    "tz": "America/Chicago",
+    "precision": "approx",
+    "is_terminal": true
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -100.0,
+     40.0
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "routing",
+    "leg": 1,
+    "after": 1,
+    "name": "Mill Corner"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -99.5,
+     40.5
+    ]
+   }
+  }
+ ]
+}

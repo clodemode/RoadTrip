@@ -975,7 +975,7 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	// visitor's page carries no navigator link and no place search.
 	// A finished ride has no day's end to navigate to: the page is a record.
 	if a.isDriver(r) && !rideFinished(rv.Legs) {
-		if de := dayEnd(rv.Legs, dl, len(rv.Legs) > 1, a.navAddresses(r)); de != nil {
+		if de := dayEnd(rv.Legs, dl, len(rv.Legs) > 1, a.navAddresses(r), a.withTrail(rv.Ride.Slug, posts)); de != nil {
 			de.CanAdd = a.freeSvc().key != ""
 			a.lookupStop(r, de)
 			data["DayEnd"] = de
