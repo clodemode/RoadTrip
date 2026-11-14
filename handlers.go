@@ -1284,7 +1284,7 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 			"start_date": rv.Ride.StartDate, "end_date": rv.Ride.EndDate,
 			"origin": rv.Ride.OriginLabel, "terminus": rv.Ride.TerminusLabel,
 			"note": "Planning-grade coordinates (town centroids, ~1 km). Times are UTC; " +
-				"each checkpoint carries its own IANA tz. Fuzzed points are snapped to a 0.05° grid. " +
+				"each checkpoint carries its own IANA tz. Fuzzed points are snapped to a 0.01° grid. " +
 				"kind=post points are pinned posts; pin_source says whether the point is the photo's " +
 				"EXIF GPS, the phone's browser fix (accuracy_m), or the nearest checkpoint (near). " +
 				"kind=leg is the plan, and its ends follow any checkpoint stamped made_it; kind=track " +
@@ -2007,8 +2007,8 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	}
 
 	// The privacy seam. nearPrivate is the "personal place" test: the point
-	// sits in the same 0.05° cell as a precision=fuzzed checkpoint, or within
-	// 2 km of it. It is the ONLY thing that pre-ticks the toggle.
+	// sits in the same 0.01° cell as a precision=fuzzed checkpoint, or within
+	// 1 km of it. It is the ONLY thing that pre-ticks the toggle.
 	pc := nearPrivate(*res.Lat, *res.Lng, cps)
 	fuzz := pc != nil && precision != pinPrecisionExact
 	if in.FuzzSet {
@@ -2050,14 +2050,14 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	}
 	// Somewhere with no checkpoint of its own — a friend's driveway. Coarsen
 	// the point to the grid and keep the source; there is no name to carry.
-	res.Note += " → fuzzed to the 0.05° grid (no checkpoint)"
+	res.Note += " → fuzzed to the 0.01° grid (no checkpoint)"
 	return res
 }
 
 // fuzzedPoint is the one rule for "fuzz this point", shared by the form's
 // toggle and the Fuzz This button: a point near a private stop goes to that
 // stop's cell (its snapped point, and the post is filed under it); anywhere
-// else it snaps to the 0.05 degree grid and keeps its source. pc is
+// else it snaps to the 0.01 degree grid and keeps its source. pc is
 // nearPrivate's answer for the point.
 func fuzzedPoint(lat, lng float64, source string, pc *Checkpoint) (flat, flng float64, fsource string, checkpointID int64) {
 	if pc != nil {

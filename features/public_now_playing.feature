@@ -34,7 +34,7 @@ Feature: Anyone can see what is playing and what played, without signing in
   Scenario: A play near a private stop publishes the snapped cell and never the exact point
     Given the driver's newest pinned post is at the exact point 44.3217, -106.2789 near a private stop
     When the driver's player reports track "Come Together" of album 42 "Abbey Road" by "The Beatles" started
-    Then the track "Come Together" is published at 44.3, -106.3
+    Then the track "Come Together" is published at 44.32, -106.28
     And nothing a visitor can read holds the exact point 44.3217 or -106.2789
 
   Scenario: A play with no point is listed without a marker

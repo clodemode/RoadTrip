@@ -34,7 +34,7 @@ type postWorld struct {
 }
 
 // rawPrivateLat/Lng is where the trip file puts milestone C. The fuzzed flag
-// makes the store publish only its 0.05 degree cell.
+// makes the store publish only its 0.01 degree cell.
 const (
 	rawPrivateLat = 42.0456
 	rawPrivateLng = -102.0123

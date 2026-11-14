@@ -58,6 +58,7 @@ func TestFeatures(t *testing.T) {
 				initMapPolishScenarios(t, sc)
 				initFinderScenarios(t, sc)
 				initFinishedTripScenarios(t, sc)
+				initFuzzOneKilometreScenarios(sc)
 			}()
 		},
 		Options: &godog.Options{

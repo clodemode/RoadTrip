@@ -28,7 +28,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
    ```
 2. **`app_scope` is `roadtrip`** (ruled 2026-09-08). LORE homes in `roadtrip/LORE/<character>/<slug>.yaml`. Rows still reading `app_scope='bloodride'` are pre-ruling history.
 3. **Nothing private goes in the repo or the seed.** `$DATA_DIR/private.json` on the volume holds addresses and notes, keyed by ride and then by checkpoint ord (the top-level block is the first ride's), rendered only to the signed-in trip-keeper. Read one ride's entries with `privateData.forRide`, never the map directly. `git check-ignore` it before you commit anything near it.
-4. **Never render a coordinate that did not come out of the store.** Fuzzed checkpoints are snapped to 0.05° on the way out; a direct read bypasses the only place that protection exists.
+4. **Never render a coordinate that did not come out of the store.** Fuzzed checkpoints are snapped to 0.01° on the way out; a direct read bypasses the only place that protection exists.
 5. **Timezones are per-event, never per-ride.** Store UTC plus the IANA zone. A ride-wide zone misprints every stamp after the first state line.
 6. **`Deploy` is `workflow_dispatch` only, and `plan` is the default.** Never add a push trigger — the site is live under someone's thumb from a car.
 7. **The repo is PUBLIC** (`clodemode/RoadTrip`, CamelCaps = public under `naming-clodemode-repo-case-signals-visibility`). Do not treat it as publishable without an explicit ruling.

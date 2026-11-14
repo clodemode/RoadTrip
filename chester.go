@@ -1578,9 +1578,10 @@ rounds:
 const chesterShowNow = "No album is on the page yet. Call show_music now with exactly one album from your searches."
 
 // chesterOwesCard is true when a Drive Tracks question has searched the library
-// and has no album card yet, and the library is up: a card is owed.
+// and has no album card yet, and the library is up and a search found an album
+// to show: a card is owed. A search that found nothing owes none.
 func chesterOwesCard(drive bool, tunes *chesterMusicRun) bool {
-	return drive && tunes != nil && tunes.searches > 0 && !tunes.down && len(tunes.cards) == 0
+	return drive && tunes != nil && tunes.searches > 0 && !tunes.down && len(tunes.refs) > 0 && len(tunes.cards) == 0
 }
 
 // chesterForce sets the tool the request to be sent as round must call, and

@@ -10,7 +10,7 @@
  *                 camera capture, so on the road this is usually the winner.
  *   Checkpoint  — whatever is picked in the Checkpoint select.
  *
- * "Fuzz location" publishes a 0.05° cell instead of the point. It ticks itself
+ * "Fuzz location" publishes a 0.01° cell instead of the point. It ticks itself
  * at a private place (window.RT_PRIVATE — the fuzzed checkpoints) and is clear
  * everywhere else, so leaving the form alone protects the home and stays exact
  * on the road. The server decides all of this again for itself; everything
@@ -275,8 +275,8 @@
   if (!rExif || !rBrow || !rCp || !rNone || !fuzz || !fuzzSet || !says) return;
 
   var EXIF_SLICE = 256 * 1024;      // the APP1 segment lives at the head of the file
-  var CELL = 0.05;                  // must match store.go fuzzGrid
-  var NEAR_KM = 2.0;                // must match store.go privateRadiusKm
+  var CELL = 0.01;                  // must match store.go fuzzGrid
+  var NEAR_KM = 1.0;                // must match store.go privateRadiusKm
   var cells = window.RT_PRIVATE || [];
   var precision = window.RT_PIN_PRECISION || 'snap';
   var exif = null, fix = null, touched = false, noExif = false, taken = null;
@@ -395,8 +395,8 @@
     }
     if (fuzz.checked) {
       says.textContent = near
-        ? 'publishes as: near ' + near.name + ' — a 5 km cell, not the point (this is a private place)'
-        : 'publishes as: ' + fmt(snap(p.lat), snap(p.lng)) + ' — a 5 km cell, not the point';
+        ? 'publishes as: near ' + near.name + ' — a 1 km cell, not the point (this is a private place)'
+        : 'publishes as: ' + fmt(snap(p.lat), snap(p.lng)) + ' — a 1 km cell, not the point';
       return;
     }
     says.textContent = near
