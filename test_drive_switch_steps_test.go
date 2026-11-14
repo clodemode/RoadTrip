@@ -95,7 +95,7 @@ func initTestDriveSwitchScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the trip-keeper bookmarks (\d+) seconds into "([^"]*)" twice and favourites it twice$`, func(sec, title string) error {
 		for _, kind := range []string{"bookmark", "bookmark", "favourite", "favourite"} {
 			rw := doAs(t, app, kris, "POST", "/driver/roadtracks/mark", url.Values{"kind": {kind}, "album_id": {"7"}, "album": {"A"}, "artist": {"B"}, "track_idx": {"2"}, "title": {title}, "position_s": {sec}})
-			if rw.Code != http.StatusNoContent {
+			if rw.Code != http.StatusOK {
 				return fmt.Errorf("mark answered %d", rw.Code)
 			}
 		}

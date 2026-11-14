@@ -96,6 +96,13 @@ func buildHUD(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving b
 // buildHUDFor is buildHUD for the signed-in trip-keeper: addr is the private
 // addresses by checkpoint ord (nil for none), which a private next stop's
 // navigator links go to.
+// legSettled is true when the leg's last stop is arrived at or skipped: the
+// day is over and its night stop reached.
+func legSettled(l Leg) bool {
+	n := len(l.Checkpoints)
+	return n > 0 && (l.Checkpoints[n-1].ArrivedAt != "" || l.Checkpoints[n-1].SkippedAt != "")
+}
+
 func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, moving bool, addr map[int]string) hudView {
 	h := hudView{Source: "plan", MilesDone: "—", MilesLeft: "—", ETA: "—", NextMiles: "—"}
 	if len(legs) == 0 {
@@ -117,6 +124,12 @@ func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, movin
 			}
 		}
 		onLine = li >= 0
+		// At a night stop the fix sits on the end of the day just driven, whose
+		// every stop is settled: the day being driven is the next one, measured
+		// from its start. The date alone never decides this.
+		for onLine && li+1 < len(legs) && legSettled(legs[li]) {
+			li, posAlong = li+1, 0
+		}
 		// A fix far from every leg is said to be off the plan, and the plan's
 		// own figures are not drawn from it. The distance is worked out here;
 		// the fix goes nowhere.
