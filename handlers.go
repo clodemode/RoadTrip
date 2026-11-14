@@ -684,6 +684,22 @@ func dayOf(ride *Ride, legs []Leg, now time.Time) dayInfo {
 			return d
 		}
 	}
+	// No leg is dated today in the zone it starts in. Zones do not roll over
+	// together: an hour after Eastern midnight it is still the evening in
+	// Central, and a post taken at the night stop belongs to the day the car
+	// arrived, not to the last leg by default. So judge once more in the zone
+	// the car is in (where the latest arrival was), which is where the
+	// evening is happening.
+	if tz := arrivedZone(legs); tz != "" {
+		carDay := now.In(loadLoc(tz)).Format("2006-01-02")
+		for i := range legs {
+			if legs[i].Date == carDay {
+				d.Today, d.N = &legs[i], i+1
+				d.Badge = "Day " + strconv.Itoa(i+1) + " of " + strconv.Itoa(d.Total)
+				return d
+			}
+		}
+	}
 	originLoc := loadLoc(legs[0].TZ)
 	today := now.In(originLoc)
 	todayStr := today.Format("2006-01-02")
@@ -746,6 +762,20 @@ func defaultLeg(legs []Leg, di dayInfo) *Leg {
 		return &legs[len(legs)-1]
 	}
 	return &legs[0]
+}
+
+// arrivedZone is the zone of the most recently ARRIVED checkpoint, or "" when
+// nothing has been reached yet.
+func arrivedZone(legs []Leg) string {
+	latest, tz := "", ""
+	for _, l := range legs {
+		for _, c := range l.Checkpoints {
+			if c.ArrivedAt != "" && c.ArrivedAt > latest {
+				latest, tz = c.ArrivedAt, c.TZ
+			}
+		}
+	}
+	return tz
 }
 
 // defaultTZ follows the car: the zone of the most recently ARRIVED

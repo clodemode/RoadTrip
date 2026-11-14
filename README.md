@@ -111,7 +111,7 @@ session cookie will never come back.
 | `ANTHROPIC_API_KEY` | the key Chester asks the Claude API with. **A secret: a Fly secret on the live site, the gitignored `.env` for a local run, never a tracked file**; unset ⇒ Chester is off, its page says so and boot logs `chester: disabled`. See "Chester" |
 | `CHESTER_MODEL_QUICK`, `CHESTER_MODEL_PLAN` | the model each mode asks; both default `claude-opus-5-5`. It must be a model the web search tool in use (`web_search_20260209`) is documented for: `claude-opus-5-5`, `claude-opus-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-5-5`, `claude-sonnet-5` or `claude-sonnet-4-6`. Any other leaves Chester off, and boot logs why |
 | `CHESTER_EFFORT_QUICK`, `CHESTER_EFFORT_PLAN` | `low`, `medium`, `high`, `xhigh` or `max`; default `low` for quick and `medium` for plan |
-| `CHESTER_DAILY_USD` | the most Chester may spend in one UTC day, in dollars; default `5`. Above zero and no more than `100`: anything else (a typo such as `1e308` included) leaves Chester off, and boot logs why |
+| `CHESTER_DAILY_USD` | the most Chester may spend in one day, in dollars (the day runs midnight to midnight in the zone the ride is in); default `5`. Above zero and no more than `100`: anything else (a typo such as `1e308` included) leaves Chester off, and boot logs why |
 | `CHESTER_MODEL_BACKUP` | the model a request is asked again on, once, when the API answered the first model with a 5xx or 529 before any of the answer began (nothing was charged for it); default `claude-sonnet-5-5`, `off` turns it off and the old sentence is shown. It is checked like the two above. The row's note says the first model was unavailable and which model answered, its served model is the backup, and its cost is priced at the model that ran |
 | `CHESTER_FALLBACK` | `default` (the default) or `off`; whether a question the API's safety classifiers decline is re-run on the model the API recommends for that case |
 | `ANTHROPIC_BASE_URL` | optional; sends Chester's questions to another address. For a local stub only: the key goes wherever this points |
@@ -368,7 +368,7 @@ to the session or the push token, because every question spends money. One
 question runs at a time, and a second is told that Chester is busy. A question
 that fails leaves one sentence on the page and stays in the box.
 
-**The daily limit.** Before each question the day's spending (UTC) is read
+**The daily limit.** Before each question the day's spending (the driver's day, in the ride's zone) is read
 from the log, and the question is refused when that spending plus the most the
 question could cost is above `CHESTER_DAILY_USD`. Checked only against what is
 already spent, one long question could take the day well past the limit. The
@@ -384,7 +384,9 @@ request is allowed:
 So with the default limit of $5 a plan question is asked until $2.93 is
 spent, and a quick one until $4.46. The refusal says what is left today, what
 the question could cost, and whether a quick one still fits; it lifts at
-midnight UTC. What a question reads is not in the worst case, because nothing
+midnight where the ride is. A question the driver cancels is charged only what
+the API had reported by then, and nothing when it had reported nothing; the
+row's note says so. What a question reads is not in the worst case, because nothing
 bounds it in advance, and a typical question costs a small part of these
 figures. A limit below a mode's worst case refuses every question in that
 mode, and boot logs a warning saying so.

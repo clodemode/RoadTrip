@@ -84,7 +84,7 @@ const (
 func chesterSaidOverLimit(cfg *chesterConfig, mode string, spent float64) string {
 	left := cfg.DailyUSD - spent
 	if left <= 0 {
-		return fmt.Sprintf("Chester has reached today's limit: %s of %s spent. It starts again at midnight UTC.",
+		return fmt.Sprintf("Chester has reached today's limit: %s of %s spent. It starts again at midnight where you are.",
 			usd2(spent), usd2(cfg.DailyUSD))
 	}
 	said := fmt.Sprintf("Chester has %s left of today's limit of %s, and a %s question can cost up to %s, so it was not asked.",
@@ -92,12 +92,19 @@ func chesterSaidOverLimit(cfg *chesterConfig, mode string, spent float64) string
 	if quick := cfg.Quick.worstUSD(); mode == chesterPlan && !chesterOverLimit(spent, quick, cfg.DailyUSD) {
 		said += fmt.Sprintf(" A quick question, at up to %s, still fits.", usd2(quick))
 	}
-	return said + " The limit starts again at midnight UTC."
+	return said + " The limit starts again at midnight where you are."
 }
 
 // chesterOverLimit is the rule: a question is refused when the day's
 // spending plus the most it could cost is above the limit. The hair's width
 // keeps two sums that should be equal from differing in the last bit.
+// chesterDay is the day the daily cap runs on: the driver's own day, in the
+// zone the app already reads "today" in (rideZone), never the UTC day, which
+// ended at 18:00 on a Central afternoon.
+func (a *App) chesterDay(now time.Time) time.Time {
+	return now.In(loadLoc(a.rideZone(a.activeSlug())))
+}
+
 func chesterOverLimit(spent, worst, limit float64) bool {
 	return spent+worst > limit+1e-9
 }
@@ -128,7 +135,7 @@ func (a *App) renderChester(w http.ResponseWriter, r *http.Request, extra map[st
 	}
 	if a.chester != nil {
 		cfg := a.chester.cfg
-		spent, _ := a.store.ChesterSpent(time.Now())
+		spent, _ := a.store.ChesterSpent(a.chesterDay(time.Now()))
 		data["Spent"], data["Cap"] = usd2(spent), usd2(cfg.DailyUSD)
 		data["Quick"], data["Plan"] = cfg.Quick, cfg.Plan
 		data["QuickSecs"], data["PlanSecs"] = int(cfg.Quick.Timeout.Seconds()), int(cfg.Plan.Timeout.Seconds())
@@ -288,7 +295,7 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 
 	cfg := a.chester.cfg
 	now := time.Now()
-	spent, err := a.store.ChesterSpent(now)
+	spent, err := a.store.ChesterSpent(a.chesterDay(now))
 	if err != nil {
 		log.Printf("ERROR chester: reading the day's spend: %v", err)
 		refuse(http.StatusInternalServerError, chesterSaidNoLedger)
@@ -354,6 +361,9 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	usd, estimated := used.cost(), used.CeilingUSD > 0
 	notes := res.Notes
+	if used.Cancelled > 0 {
+		notes = append(notes, "cancelled before the API reported its usage, so a cancelled round was charged only what the API had reported by then, and nothing when it had reported nothing; the question cost "+usd4(usd))
+	}
 	if estimated {
 		notes = append(notes, "the cost is an estimate: a round was cut off before the API said what it used, so "+
 			usd4(used.CeilingUSD)+" was charged for it, the most it could have written")
