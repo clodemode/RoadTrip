@@ -29,10 +29,10 @@ import (
 const (
 	chesterSearchPodcastsTool = "search_podcasts"
 	chesterShowPodcastTool    = "show_podcast"
-	chesterPodcastResults     = 8   // episodes one search hands the model
-	chesterPodcastSearches    = 5   // searches one answer may run
-	chesterPodcastMinMinutes  = 15  // shorter is a clip, not a listen
-	chesterPodcastMaxMinutes  = 120 // longer is a sleep track or a marathon
+	chesterPodcastResults     = 8  // episodes one search hands the model
+	chesterPodcastSearches    = 5  // searches one answer may run
+	chesterPodcastMinMinutes  = 5  // shorter is a clip, not a listen
+	chesterPodcastMaxMinutes  = 30 // longer is more than a stretch of road holds
 	chesterPodcastTimeout     = 6 * time.Second
 	chesterPodcastLabel       = "Open in Apple Podcasts"
 
@@ -160,6 +160,11 @@ type chesterPodcastRun struct {
 	down     bool
 }
 
+// podcastRange is the length window in words, derived from the two limits.
+func podcastRange() string {
+	return strconv.Itoa(chesterPodcastMinMinutes) + " to " + strconv.Itoa(chesterPodcastMaxMinutes) + " minutes"
+}
+
 func newChesterPodcastRun(lib *chesterPodcastLib) *chesterPodcastRun {
 	return &chesterPodcastRun{lib: lib, refs: map[string]podcastEp{}, byURL: map[string]string{}}
 }
@@ -168,8 +173,8 @@ func chesterPodcastTools() []anthropic.BetaToolUnionParam {
 	return []anthropic.BetaToolUnionParam{
 		clientTool(chesterSearchPodcastsTool,
 			"Search podcast episodes by words: a place, its history, its rivers, its people. Search several times with different words. "+
-				"It keeps only episodes of 15 to 120 minutes and returns up to "+strconv.Itoa(chesterPodcastResults)+
-				" with a reference such as p1, the show, the episode, the year and the minutes. Prefer established publishers (public radio, "+
+				"It keeps only episodes of "+podcastRange()+" and returns up to "+strconv.Itoa(chesterPodcastResults)+
+				" with a reference such as p1, the show, the episode, the year and the minutes. Prefer episodes with substance (history, reporting, a real story) over chat, and established publishers (public radio, "+
 				"university, museum, park service, well-known history shows) over thin machine-made shows. Recommend only episodes it returns.",
 			map[string]any{"query": map[string]any{"type": "string", "description": "Words only, under 80 characters. No coordinates."}},
 			[]string{"query"}),
@@ -206,7 +211,7 @@ func (p *chesterPodcastRun) search(ctx context.Context, raw string) (string, boo
 	}
 	p.lib.melt.Event("chester_podcast_search", map[string]any{"count": len(eps), "status": 200})
 	if len(eps) == 0 {
-		return "No episode of 15 to 120 minutes matched. Try different words, or say none fit.", false
+		return "No episode of " + podcastRange() + " matched. Try different words, or say none fit.", false
 	}
 	var b strings.Builder
 	for _, e := range eps {

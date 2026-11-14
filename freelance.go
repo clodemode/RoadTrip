@@ -55,9 +55,9 @@ const (
 	freeMaxDest      = 120
 	freePerCategory  = 5 // candidates asked of TomTom per query
 	freeMaxPoints    = 100
-	freeDetourSecs   = 900 // maxDetourTime for along-route search
+	freeDetourSecs   = 600 // 5 minutes each way: TomTom counts there and back; maxDetourTime for along-route search
 	freePicksMaxUses = 3   // web searches Chester may run for one Find picks
-	freePicksVersion = "freelance-picks-4"
+	freePicksVersion = "freelance-picks-5"
 
 	freeNearRadiusM = 16000     // Aimless: how far around the car TomTom is asked to look (about 10 miles)
 	freeNearTTL     = time.Hour // Aimless: nearby candidates and rankings, keyed by a 0.1 degree cell
@@ -74,16 +74,17 @@ const (
 // only when the stop is near the end of the day's drive and the ETA is evening.
 type freeCat struct {
 	Key, Label, Taste string
+	Hours             bool // drop a place known to be closed when the car gets there
 	Queries           []string
 	Daily, Evening    bool
 }
 
 var freeCats = []freeCat{
-	{Key: "coffee", Label: "Coffee", Queries: []string{"coffee shop"},
-		Taste: "great, authentic local coffee, not chains"},
+	{Key: "coffee", Label: "Coffee", Hours: true, Queries: []string{"coffee shop", "cafe"},
+		Taste: "independent local coffee shops only, never chains"},
 	{Key: "food", Label: "Standout food",
-		Queries: []string{"barbecue", "fried chicken", "indian restaurant", "asian restaurant", "diner"},
-		Taste:   "standout food worth a detour: Asian, Indian, BBQ, fried chicken, local diners; judge for yourself what is amazing and drop the merely ok"},
+		Hours: true, Queries: []string{"barbecue", "fried chicken", "indian restaurant", "asian restaurant", "diner"},
+		Taste: "standout food worth a detour: Asian, Indian, BBQ, fried chicken, local diners; independent places over chains; judge for yourself what is amazing and drop the merely ok"},
 	{Key: "music", Label: "Live music & happy hour", Daily: true, Queries: []string{"live music bar", "pub"},
 		Taste: "low-cost live music, or a good happy hour, at any time of day"},
 	{Key: "evening", Label: "Live music tonight", Daily: true, Evening: true, Queries: []string{"live music venue"},
@@ -626,6 +627,9 @@ type freePick struct {
 	distM  float64 // Aimless: metres from the car, for ordering
 	lat    float64
 	lng    float64
+
+	hours        []hoursRange // TomTom's opening hours, place-local clock; none means unknown
+	hoursUnknown bool         // kept because the hours are unknown, and Chester is told so
 }
 
 type freeCatOut struct {
@@ -669,7 +673,7 @@ func (a *App) freeFuzzed() ([]Checkpoint, error) {
 // alongQuery asks TomTom for one query's places along the route ahead. It
 // sends nothing for fewer than freeMinAlong points, which only a caller that
 // skipped the private-place mask could hand it.
-func (s *freeSvc) alongQuery(ctx context.Context, query string, pts []ll) ([]freePick, error) {
+func (s *freeSvc) alongQuery(ctx context.Context, query string, pts []ll, withHours bool) ([]freePick, error) {
 	if len(pts) < freeMinAlong {
 		return nil, errors.New("no route")
 	}
@@ -685,7 +689,15 @@ func (s *freeSvc) alongQuery(ctx context.Context, query string, pts []ll) ([]fre
 	}
 	var body struct {
 		Results []struct {
-			POI     struct{ Name string } `json:"poi"`
+			POI struct {
+				Name         string `json:"name"`
+				OpeningHours struct {
+					TimeRanges []struct {
+						Start tomtomClock `json:"startTime"`
+						End   tomtomClock `json:"endTime"`
+					} `json:"timeRanges"`
+				} `json:"openingHours"`
+			} `json:"poi"`
 			Address struct {
 				Municipality string `json:"municipality"`
 				Region       string `json:"countrySubdivision"`
@@ -694,8 +706,11 @@ func (s *freeSvc) alongQuery(ctx context.Context, query string, pts []ll) ([]fre
 			DetourTime float64                    `json:"detourTime"`
 		} `json:"results"`
 	}
-	u := s.ttBase + "/search/2/searchAlongRoute/" + url.PathEscape(query) + ".json?" + s.q(url.Values{
-		"maxDetourTime": {strconv.Itoa(freeDetourSecs)}, "limit": {strconv.Itoa(freePerCategory)}})
+	vals := url.Values{"maxDetourTime": {strconv.Itoa(freeDetourSecs)}, "limit": {strconv.Itoa(freePerCategory)}}
+	if withHours {
+		vals.Set("openingHours", "nextSevenDays")
+	}
+	u := s.ttBase + "/search/2/searchAlongRoute/" + url.PathEscape(query) + ".json?" + s.q(vals)
 	if err := s.call(ctx, http.MethodPost, u, map[string]any{"route": route}, &body); err != nil {
 		return nil, err
 	}
@@ -704,12 +719,21 @@ func (s *freeSvc) alongQuery(ctx context.Context, query string, pts []ll) ([]fre
 		if r.POI.Name == "" {
 			continue
 		}
+		// The cap is also kept here: a place over it is dropped even if
+		// TomTom ignored the parameter. A missing time (0) is not over it.
+		if r.DetourTime > freeDetourSecs {
+			continue
+		}
 		town := r.Address.Municipality
 		if town != "" && r.Address.Region != "" {
 			town += ", " + r.Address.Region
 		}
+		var hrs []hoursRange
+		for _, tr := range r.POI.OpeningHours.TimeRanges {
+			hrs = append(hrs, hoursRange{tr.Start.wall(), tr.End.wall()})
+		}
 		out = append(out, freePick{Name: cleanLine(r.POI.Name, 100), Town: cleanLine(town, 80),
-			secs: r.DetourTime, lat: r.Position.Lat, lng: r.Position.Lon})
+			secs: r.DetourTime, lat: r.Position.Lat, lng: r.Position.Lon, hours: hrs})
 	}
 	return out, nil
 }
@@ -718,7 +742,89 @@ func (s *freeSvc) alongQuery(ctx context.Context, query string, pts []ll) ([]fre
 // found twice is kept once, nearest first, at most freeCandCap. It fails only
 // when a query failed and nothing else answered.
 func (s *freeSvc) alongCat(ctx context.Context, c freeCat, pts []ll) ([]freePick, error) {
-	return mergeCat(c, func(q string) ([]freePick, error) { return s.alongQuery(ctx, q, pts) })
+	return mergeCat(c, func(q string) ([]freePick, error) { return s.alongQuery(ctx, q, pts, c.Hours) })
+}
+
+// tomtomClock is a date and time of day as TomTom's opening hours give them,
+// on the clock of the place itself.
+type tomtomClock struct {
+	Date   string `json:"date"`
+	Hour   int    `json:"hour"`
+	Minute int    `json:"minute"`
+}
+
+func (c tomtomClock) wall() time.Time {
+	d, err := time.Parse("2006-01-02", c.Date)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Date(d.Year(), d.Month(), d.Day(), c.Hour, c.Minute, 0, 0, time.UTC)
+}
+
+// hoursRange is one opening interval, both ends read as a wall clock.
+type hoursRange struct{ start, end time.Time }
+
+// wallClock is t's own clock face as a UTC time, so it compares with hours
+// that are given on the place's clock. The route's arrival carries the zone
+// of where it ends, which is the best zone known for places on the way.
+func wallClock(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, t.Hour(), t.Minute(), 0, 0, time.UTC)
+}
+
+// placeETA estimates when the car reaches the place: the share of the route
+// ahead that lies before the place's nearest route point, applied to the
+// time left until the route's arrival. Without a usable arrival it is now.
+func placeETA(ahead []ll, lat, lng float64, now, arrival time.Time) time.Time {
+	if len(ahead) < 2 || !arrival.After(now) {
+		if arrival.After(now) {
+			return arrival
+		}
+		return now
+	}
+	best, bestD := 0, math.Inf(1)
+	for i, p := range ahead {
+		if d := haversineKm(lat, lng, p.Lat, p.Lng); d < bestD {
+			best, bestD = i, d
+		}
+	}
+	var before, total float64
+	for i := 1; i < len(ahead); i++ {
+		seg := haversineKm(ahead[i-1].Lat, ahead[i-1].Lng, ahead[i].Lat, ahead[i].Lng)
+		total += seg
+		if i <= best {
+			before += seg
+		}
+	}
+	if total == 0 {
+		return arrival
+	}
+	return now.Add(time.Duration(float64(arrival.Sub(now)) * before / total)).In(arrival.Location())
+}
+
+// keepOpenAtETA drops a place whose opening hours are known and do not cover
+// the time the car reaches it. A place with no hours is kept and marked, so
+// Chester is told the hours are unknown rather than being left to assume.
+func keepOpenAtETA(picks []freePick, ahead []ll, now, arrival time.Time) []freePick {
+	var out []freePick
+	for _, p := range picks {
+		if len(p.hours) == 0 {
+			p.hoursUnknown = true
+			out = append(out, p)
+			continue
+		}
+		at := wallClock(placeETA(ahead, p.lat, p.lng, now, arrival))
+		open := false
+		for _, h := range p.hours {
+			if !at.Before(h.start) && at.Before(h.end) {
+				open = true
+			}
+		}
+		if open {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // nearQuery asks TomTom for one query's places around a point (Search API,
@@ -889,7 +995,13 @@ func (a *App) buildPicks(r *http.Request) freePicksOut {
 	return a.runPicks(ctx, user, lat, lng, want, force, picksPlan{
 		cats:     activeCats(rt.Arrival, left),
 		corridor: corridorKey(ahead),
-		fetch:    func(ctx context.Context, c freeCat) ([]freePick, error) { return s.alongCat(ctx, c, ahead) },
+		fetch: func(ctx context.Context, c freeCat) ([]freePick, error) {
+			picks, err := s.alongCat(ctx, c, ahead)
+			if err == nil && c.Hours {
+				picks = keepOpenAtETA(picks, ahead, now, rt.Arrival)
+			}
+			return picks, err
+		},
 		// Live music lasts until the end of the day at the place; the rest a day.
 		expiry: func(c freeCat) time.Time {
 			if c.Daily {
@@ -970,7 +1082,7 @@ func (a *App) runPicks(ctx context.Context, user string, lat, lng *float64, want
 			case err != nil:
 				co.State, co.Text = "unavailable", c.Label+" picks unavailable: "+freeWhy(err)+"."
 			case len(picks) == 0:
-				co.State, co.Text = "empty", "TomTom found no "+strings.ToLower(c.Label)+" within a "+strconv.Itoa(freeDetourSecs/60)+" minute detour."
+				co.State, co.Text = "empty", "TomTom found no "+strings.ToLower(c.Label)+" within about "+strconv.Itoa(freeDetourSecs/120)+" minutes of the route."
 			default:
 				co.State, co.Picks = "items", picks
 			}
@@ -1063,6 +1175,9 @@ func (a *App) enrichPicks(ctx context.Context, out *freePicksOut, user string, l
 			}
 			if p.Detour != "" {
 				sb.WriteString(" (" + p.Detour + ")")
+			}
+			if p.hoursUnknown {
+				sb.WriteString(" [hours unknown]")
 			}
 			sb.WriteString("\n")
 		}

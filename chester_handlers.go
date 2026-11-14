@@ -24,9 +24,9 @@ import (
 // can compare them.
 var chesterPresets = []struct{ ID, Label, Question string }{
 	{"fuel", "Fuel", "Where is a good place for fuel soon, on today's route?"},
-	{"food", "Food", "Where is a good place to eat soon, on today's route?"},
+	{"food", "Food", "Where is a good place to eat on the road ahead, no more than about 5 minutes off our route, that will be open when we get there? Independent places over chains."},
 	{"rest", "Rest stop", "Where is the next rest stop, or a good place to stretch, on today's route?"},
-	{"coffee", "Coffee", "Where can we get good coffee soon, on today's route?"},
+	{"coffee", "Coffee", "Where is an independent coffee shop (not a chain) on the road ahead, no more than about 5 minutes off our route, that will be open when we get there?"},
 	{"lodging", "Tonight's lodging", "Where could we stay tonight, at or near tonight's stop? Give real options and what to check before booking."},
 	{"stop", "Worth a stop", "Is there anything worth a short stop ahead on today's route?"},
 	{"weather", "Weather and roads ahead", "What are the weather and the road conditions ahead on today's route? Say what you could confirm and what you could not."},

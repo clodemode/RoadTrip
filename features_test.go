@@ -56,6 +56,7 @@ func TestFeatures(t *testing.T) {
 				initChesterCancelScenarios(t, sc)
 				initCombinationCapScenarios(sc)
 				initMapPolishScenarios(t, sc)
+				initFinderScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{
