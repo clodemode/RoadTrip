@@ -117,7 +117,7 @@ func TestDriverHomeIsTheHUDAndStaysBehindSignIn(t *testing.T) {
 		t.Fatalf("/driver: %d", w.Code)
 	}
 	body := w.Body.String()
-	for _, want := range []string{`class="hud`, `href="/driver/post"`, `href="/checklist"`, `href="/plan"`, "Navigate in Waze", `id="hud-gps"`, `id="hud-net"`, `id="hud-sync"`, "Weather: checking"} {
+	for _, want := range []string{`class="hud`, `href="/driver/post"`, `href="/plan"`, "Navigate in Waze", `id="hud-gps"`, `id="hud-net"`, `id="hud-sync"`, "Weather: checking"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("HUD lacks %q", want)
 		}

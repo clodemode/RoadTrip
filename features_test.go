@@ -57,6 +57,7 @@ func TestFeatures(t *testing.T) {
 				initCombinationCapScenarios(sc)
 				initMapPolishScenarios(t, sc)
 				initFinderScenarios(t, sc)
+				initFinishedTripScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

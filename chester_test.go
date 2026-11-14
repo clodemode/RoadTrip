@@ -364,7 +364,7 @@ func TestChesterRefusesAnonymous(t *testing.T) {
 		t.Fatalf("the token does not open the log: status %d", w.Code)
 	}
 	// No open page or endpoint carries any of the log, signed in or not.
-	for _, p := range []string{"/", "/plan", "/plan.json", "/photos", "/route.geojson", "/checklist", "/healthz", "/robots.txt"} {
+	for _, p := range []string{"/", "/plan", "/plan.json", "/photos", "/route.geojson", "/healthz", "/robots.txt"} {
 		if body := send(t, app, "GET", p, "", "", nil).Body.String(); strings.Contains(body, "LOG-MARKER") {
 			t.Errorf("%s carries the log", p)
 		}
@@ -1072,11 +1072,11 @@ const overlayMark = "OVERLAY-CHESTER"
 
 // The request that leaves the machine carries the plan as the public pages
 // show it and one position that has been through the store's fuzz seam. It
-// carries no private overlay text, no checklist private text, and no raw
+// carries no private overlay text and no raw
 // coordinate of a private place, however the position reached it.
 func TestChesterIsToldNothingPrivate(t *testing.T) {
 	stub := newAPIStub(t, quickScript(), quickScript(), quickScript())
-	app := checklistApp(t)
+	app := activeTripApp(t)
 	app.chester = newChester(chesterEnv(t, stub, nil))
 
 	// The private things, all really present.
@@ -1084,7 +1084,6 @@ func TestChesterIsToldNothingPrivate(t *testing.T) {
 		"notes-1": {overlayMark + " gate code"}}); w.Code != http.StatusSeeOther {
 		t.Fatalf("save the overlay: status %d", w.Code)
 	}
-	markOK(t, app, clStep, "inspect", url.Values{"outcome": {"done"}, "private_note": {privateNoteMark + " kept"}})
 	// A post pinned at the raw finish, as an exact pin with the fuzz off.
 	legs := mustLegs(t, app, fixtureSlug)
 	rawLat, rawLng := 44.3217, -106.2789
@@ -1102,9 +1101,6 @@ func TestChesterIsToldNothingPrivate(t *testing.T) {
 	}
 	if overlay, _ := os.ReadFile(app.dataDir + "/private.json"); !bytes.Contains(overlay, []byte(overlayMark)) {
 		t.Fatal("the overlay on the volume does not hold the marker; this test would pass on nothing")
-	}
-	if cl := js(census(t, app, fixtureSlug)); !strings.Contains(cl, privateMark) || !strings.Contains(cl, privateNoteMark) {
-		t.Fatal("the checklist holds no private text; this test would pass on nothing")
 	}
 	if p, err := app.store.Post(post.ID); err != nil || p.Lat == nil || *p.Lat != rawLat {
 		t.Fatal("the post is not pinned at the raw private point; this test would pass on nothing")
@@ -1145,7 +1141,7 @@ func TestChesterIsToldNothingPrivate(t *testing.T) {
 				t.Errorf("%s: the request carries the raw private number %s", ask.name, raw)
 			}
 		}
-		for _, private := range []string{overlayMark, privateMark, privateNoteMark, "Invented Lane", "gate code", "at the door"} {
+		for _, private := range []string{overlayMark, "Invented Lane", "gate code", "at the door"} {
 			if strings.Contains(body, private) {
 				t.Errorf("%s: the request carries private text %q", ask.name, private)
 			}

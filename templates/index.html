@@ -12,7 +12,6 @@
     <span class="muted figure">{{day .Ride.StartDate}} &ndash; {{day .Ride.EndDate}} &middot; {{.Ride.Mode}}</span>
   </p>
   <p class="cast">Trip-keeper: Kris &middot; Guide: {{.GuideName}} &middot; {{.CreatureName}}</p>
-  {{if .Driver}}{{with .Checklist}}<p class="cl-summary figure"><a href="/checklist">Checklist</a>: {{.Done}} of {{.Total}} done{{if .Questions}} &middot; {{.Answered}} of {{.Questions}} questions answered{{end}}</p>{{end}}{{end}}
   <ol class="leg-strip">
     <li class="leg-guide">
       <img src="/static/img/lance.svg?v={{.V}}" width="40" height="40" alt="{{.GuideName}}">
@@ -37,7 +36,7 @@
      map as a corner control and keeps it fresh. */}}
 {{with .NowPlaying}}
 <aside class="np" id="np" aria-label="Music on this trip">
-  <p class="np-chip" id="np-chip"><span class="np-label" id="np-label">Currently playing</span> <span id="np-line"></span></p>
+  {{if not .Finished}}<p class="np-chip" id="np-chip"><span class="np-label" id="np-label">Currently playing</span> <span id="np-line"></span></p>{{end}}
   {{/* Hearing it (listen.go): one shared audio element, only for a visitor and only with PUBLIC_LISTEN on.
        A signed-in driver's page may carry the Drive Tracks player, so there the control is not drawn at all:
        two players on one page would fight. */}}

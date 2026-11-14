@@ -103,7 +103,6 @@ session cookie will never come back.
 | `MELT_REDIS_ADDR` | optional `host:port` of the fleet Redis (e.g. `redis:6379`); the app then publishes MELT records to `clode:state:melt:roadtrip:{events,errors}` (read them with `melt_tail(source='roadtrip')`). Unset ⇒ the Redis sink is off; Fly has no fleet Redis, so production uses `MELT_FILE` instead. No coordinate, typed destination or private text is ever published |
 | `MELT_FILE` | optional path of a file that keeps every MELT record (both streams, each with a `stream` field) as one JSON line, written in the background and rotated to `<path>.1` past 2 MB. Set to `/data/melt/roadtrip.jsonl` on Fly. Read it signed in at `GET /driver/melt.json?stream=events\|errors\|all&n=200&event=<name>` (newest first, at most 1000); with no file it answers `{"sink":"off","records":[]}`. The same guard as the Redis sink applies. The phone reports player trouble to `POST /driver/roadtracks/event` |
 | `MELT_VENUE` | the `venue` stamped on every MELT record; default `kate`, `fly` in production |
-| `$DATA_DIR/trips/<slug>.checklist.json` | a trip's checklist: pushed with `POST /driver/checklist`, read at boot after the trips; never in the repo. Holds private text. See "A trip's checklist" |
 | `$DATA_DIR/private.json` | private overlay, keyed by ride and then by checkpoint ord: the top-level `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` is the first ride's (`RIDE_SLUG`), every other ride has its own block under `"rides":{"<slug>":{"checkpoints":{…}}}`; rendered on admin pages only, never in the repo or the seed; absent = no private data |
 | `SITE_URL` | the canonical origin, e.g. `https://roadtrip.opeongo.net`; unset (the local default) ⇒ no redirect and no canonical/og tags |
 | `SITE_VISIBILITY` | `public` (default in code) or `private`; **private puts the whole site behind the one admin password** — see below |
@@ -263,49 +262,21 @@ it (a test holds that), though boot does not run it on an embedded seed.
 moves every page, the post form and `/route.geojson` together. The ride that
 stops being shown is not touched: it stays in the database whole.
 
-### A trip's checklist
+### A finished trip is a record
 
-A trip may carry a checklist: staged steps and open questions that the
-trip-keeper checks off as they succeed, each with a time and a public note of
-what actually happened. `GET /checklist` is for signed-in drivers only (a visitor is sent to sign-in; the masthead link and the front-page line show only when signed in) and written for the next
-person who has to do the same thing; the masthead links to it and the front
-page says *n of m done*. `GET /checklist.json` is the same page as data.
+Once a drive has begun and its finish is reached or skipped, the ride reads
+*Finished* (`rideFinished`, the same state the banner shows; nothing extra is
+stored). The site then stays up as a record and spends nothing (Kris,
+2026-11-14): the map, the posts, the photos and the Listen Inn history stay open
+to every visitor, but the live-drive parts are not drawn: no drive HUD strip, no
+"Currently playing" chip, no ETA (the driver screen's gauge is hidden and the
+HUD makes none), and no Waze or Navigate link. **Chester is resting**: a
+question, a Drive Tracks tap or a FreeLance "Find picks" is refused with a fixed
+sentence and makes no API call, and the Chester links leave the menu. A new,
+unfinished ride made active turns all of it back on. `features/finished_trip_is_a_record.feature`
+holds it.
 
-```bash
-# the whole checklist document, for a ride that is already in the database
-curl -s -H "$H" -H 'Content-Type: application/json' --data-binary @trip.checklist.json "$S/driver/checklist?ride=<slug>"
-
-# check a step off now, or after the fact; the public note is "outcome"
-curl -s -H "$H" -X POST $S/driver/checklist/step/<step-id>
-curl -s -H "$H" -X POST -d at=2030-05-01T14:30 --data-urlencode 'outcome=What actually happened.' \
-     --data-urlencode 'private_note=For the trip-keeper only.' $S/driver/checklist/step/<step-id>
-curl -s -H "$H" -X POST -d clear=1 $S/driver/checklist/step/<step-id>        # undo: the time goes, the notes stay
-
-# answer a question the same way
-curl -s -H "$H" -X POST --data-urlencode 'outcome=The answer.' $S/driver/checklist/question/<question-id>
-
-# everything, private text included: signed in or with the token only
-curl -s -H "$H" $S/driver/checklist.json
-```
-
-The document is `title`, `intro`, `disclaimer`, `stages` (each `id`, `title`,
-`tz`, `when`, `steps` of `id`, `title`, `detail`, `private`), `questions`
-(`id`, `group`, `ask`, `why`, `private`) and `sources` (`label`, `url`). It is
-parsed completely before anything is written, an unknown key is refused, and
-it lands at `$DATA_DIR/trips/<slug>.checklist.json`. Without `?ride=` (or a
-`"ride"` in the document) it belongs to the ride the site is showing.
-
-**Public and private.** Titles, details, questions and the outcome notes are
-public. `private`, and the private note taken at check-off, are for the
-signed-in trip-keeper: the public read never loads them (`Store.Checklist`
-with `withPrivate` false does not select those columns), so they are on no
-anonymous page and in no open endpoint. A push is **refused** when a public
-field holds a 17-character token shaped like a vehicle identification number,
-and so is a public note; the refusal names the field and never the value, and
-nothing logs it. That check is a shape, not a promise: a name or a plate in a
-public field is not something it can see.
-
-**A signed-in page is never cached.** `/checklist`, like every page, is one
+**A signed-in page is never cached.** `/plan`, like every page, is one
 address for the visitor and the trip-keeper. Every HTML response to a signed-in
 request (the session cookie or the push token) is sent with
 `Cache-Control: private, no-store` and `Vary: Cookie`, set once where the pages
@@ -432,8 +403,8 @@ leg and how many miles of it are left, the local time in the zone of the
 nearest checkpoint, and one position: the phone's when the trip-keeper taps
 *Send my position*, else the last pinned post. That position goes through the
 store's fuzz seam first, so a point at or near a private place is replaced by
-the same 0.05° cell a post's pin would get. The private overlay, a checklist's
-private text and photos are never sent. The nearest checkpoint's town is
+the same 0.05° cell a post's pin would get. The private overlay
+and photos are never sent. The nearest checkpoint's town is
 said only when that checkpoint's own name is one. The web search tool is given
 the ride-day's time zone and nothing else: never a coordinate, and not the
 town. The tools come first in the prompt, ahead of the plan, so a town or a
@@ -545,9 +516,9 @@ to the same rule.
 **What a page says about a save is a fixed sentence.** After **Save this
 plan** the page comes back to the line under the button: `Saved.`, or
 `Not saved:` and why. The redirect carries a short code (`/plan?ok=saved`,
-`/plan?error=conflict`, `/checklist?error=future`), never words, and each page
+`/plan?error=conflict`), never words, and each page
 maps the codes it knows to its own sentences; a code it does not know prints
-nothing. `/plan` is a public page and `/checklist` a driver page, and free text in a query
+nothing. `/plan` is a public page, and free text in a query
 string would let anyone put a sentence of their choosing on the site with a
 link. curl is unaffected: it gets the status and the full reason as JSON.
 

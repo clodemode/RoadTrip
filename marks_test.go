@@ -70,7 +70,7 @@ func TestSignedInToolsAreSignedInOnly(t *testing.T) {
 	app := chesterApp(t, newAPIStub(t))
 	pat := asUser(t, app, "pat", roleEditor)
 	startTheDrive(t, app) // Chester is in the menu while the ride is Active
-	for _, p := range []string{"/", "/plan", "/checklist", "/photos"} {
+	for _, p := range []string{"/", "/plan", "/photos"} {
 		anon := doAs(t, app, nil, "GET", p, nil).Body.String()
 		for _, bad := range []string{"driver-bar", "waze.com", "/chester?q="} {
 			if strings.Contains(anon, bad) {

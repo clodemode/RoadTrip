@@ -46,6 +46,14 @@ func rideFinished(legs []Leg) bool {
 	return fin.ID != st.ID && (fin.ArrivedAt != "" || fin.SkippedAt != "")
 }
 
+// rideIsFinished is rideFinished for the ride the site shows. It is the one
+// "the trip is over" test: the banner, the record page and Chester's rest all
+// read it, so a new, unfinished ride brought active switches them all back on.
+func (a *App) rideIsFinished() bool {
+	rv, err := a.loadRide()
+	return err == nil && rideFinished(rv.Legs)
+}
+
 // menuFor lists the masthead links in the order of the ride's state. Each link
 // keeps the gate it always had; the state only decides which are worth the room.
 func menuFor(active, started, driver, chesterOn, admin bool, path string) []menuItem {
@@ -111,8 +119,6 @@ func pageHead(name string, data map[string]any, rideName string) (string, []crum
 		return page("Plan")
 	case "photos.html":
 		return page("Photos")
-	case "checklist.html":
-		return page("Checklist")
 	case "lodging.html":
 		return page("Lodging")
 	case "users.html":

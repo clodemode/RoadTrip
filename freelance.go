@@ -29,7 +29,7 @@ import (
 //
 // None of it touches the planned ride: the mode and the destination are held
 // here, in memory, per signed-in user, and a restart forgets them. Nothing is
-// written to the plan, the checklist or the volume.
+// written to the plan or the volume.
 //
 // TomTom products called, all with TOMTOM_API_KEY, all server-side:
 //   Search API, fuzzy search          GET  /search/2/search/{query}.json
@@ -1129,6 +1129,10 @@ func (a *App) enrichPicks(ctx context.Context, out *freePicksOut, user string, l
 	}
 	if a.chester == nil {
 		out.Chester, out.Note = "off", "Chester is off, so these are TomTom's nearest, with no notes and no ranking."
+		return
+	}
+	if a.rideIsFinished() {
+		out.Chester, out.Note = "off", "Chester is resting until the next trip starts, so these are TomTom's nearest, with no notes and no ranking."
 		return
 	}
 	if !a.chesterBusy.TryLock() {

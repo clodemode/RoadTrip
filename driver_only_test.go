@@ -6,39 +6,23 @@ import (
 	"testing"
 )
 
-// The checklist and the GeoJSON are for signed-in drivers only (Kris, 2026-11-07).
-func TestChecklistAndGeoJSONAreDriverOnly(t *testing.T) {
+// The GeoJSON is for signed-in drivers only (Kris, 2026-11-07).
+func TestGeoJSONIsDriverOnly(t *testing.T) {
 	app := activeTripApp(t)
-	if w := pushChecklist(t, app, fixtureChecklist(t), ""); w.Code != http.StatusOK {
-		t.Fatalf("push: %d", w.Code)
-	}
 	// A visitor: no link anywhere, and the content itself is refused.
 	home := send(t, app, "GET", "/", "", "", nil).Body.String()
-	for _, link := range []string{`href="/checklist"`, `href="/route.geojson"`, "of 5 done"} {
-		if strings.Contains(home, link) {
-			t.Errorf("a visitor's front page carries %q", link)
-		}
+	if strings.Contains(home, `href="/route.geojson"`) {
+		t.Errorf("a visitor's front page links the GeoJSON")
 	}
-	for _, p := range []string{"/checklist", "/checklist.json", "/route.geojson"} {
-		w := send(t, app, "GET", p, "", "", nil)
-		if w.Code != http.StatusFound || !strings.HasPrefix(w.Header().Get("Location"), "/driver/login") {
-			t.Errorf("visitor %s: status %d location %q, want a redirect to sign-in", p, w.Code, w.Header().Get("Location"))
-		}
-		if strings.Contains(w.Body.String(), "canoe") || strings.Contains(w.Body.String(), "FeatureCollection") {
-			t.Errorf("visitor %s carries content", p)
-		}
+	w := send(t, app, "GET", "/route.geojson", "", "", nil)
+	if w.Code != http.StatusFound || !strings.HasPrefix(w.Header().Get("Location"), "/driver/login") {
+		t.Errorf("visitor /route.geojson: status %d location %q, want a redirect to sign-in", w.Code, w.Header().Get("Location"))
 	}
-	// A signed-in driver (the push token is the same credential): links and 200s.
-	home = send(t, app, "GET", "/", testToken, "", nil).Body.String()
-	// The GeoJSON is reached by its address only: Kris took it off the menu on 2026-11-12.
-	for _, want := range []string{`href="/checklist"`, "of 5 done"} {
-		if !strings.Contains(home, want) {
-			t.Errorf("a signed-in front page lacks %q", want)
-		}
+	if strings.Contains(w.Body.String(), "FeatureCollection") {
+		t.Errorf("visitor /route.geojson carries content")
 	}
-	for _, p := range []string{"/checklist", "/checklist.json", "/route.geojson"} {
-		if w := send(t, app, "GET", p, testToken, "", nil); w.Code != http.StatusOK {
-			t.Errorf("signed-in %s: status %d, want 200", p, w.Code)
-		}
+	// A signed-in driver (the push token is the same credential): a 200.
+	if w := send(t, app, "GET", "/route.geojson", testToken, "", nil); w.Code != http.StatusOK {
+		t.Errorf("signed-in /route.geojson: status %d, want 200", w.Code)
 	}
 }

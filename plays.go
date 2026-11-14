@@ -71,6 +71,9 @@ type tracksDoc struct {
 	Now    *playView  `json:"now"`
 	Last   *playView  `json:"last"`
 	Tracks []playView `json:"tracks"`
+	// Finished is true for a ride that is over: the history stays, and the
+	// page draws no chip, because nothing is playing on a finished trip.
+	Finished bool `json:"finished"`
 }
 
 func (p Play) view() playView {
@@ -133,6 +136,9 @@ func (a *App) nowPlayingFor(ride string, now time.Time) *tracksDoc {
 	}
 	doc := tracksDocOf(plays, now)
 	doc.Listen = a.listenOn()
+	if a.rideIsFinished() {
+		doc.Finished, doc.Now, doc.Last = true, nil, nil
+	}
 	return doc
 }
 
