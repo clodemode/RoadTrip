@@ -204,7 +204,15 @@
     if (int(f.track_idx) !== null) b += '&track_idx=' + int(f.track_idx);
     return b;
   }
-  var api = { createWatch: createWatch, reportBody: reportBody, toggleCard: toggleCard, nextPlayable: nextPlayable, metadataFor: metadataFor, stateBody: stateBody, startedBody: startedBody, unlockThenLoad: unlockThenLoad, stripEmbed: stripEmbed, createNest: createNest, SILENT: SILENT };
+  // The line shown after a Favourite or Mark: it names what the server saved,
+  // and with nothing held anywhere it says to play something first.
+  function markStatus(kind, code, reply) {
+    if (code === 404) return 'Play something first.';
+    if (code < 200 || code > 299) return 'Could not save that.';
+    var name = reply && reply.saved ? ': ' + reply.saved : '';
+    return (kind === 'bookmark' ? 'Marked this point' : 'Favourited') + name + '. See Plan.';
+  }
+  var api = { markStatus: markStatus, createWatch: createWatch, reportBody: reportBody, toggleCard: toggleCard, nextPlayable: nextPlayable, metadataFor: metadataFor, stateBody: stateBody, startedBody: startedBody, unlockThenLoad: unlockThenLoad, stripEmbed: stripEmbed, createNest: createNest, SILENT: SILENT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
   var root = typeof document !== 'undefined' && document.getElementById('rt-player');
@@ -461,13 +469,19 @@
     var p = audio.play();
     if (p && p.catch) p.catch(function (e) { if (!(e && e.name === 'AbortError')) status('Tap Play to start'); });
   });
+  // Favourite and Mark save what is playing. With nothing loaded in this page
+  // the request names no album, and the server saves the one resume point it
+  // holds for the user (never kept per tab); the reply names what was saved.
   function mark(kind) {
-    var t = tracks[cur];
-    if (!album || !t) { status('Nothing playing to save.'); return; }
+    var t = tracks[cur], loaded = album && t;
+    var body = loaded ? stateBody(album, cur, audio.currentTime) + '&title=' + encodeURIComponent(t.title || '') : '';
     fetch('/driver/roadtracks/mark', { method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: stateBody(album, cur, audio.currentTime) + '&kind=' + kind + '&title=' + encodeURIComponent(t.title || '') })
-      .then(function (r) { status(r.ok ? (kind === 'bookmark' ? 'Marked this point. See Plan.' : 'Favourited. See Plan.') : 'Could not save that.'); })
+      body: 'kind=' + kind + (body ? '&' + body : '') })
+      .then(function (r) {
+        if (!r.ok) { status(markStatus(kind, r.status)); return; }
+        return r.json().then(function (o) { status(markStatus(kind, r.status, o)); });
+      })
       .catch(function () { status('Could not save that.'); });
   }
   var fb = $('rt-fav'); if (fb) fb.addEventListener('click', function () { mark('favourite'); });
