@@ -228,14 +228,18 @@
       var t = NP.chipText(doc);
       npEl.hidden = !t;
       if (t) { npLabel.textContent = t.label; npLine.textContent = t.line; }
-      npPanel.innerHTML = (doc.tracks || []).map(function (p) { return NP.rowHtml(p, esc, doc.listen && !!document.getElementById('np-audio')); }).join('');
+      npPanel.innerHTML = NP.panelHtml(doc.tracks || [], esc, doc.listen && !!document.getElementById('np-audio'));
       if (window.RTListen && window.RTListen.update) window.RTListen.update(doc);
       playLayer.clearLayers();
       (doc.tracks || []).forEach(function (p) {
-        if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+        if (typeof p.lat !== 'number' || typeof p.lng !== 'number' || !isFinite(p.lat) || !isFinite(p.lng)) return;
+        /* A track often starts at a stop, so a note sits above the stop pins
+           (500 and 600) and under a photo (1000); it is drawn as a pin whose tip
+           is the spot, 30 px across, so it can be seen and tapped beside the
+           stop's own circle. */
         L.marker([p.lat, p.lng], {
-          icon: L.divIcon({ className: 'np-pin', iconSize: [22, 22], iconAnchor: [11, 11], html: '<span>&#9834;</span>' }),
-          keyboard: false, zIndexOffset: 400
+          icon: L.divIcon({ className: 'np-pin', iconSize: [30, 30], iconAnchor: [15, 34], html: '<span>&#9834;</span>' }),
+          keyboard: false, zIndexOffset: 700
         }).addTo(playLayer).bindPopup('<div class="popup">' + NP.rowHtml(p, esc) + '</div>');
       });
     };
@@ -271,15 +275,19 @@
   /* Leaflet measures the container once, at construction. If the layout has
      not settled the map can be a couple of pixels wide and fitBounds clamps
      to maxZoom — a fully zoomed-in map showing nothing. Re-fit on resize until
-     the user takes the view. */
-  var userMoved = false;
-  ['mousedown', 'wheel', 'touchstart', 'dblclick'].forEach(function (ev) {
-    el.addEventListener(ev, function () { userMoved = true; }, { passive: true });
-  });
+     the visitor really takes the view: a drag or a zoom. A finger that only
+     touches the map to scroll the page, a wheel turn or a click is not taking
+     it, and used to freeze a stale view (the destination off-screen). The
+     map's own fit is animate:false, so its events arrive inside the call and
+     are told apart from the visitor's by the flag. */
+  var userMoved = false, fitting = false;
+  map.on('dragstart', function () { userMoved = true; });
+  map.on('zoomstart', function () { if (!fitting) userMoved = true; });
   function refit() {
     map.invalidateSize();
     if (userMoved) return;
-    map.fitBounds(bounds, { padding: [24, 24] });
+    fitting = true;
+    try { map.fitBounds(bounds, { padding: [24, 24], animate: false }); } finally { fitting = false; }
   }
   refit();
   if (window.ResizeObserver) {
