@@ -1028,7 +1028,7 @@ func (a *App) enrichPicks(ctx context.Context, out *freePicksOut, user string, l
 	cfg := a.chester.cfg
 	m := cfg.Quick
 	now := time.Now()
-	spent, err := a.store.ChesterSpent(now)
+	spent, err := a.store.ChesterSpent(a.chesterDay(now))
 	worst := m.roundCeilingUSD("") + freePicksMaxUses*chesterSearchUSD
 	if err != nil || chesterOverLimit(spent, worst, cfg.DailyUSD) {
 		out.Chester, out.Note = "over_limit", "Chester's daily limit is reached, so these are TomTom's nearest, with no notes."

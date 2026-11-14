@@ -262,6 +262,11 @@ type chesterUsage struct {
 	// count: the most such a round could have written. Above zero, the
 	// question's cost is an estimate and the row says so.
 	CeilingUSD float64
+	// Cancelled counts the rounds the driver's side ended before the API
+	// reported its usage. They are charged what the API had said by then (the
+	// input of the first event) and nothing for an answer that was never
+	// finished, so they are not an estimate.
+	Cancelled int
 }
 
 // chesterRequestUsage is one request of a question as the API counted it.
@@ -279,9 +284,13 @@ type chesterRequestUsage struct {
 	MaxTokens int64  `json:"max_tokens"`
 	// Finished is true when the API said how the turn ended and what it
 	// used. False is a request that was cut off: Final is missing.
-	Finished bool            `json:"finished"`
-	Start    json.RawMessage `json:"start,omitempty"`
-	Final    json.RawMessage `json:"final,omitempty"`
+	Finished bool `json:"finished"`
+	// Cancelled is true when the driver's own side ended the request (the
+	// browser went away, the question was stopped) before the API said what it
+	// used. Only what the API had already reported is charged for it.
+	Cancelled bool            `json:"cancelled,omitempty"`
+	Start     json.RawMessage `json:"start,omitempty"`
+	Final     json.RawMessage `json:"final,omitempty"`
 }
 
 // chesterCounts is the four token counts of a usage object or of one entry
@@ -343,7 +352,9 @@ func firstCount(vs ...*int64) int64 {
 //
 // A request that was cut off. What it had read is known from the first event;
 // what it wrote is not, so it is charged the most it could have written, its
-// max_tokens at the output price. Searches such a request ran are not known
+// max_tokens at the output price, unless the driver's own side cancelled it:
+// then only what the API had reported is charged, and nothing when it had
+// reported nothing. Searches such a request ran are not known
 // either and are not charged. A final usage object that cannot be read is
 // treated the same way.
 func chesterUsageOf(reqs []chesterRequestUsage) chesterUsage {
@@ -357,6 +368,10 @@ func chesterUsageOf(reqs []chesterRequestUsage) chesterUsage {
 		if !finished {
 			u.count(chesterUsage{In: firstCount(start.In), CacheRead: firstCount(start.CacheRead),
 				CacheWrite: firstCount(start.CacheWrite)}, r.Asked, r.Served)
+			if r.Cancelled {
+				u.Cancelled++
+				continue
+			}
 			u.CeilingUSD += chesterCeilingUSD(r.Asked, r.Served, r.MaxTokens)
 			continue
 		}
@@ -1294,7 +1309,9 @@ rounds:
 		default:
 			// The round stopped with no final count: a dropped connection,
 			// the time limit, the browser going away, an error part way
-			// through. It may have run, so it is charged as if it did.
+			// through. It may have run, so it is charged as if it did, unless
+			// the driver cancelled it: then only what the API reported counts.
+			used.Cancelled = errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled)
 			res.Requests = append(res.Requests, used)
 		}
 		if string(msg.Model) != "" && string(msg.Model) != m.Model {
@@ -1902,12 +1919,16 @@ func (s *Store) ChesterQuery(id int64) (*ChesterQuery, error) {
 	return &c, nil
 }
 
-// ChesterSpent is the dollars spent in one UTC day, the day the cap runs on.
+// ChesterSpent is the dollars spent in one day, the day the cap runs on. The
+// day is the one the time is in: pass it in the driver's zone and the day runs
+// from midnight to midnight where the car is, not in UTC.
 func (s *Store) ChesterSpent(day time.Time) (float64, error) {
-	d := day.UTC().Format(dateLayout)
+	y, m, d := day.Date()
+	from := time.Date(y, m, d, 0, 0, 0, 0, day.Location())
+	to := time.Date(y, m, d+1, 0, 0, 0, 0, day.Location())
 	var usd sql.NullFloat64
 	err := s.db.QueryRow(`SELECT SUM(usd) FROM chester_queries WHERE asked_at >= ? AND asked_at < ?`,
-		d+"T00:00:00Z", day.UTC().AddDate(0, 0, 1).Format(dateLayout)+"T00:00:00Z").Scan(&usd)
+		utcString(from), utcString(to)).Scan(&usd)
 	return usd.Float64, err
 }
 

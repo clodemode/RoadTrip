@@ -836,7 +836,7 @@ func TestChesterDailyCapRefusesInPlainWords(t *testing.T) {
 		t.Fatalf("over the limit: status %d: %s", w.Code, w.Body.String())
 	}
 	said := refusal(t, w)
-	if !strings.Contains(said, "today's limit") || !strings.Contains(said, "of $5.00") || !strings.Contains(said, "midnight UTC") {
+	if !strings.Contains(said, "today's limit") || !strings.Contains(said, "of $5.00") || !strings.Contains(said, "midnight where you are") {
 		t.Errorf("the refusal reads %q", said)
 	}
 	if n := len(stub.requests()); n != 1 {

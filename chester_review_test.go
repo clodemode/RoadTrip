@@ -324,7 +324,7 @@ func TestChesterRefusesAQuestionThatCouldPassTheLimit(t *testing.T) {
 	}
 	said := refusal(t, w)
 	for _, want := range []string{"Chester has " + usd2(5-spent) + " left of today's limit of $5.00", "a plan question can cost up to $2.07",
-		"was not asked", "A quick question, at up to $0.54, still fits.", "midnight UTC"} {
+		"was not asked", "A quick question, at up to $0.54, still fits.", "midnight where you are"} {
 		if !strings.Contains(said, want) {
 			t.Errorf("the refusal %q does not say %q", said, want)
 		}

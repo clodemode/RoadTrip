@@ -199,21 +199,24 @@ func checkLineEnds(sd *seedData, lineEnds map[int][2][]float64) error {
 const maxPlanCombos = 64
 
 // allSelections is every combination of choices a document offers, one map
-// per plan, every option answered. The combinations a dependent option does
-// not take part in come out as duplicate plans, which is harmless: each is
-// checked like any other and published once.
+// per plan, every option answered. Only options in force multiply the count:
+// an option tied by "when" to a choice that is not taken is not in force, so
+// it takes its default and adds no plans of its own. The cap counts the plans
+// that really differ, never the options a branch has switched off.
 func allSelections(opts []tripOption) ([]map[string]string, error) {
-	n := 1
-	for _, o := range opts {
-		n *= len(o.Choices)
-		if n > maxPlanCombos {
-			return nil, fmt.Errorf("the trip offers more than %d combinations of choices", maxPlanCombos)
-		}
-	}
 	out := []map[string]string{{}}
-	for _, o := range opts {
+	for i, o := range opts {
 		var next []map[string]string
 		for _, s := range out {
+			if !optionsInForce(opts[:i+1], s)[o.ID] {
+				m := make(map[string]string, len(s)+1)
+				for k, v := range s {
+					m[k] = v
+				}
+				m[o.ID] = o.offDefault()
+				next = append(next, m)
+				continue
+			}
 			for _, c := range o.Choices {
 				m := make(map[string]string, len(s)+1)
 				for k, v := range s {
@@ -223,9 +226,26 @@ func allSelections(opts []tripOption) ([]map[string]string, error) {
 				next = append(next, m)
 			}
 		}
+		if len(next) > maxPlanCombos {
+			return nil, fmt.Errorf("the trip offers more than %d combinations of choices", maxPlanCombos)
+		}
 		out = next
 	}
 	return out, nil
+}
+
+// offDefault is the choice an option holds while it is not in force: its
+// default, else its first choice.
+func (o tripOption) offDefault() string {
+	for _, c := range o.Choices {
+		if c.ID == o.Default {
+			return c.ID
+		}
+	}
+	if len(o.Choices) > 0 {
+		return o.Choices[0].ID
+	}
+	return ""
 }
 
 // checkTrip parses a pushed document completely — under its defaults and
