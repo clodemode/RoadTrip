@@ -1524,7 +1524,7 @@ rounds:
 	if casts != nil {
 		res.Podcasts = casts.cards
 		if len(casts.cards) > 0 {
-			res.Notes = append(res.Notes, "showed a podcast episode card")
+			res.Notes = append(res.Notes, "showed "+strconv.Itoa(len(casts.cards))+" podcast episode card(s)")
 		}
 		if casts.drops > 0 {
 			res.Notes = append(res.Notes, strconv.Itoa(casts.drops)+" podcast reference(s) the search had not returned were dropped")

@@ -68,6 +68,17 @@ func initChesterPodcastScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the bus is listening$`, func() error { w.listen = true; return nil })
 	sc.Step(`^Chester will search podcasts for "([^"]*)"$`, w.willSearch)
 	sc.Step(`^Chester will then show the podcast "([^"]*)" because "([^"]*)"$`, w.willShow)
+	sc.Step(`^Chester will then show the podcasts (.+)$`, w.willShowEach)
+	sc.Step(`^the answer carries the podcast cards in this order: (.+)$`, w.cardsAre)
+	sc.Step(`^the answer carries no card for "([^"]*)"$`, func(ep string) error {
+		for _, c := range w.cards() {
+			if c.Episode == ep {
+				return fmt.Errorf("a card for %q is on the page", ep)
+			}
+		}
+		return nil
+	})
+	sc.Step(`^the show_podcast tool refuses a fourth episode in its schema$`, w.schemaCapsEpisodes)
 	sc.Step(`^Chester will (?:then )?answer "([^"]*)"$`, w.willSay)
 	sc.Step(`^the traveller asks Chester for "([^"]*)"$`, w.ask)
 	sc.Step(`^the traveller opens the Chester page$`, w.openPage)
@@ -112,10 +123,74 @@ func (w *podcastWorld) willSearch(q string) error {
 }
 
 func (w *podcastWorld) willShow(ref, why string) error {
-	in := js(map[string]any{"ref": ref, "why": why})
+	return w.willShowThese([][2]string{{ref, why}})
+}
+
+func (w *podcastWorld) willShowThese(eps [][2]string) error {
+	var list []any
+	for _, e := range eps {
+		list = append(list, map[string]any{"ref": e[0], "why": e[1]})
+	}
+	in := js(map[string]any{"episodes": list})
 	w.script = append(w.script, stream(events(evStart(stubModel, 120, 0, 0), evThinking(0),
 		evClientTool(1, "toolu_q"+strconv.Itoa(len(w.script)), "show_podcast", in), evEnd("tool_use", 20, 0, nil))...))
 	return nil
+}
+
+var podcastPair = regexp.MustCompile(`"([^"]*)" because "([^"]*)"`)
+
+// willShowEach scripts one show_podcast call naming several episodes, in the
+// order written: `"p1" because "..." and "p2" because "..."`.
+func (w *podcastWorld) willShowEach(list string) error {
+	var eps [][2]string
+	for _, m := range podcastPair.FindAllStringSubmatch(list, -1) {
+		eps = append(eps, [2]string{m[1], m[2]})
+	}
+	return w.willShowThese(eps)
+}
+
+func (w *podcastWorld) cardsAre(shows string) error {
+	var want []string
+	for _, m := range regexp.MustCompile(`"([^"]*)"`).FindAllStringSubmatch(shows, -1) {
+		want = append(want, m[1])
+	}
+	got := w.cards()
+	if len(got) != len(want) {
+		return fmt.Errorf("%d podcast card(s), want %d (%v)", len(got), len(want), want)
+	}
+	for i, c := range got {
+		if c.Episode != want[i] {
+			return fmt.Errorf("card %d is %q, want %q", i+1, c.Episode, want[i])
+		}
+	}
+	return nil
+}
+
+// schemaCapsEpisodes is true when the show_podcast tool the request carried
+// says an episode list holds at most three: the schema refuses a fourth.
+func (w *podcastWorld) schemaCapsEpisodes() error {
+	var req struct {
+		Tools []struct {
+			Name        string `json:"name"`
+			InputSchema struct {
+				Properties struct {
+					Episodes struct {
+						MaxItems int `json:"maxItems"`
+					} `json:"episodes"`
+				} `json:"properties"`
+			} `json:"input_schema"`
+		} `json:"tools"`
+	}
+	_ = json.Unmarshal(w.stub.requests()[0].Body, &req)
+	for _, t := range req.Tools {
+		if t.Name == chesterShowPodcastTool {
+			if m := t.InputSchema.Properties.Episodes.MaxItems; m < 1 || m > 3 {
+				return fmt.Errorf("show_podcast takes at most %d episodes in its schema, want a cap of three or fewer", m)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("show_podcast was not offered")
 }
 
 func (w *podcastWorld) willSay(text string) error {
