@@ -1,0 +1,37 @@
+{{template "head" .}}
+<section class="page-head">
+  <h1>Remove photos</h1>
+  <p class="muted">Tick the bad ones and tap the button. Each post stays on the map and the timeline as a marker, with the same place and time. You can undo for ten minutes.</p>
+  {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+</section>
+
+{{if .Held}}
+<section class="card"><div class="card-body">
+  <h2 class="h5">Just removed</h2>
+  <ul class="list-unstyled">
+  {{range .Held}}
+    <li><form method="post" action="/driver/post/{{.PostID}}/photo/undo" class="d-flex align-items-center gap-2">
+      <span>{{if .Title}}{{.Title}} &middot; {{end}}{{.When}}</span>
+      <button class="btn btn-sm btn-outline-primary">Undo</button>
+      <span class="muted small">about {{.Mins}} min left</span></form></li>
+  {{end}}
+  </ul>
+  <form method="post" action="/driver/posts/photos/undo"><button class="btn btn-sm btn-outline-primary">Undo all</button></form>
+</div></section>
+{{end}}
+
+{{if not .Posts}}<p class="muted">No photos on this trip.</p>{{else}}
+<form method="post" action="/driver/posts/photos/remove" id="bulk-remove">
+  <div class="gallery">
+  {{range .Posts}}
+    <figure>
+      <label class="touch"><input class="form-check-input" type="checkbox" name="post_id" value="{{.ID}}"> Remove</label>
+      <img src="/media/{{.Photo.ThumbPath}}" alt="{{.Title}}" loading="lazy">
+      <figcaption>{{if .Title}}{{.Title}} &middot; {{end}}{{local .OccurredAt .TZ}}</figcaption>
+    </figure>
+  {{end}}
+  </div>
+  <p><button type="submit" class="btn btn-danger">Remove photos</button> <span class="muted small">keeps each post as a marker</span></p>
+</form>
+{{end}}
+{{template "foot" .}}

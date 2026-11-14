@@ -49,6 +49,8 @@
 <script>window.RIDE_TRACKS = {{json .}};</script>
 {{end}}
 
+{{with .ListenLine}}<p class="listen-count muted small" id="listen-count">{{.}}</p>{{end}}
+
 {{/* The day's end: the trip-keeper's first navigation target, with Add a stop.
      Signed-in only (DayEnd is built for a driver alone); a visitor's page has
      no navigator link and no place search. */}}

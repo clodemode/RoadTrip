@@ -60,6 +60,8 @@ func TestFeatures(t *testing.T) {
 				initFinishedTripScenarios(t, sc)
 				initFuzzOneKilometreScenarios(sc)
 				initTrailPointScenarios(t, sc)
+				initPhotoMarkerScenarios(t, sc)
+				initListenCountScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

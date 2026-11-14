@@ -287,6 +287,28 @@ CREATE TABLE IF NOT EXISTS posts (
   pin_fuzzed    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS posts_occurred ON posts(occurred_at);
+CREATE TABLE IF NOT EXISTS listen_counts (
+  ride_slug TEXT NOT NULL,
+  day       TEXT NOT NULL,
+  songs     INTEGER NOT NULL DEFAULT 0,
+  listeners INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (ride_slug, day)
+);
+CREATE TABLE IF NOT EXISTS photo_holds (
+  post_id    INTEGER PRIMARY KEY,
+  photo_id   INTEGER NOT NULL,
+  path       TEXT NOT NULL,
+  thumb_path TEXT NOT NULL,
+  taken_at   TEXT NOT NULL DEFAULT '',
+  tz         TEXT NOT NULL DEFAULT '',
+  lat        REAL,
+  lng        REAL,
+  width      INTEGER NOT NULL DEFAULT 0,
+  height     INTEGER NOT NULL DEFAULT 0,
+  sha256     TEXT NOT NULL,
+  shared     INTEGER NOT NULL DEFAULT 0,
+  expires_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL DEFAULT ''

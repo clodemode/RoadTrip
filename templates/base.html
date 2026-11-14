@@ -136,6 +136,12 @@
     {{else if .CanUnfuzz}}<form method="post" action="/driver/post/{{.ID}}/unfuzz" class="post-fuzz">
       <button class="btn btn-sm btn-outline-secondary">Unfuzz</button>
       <span class="muted small">this location is fuzzy</span></form>{{end}}
+    {{if .Photo}}<form method="post" action="/driver/post/{{.ID}}/photo/remove" class="post-photo-remove">
+      <button class="btn btn-sm btn-outline-danger">Remove photo</button>
+      <span class="muted small">keeps the post as a marker</span></form>
+    {{else if .HeldMins}}<form method="post" action="/driver/post/{{.ID}}/photo/undo" class="post-photo-remove">
+      <button class="btn btn-sm btn-outline-primary">Undo</button>
+      <span class="muted small">photo removed, about {{.HeldMins}} min left</span></form>{{end}}
     <p class="post-edit"><a href="/driver/post/{{.ID}}/edit">Edit kind, leg, checkpoint, time&hellip;</a></p>
     <form method="post" action="/driver/post/{{.ID}}/pin" class="post-repin">
       <input type="hidden" name="fuzz_choice" value="1">

@@ -63,12 +63,16 @@ type App struct {
 	// listenOff is PUBLIC_LISTEN=0: no visitor may hear the tracks (listen.go). The zero value is on.
 	listenOff   bool
 	listenBrake addrLimiter
-	store       *Store
-	auth        *Auth
-	tmpl        *template.Template
-	dataDir     string
-	mediaDir    string
-	rideSlug    string
+	listenCount listenCounter
+	clockFn     func() time.Time // a test's clock; nil is the real one
+	// photoUndoFor is how long a removed photo can be brought back; 0 is ten minutes.
+	photoUndoFor time.Duration
+	store        *Store
+	auth         *Auth
+	tmpl         *template.Template
+	dataDir      string
+	mediaDir     string
+	rideSlug     string
 	// assetV busts the static cache on deploy. Static assets are served with a
 	// long max-age, so without a version in the URL a redeploy would leave
 	// browsers running the previous build's JS and CSS against the new HTML.
@@ -371,6 +375,15 @@ func main() {
 		WriteTimeout: 5 * time.Minute,
 		IdleTimeout:  120 * time.Second,
 	}
+
+	// A removed photo's files wait out their undo window in a folder no page
+	// serves (photo_marker.go); this is what deletes them when it closes.
+	app.sweepPhotoHolds(time.Now())
+	go func() {
+		for range time.Tick(time.Minute) {
+			app.sweepPhotoHolds(time.Now())
+		}
+	}()
 
 	go func() {
 		log.Printf("roadtrip listening on %s (ride %s)", addr, app.activeSlug())
