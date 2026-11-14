@@ -64,7 +64,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-17"
+	chesterPromptVersion = "chester-rt-18"
 
 	maxChesterQuestion = 1000
 )
@@ -1229,6 +1229,11 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 		tunes = newChesterMusicRun(music)
 		params.Tools = append(params.Tools, chesterMusicTools()...)
 	}
+	// Drive Tracks is one tap that must end in one album card, so its first
+	// request is made to search the library (Kris, 2026-11-14: three taps of
+	// four ended in words alone while nothing set tool_choice).
+	drive := tunes != nil && tunes.lib.one
+	chesterForce(&params, drive, tunes, 0)
 	var casts *chesterPodcastRun
 	if cx.podcasts != nil {
 		casts = newChesterPodcastRun(cx.podcasts)
@@ -1462,8 +1467,22 @@ rounds:
 				if lastNext {
 					chesterWithdrawSearches(&params, tunes != nil, casts != nil)
 				}
+				chesterForce(&params, drive, tunes, round+1)
 				continue
 			}
+		}
+		// A Drive Tracks turn that is about to end with no album card gets one
+		// more request that must call show_music, on what the searches found.
+		if round < chesterRounds-1 && chesterOwesCard(drive, tunes) {
+			params.Messages = append(params.Messages, msg.ToParam())
+			next := anthropic.NewBetaTextBlock(chesterShowNow)
+			if len(results) > 0 {
+				params.Messages = append(params.Messages, anthropic.NewBetaUserMessage(append(results, next)...))
+			} else {
+				params.Messages = append(params.Messages, anthropic.NewBetaUserMessage(next))
+			}
+			chesterForceShow(&params)
+			continue
 		}
 		whole = true
 		break rounds
@@ -1552,6 +1571,43 @@ rounds:
 		emit(chesterEvent{T: "text", D: said})
 	}
 	return finish()
+}
+
+// chesterShowNow is what a Drive Tracks turn that ended with no album card is
+// told, beside the one request that must call show_music.
+const chesterShowNow = "No album is on the page yet. Call show_music now with exactly one album from your searches."
+
+// chesterOwesCard is true when a Drive Tracks question has searched the library
+// and has no album card yet, and the library is up: a card is owed.
+func chesterOwesCard(drive bool, tunes *chesterMusicRun) bool {
+	return drive && tunes != nil && tunes.searches > 0 && !tunes.down && len(tunes.cards) == 0
+}
+
+// chesterForce sets the tool the request to be sent as round must call, and
+// takes the setting off every request that need not. Only Drive Tracks forces
+// a tool: round 0 must search the library, and the last round, when no card
+// has been shown by then, must show one. The API refuses a forced tool beside
+// adaptive thinking, so a forced request thinks only between tool calls.
+func chesterForce(params *anthropic.BetaMessageNewParams, drive bool, tunes *chesterMusicRun, round int) {
+	switch {
+	case !drive:
+		return
+	case round == 0:
+		params.ToolChoice = anthropic.BetaToolChoiceUnionParam{OfTool: &anthropic.BetaToolChoiceToolParam{Name: chesterSearchMusicTool}}
+		params.Thinking = anthropic.BetaThinkingConfigParamUnion{OfBetweenTools: &anthropic.BetaThinkingConfigBetweenToolsParam{}}
+	case round == chesterRounds-1 && chesterOwesCard(drive, tunes):
+		chesterForceShow(params)
+	default:
+		params.ToolChoice = anthropic.BetaToolChoiceUnionParam{}
+		params.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}}
+	}
+}
+
+// chesterForceShow makes the next request call show_music, once.
+func chesterForceShow(params *anthropic.BetaMessageNewParams) {
+	params.ToolChoice = anthropic.BetaToolChoiceUnionParam{OfTool: &anthropic.BetaToolChoiceToolParam{
+		Name: chesterShowMusicTool, DisableParallelToolUse: anthropic.Bool(true)}}
+	params.Thinking = anthropic.BetaThinkingConfigParamUnion{OfBetweenTools: &anthropic.BetaThinkingConfigBetweenToolsParam{}}
 }
 
 // chesterWithdrawSearches takes the search tools away from the last round. The
