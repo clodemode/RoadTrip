@@ -52,6 +52,7 @@ func TestFeatures(t *testing.T) {
 				initChesterPreferencesScenarios(t, sc)
 				initChesterPositionHistoryScenarios(t, sc)
 				initPhotoViewScenarios(sc, sw.p)
+				initMapPolishScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -117,6 +118,24 @@ func initPublicNowPlayingScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		if p.Note != note {
 			return fmt.Errorf("note %q, want %q", p.Note, note)
+		}
+		return nil
+	})
+	sc.Step(`^the track "([^"]*)" carries a note ending on a whole word with an ellipsis, at most 300 bytes$`, func(tr string) error {
+		p, err := w.track(tr)
+		if err != nil {
+			return err
+		}
+		if len(p.Note) > 300 {
+			return fmt.Errorf("the note is %d bytes", len(p.Note))
+		}
+		body, ok := strings.CutSuffix(p.Note, "\u2026")
+		if !ok {
+			return fmt.Errorf("the note does not end in an ellipsis: %q", p.Note)
+		}
+		f := strings.Fields(body)
+		if len(f) == 0 || !regexp.MustCompile(`^word\d\d$`).MatchString(f[len(f)-1]) {
+			return fmt.Errorf("the note ends in the middle of a word: %q", p.Note)
 		}
 		return nil
 	})

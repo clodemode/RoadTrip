@@ -197,7 +197,7 @@ func (a *App) recordPlay(user string, sp startedPlay, now time.Time) error {
 				if c.AlbumID != sp.albumID || sp.albumID <= 0 {
 					continue
 				}
-				p.Note = cleanLine(c.Why, playNoteMax)
+				p.Note = cleanNote(c.Why, playNoteMax)
 				if p.Year == 0 {
 					p.Year = c.Year
 				}

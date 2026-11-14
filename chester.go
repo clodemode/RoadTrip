@@ -530,6 +530,25 @@ func cleanLine(s string, limit int) string {
 	return strings.TrimSpace(s[:cut])
 }
 
+// cleanNote is cleanLine for a sentence a visitor reads: when it is too long it
+// is cut on a whole word and ends with an ellipsis, never in the middle of a word.
+// limit counts bytes, the ellipsis included.
+func cleanNote(s string, limit int) string {
+	s = cleanLine(s, len(s)+1)
+	if len(s) <= limit {
+		return s
+	}
+	room := limit - len("\u2026")
+	cut := strings.LastIndexByte(s[:room+1], ' ')
+	if cut < room/2 {
+		cut = room
+		for cut > 0 && (s[cut]&0xC0) == 0x80 {
+			cut--
+		}
+	}
+	return strings.TrimRight(s[:cut], " ,;:.-") + "\u2026"
+}
+
 // cleanURL keeps a web address and nothing else: http or https, a host, no
 // credentials. Anything else is dropped, never repaired.
 func cleanURL(s string) string {

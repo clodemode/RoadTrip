@@ -164,7 +164,14 @@ h2 { margin: 1.5rem 0 .5rem; }
 .np-msg { margin: .25rem 0 0; font-size: .75rem; color: #7a1f1f; overflow-wrap: anywhere; }
 .np-row.np-on { background: #eef4ff; }
 .np-pin span { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
-  border-radius: 50%; background: #fff; color: #1f2937; border: 2px solid #1f2937; font-size: 12px; }
+  border-radius: 50%; background: #fff; color: #1f2937; border: 2px solid #1f2937; font-size: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
+.np-group { border-bottom: 1px solid var(--ds-hairline); padding-bottom: .15rem; }
+.np-group .np-row { border-bottom: 0; padding: .15rem 0; }
+.np-album-h { font-weight: 700; color: #1f2937; padding-top: .25rem; }
+/* On a phone the map is only about 380px tall: the open list is short and scrolls
+   inside itself, so most of the map stays in sight above it. */
+@media (max-width: 575px) { .np-panel { max-height: 6rem; } }
 #map[data-mode="plan"] .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 1.4rem; }
 
 /* --- the day's end: first navigation target, with Add a stop ---------------------- */
