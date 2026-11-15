@@ -110,6 +110,7 @@ func (a *App) tracksAudio(w http.ResponseWriter, r *http.Request) {
 		listenText(w, http.StatusNotFound, "That track is not available to hear right now.")
 		return
 	}
+	a.countListen(r)
 	// One event per listen start; no address and no place.
 	a.melt.Event("listen_audio", map[string]any{"status": http.StatusFound, "ms": time.Since(t0).Milliseconds()})
 	w.Header().Set("Cache-Control", "no-store")

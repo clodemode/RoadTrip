@@ -92,7 +92,11 @@ func (a *App) funcs() template.FuncMap {
 		"card": func(p Post, authed bool) postCard {
 			// CanUnfuzz is a yes or no from the store; the kept point itself never
 			// reaches a template.
-			return postCard{Post: p, Authed: authed, CanUnfuzz: authed && p.PinFuzzed && a.store.CanUnfuzz(p.ID)}
+			c := postCard{Post: p, Authed: authed, CanUnfuzz: authed && p.PinFuzzed && a.store.CanUnfuzz(p.ID)}
+			if authed && p.Photo == nil {
+				c.HeldMins = a.heldFor(p.ID)
+			}
+			return c
 		},
 		"row": func(c Checkpoint, legOrd int, driver, chesterOn bool, nextID int64, showTZ bool, navLegID int64, started bool, addr map[int]string) stopRow {
 			open := !c.IsStart && c.ArrivedAt == "" && c.SkippedAt == ""
@@ -200,6 +204,11 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/post", a.requireRide(a.postCreate))
 	mux.Handle("POST /driver/checkpoint/{id}/arrive", a.requireRide(a.checkpointArrive))
 	mux.Handle("POST /driver/post/{id}/delete", a.requireRide(a.postDelete))
+	mux.Handle("POST /driver/post/{id}/photo/remove", a.requireRide(a.photoRemove))
+	mux.Handle("POST /driver/post/{id}/photo/undo", a.requireRide(a.photoUndo))
+	mux.Handle("GET /driver/posts", a.requireRide(a.photosPage))
+	mux.Handle("POST /driver/posts/photos/remove", a.requireRide(a.photosRemove))
+	mux.Handle("POST /driver/posts/photos/undo", a.requireRide(a.photosUndo))
 	// The census: every post, for finding duplicates the road left behind.
 	mux.Handle("GET /driver/posts.json", a.requireRide(a.postsJSON))
 	mux.Handle("POST /driver/post/{id}/pin", a.requireRide(a.postRepin))
@@ -982,6 +991,7 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data["NowPlaying"] = a.nowPlayingFor(rv.Ride.Slug, time.Now()) // nil: no plays, no chip
+	data["ListenLine"] = a.listenLine(rv.Ride.Slug)
 	a.render(w, r, "index.html", data)
 }
 
@@ -1072,6 +1082,8 @@ type postCard struct {
 	// CanUnfuzz: the post is fuzzed and a kept exact point exists (never the
 	// point). CanFuzz: it has a published pin that is not fuzzed.
 	CanUnfuzz bool
+	// HeldMins: a removed photo can be brought back for about this many more minutes.
+	HeldMins int
 }
 
 func (c postCard) CanFuzz() bool {
