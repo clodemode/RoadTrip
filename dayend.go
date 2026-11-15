@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -71,15 +72,108 @@ type foundPlace struct {
 	Lat, Lng float64
 }
 
-// routingAhead is the leg's routing points the car has not passed, in order:
-// a point is passed once a stop after it is arrived at or skipped, the same
-// rule nextRoutingPoint applies when it has no position.
-func routingAhead(leg *Leg) []RoutingPoint {
+// The position rule (2026-11-14). A routing point is passed once a stop after it
+// is arrived at or skipped, or once the car's furthest position the app holds
+// is at least passedMarginKm beyond it along the day's line. On the day's last
+// stretch the only stop after a point is the day's end, so the stamps alone
+// never call it passed and the Waze link kept sending the car back (day 4).
+//
+// Positions are only ones the store already holds, each published when it was
+// written (a post's pin, a Chester ask or a track play's trail point): nothing
+// raw is read, logged or rendered, and none is kept per tab.
+const (
+	// passedMarginKm covers a published point's rounding (0.001 degree, about
+	// 100 m) and a phone's jitter: a car AT the point has not passed it.
+	passedMarginKm = 0.3
+	// fixOffRoadKm is how far from the day's line a position can sit and still
+	// say how far along the car is; a fix further out (a detour, a bad fix)
+	// says nothing, so it drops nothing.
+	fixOffRoadKm = 2.0
+	// alongTieKm: two places on a line this close to a fix are the same place
+	// for the fix (a loop's start and its end), and the earlier one is taken.
+	alongTieKm = 0.25
+)
+
+// alongFrom is alongLine restricted to the part of the line from fromKm on, and
+// for a fix near two places on the line (a loop that ends where it began, a road
+// that crosses itself) it takes the earlier, so a car just leaving the start of
+// a loop is never read as at its end.
+func alongFrom(line json.RawMessage, lat, lng, fromKm float64) (alongKm, offKm float64, ok bool) {
+	var pts [][]float64
+	if err := json.Unmarshal(line, &pts); err != nil || len(pts) < 2 {
+		return 0, 0, false
+	}
+	offKm = math.Inf(1)
+	cum := 0.0
+	for i := 0; i+1 < len(pts); i++ {
+		a, b := pts[i], pts[i+1]
+		if len(a) < 2 || len(b) < 2 {
+			return 0, 0, false
+		}
+		seg := haversineKm(a[1], a[0], b[1], b[0])
+		if cum+seg >= fromKm {
+			kx := math.Cos((a[1] + b[1]) / 2 * math.Pi / 180)
+			dx, dy := (b[0]-a[0])*kx, b[1]-a[1]
+			px, py := (lng-a[0])*kx, lat-a[1]
+			t := 0.0
+			if d := dx*dx + dy*dy; d > 0 {
+				t = math.Max(0, math.Min(1, (px*dx+py*dy)/d))
+			}
+			off := haversineKm(lat, lng, a[1]+t*(b[1]-a[1]), a[0]+t*(b[0]-a[0]))
+			if off < offKm-alongTieKm {
+				offKm, alongKm = off, cum+t*seg
+			}
+		}
+		cum += seg
+	}
+	return alongKm, offKm, !math.IsInf(offKm, 1)
+}
+
+// carProgress is how far along the leg's line the car has got, by the furthest
+// of the positions the app holds for this leg, or false when it holds none that
+// sit on the line. Only fixes from the latest passed stop on are read, so a
+// stretch already driven is never re-read. Furthest, not latest: a noisy fix
+// behind the car cannot bring a point it has passed back.
+func carProgress(leg *Leg, held []Post) (float64, bool) {
+	from := 0.0
+	if p := latestPassedOrd(leg); p > 0 {
+		for _, c := range leg.Checkpoints {
+			if c.Ord == p {
+				if a, _, _, ok := alongLine(leg.Line, c.Lat, c.Lng); ok {
+					from = math.Max(0, a-passedMarginKm)
+				}
+			}
+		}
+	}
+	best, have := 0.0, false
+	for _, p := range held {
+		if p.LegID != leg.ID || p.PinLat == nil || p.PinLng == nil {
+			continue
+		}
+		if a, off, ok := alongFrom(leg.Line, *p.PinLat, *p.PinLng, from); ok && off <= fixOffRoadKm && (!have || a > best) {
+			best, have = a, true
+		}
+	}
+	return best, have
+}
+
+// routingAhead is the leg's routing points the car has not passed, in order: a
+// point is passed once a stop after it is arrived at or skipped (the rule
+// nextRoutingPoint applies), or once the car's furthest held position is
+// passedMarginKm beyond it. held is the ride's posts and trail points; none
+// held means the stamps alone decide, as before.
+func routingAhead(leg *Leg, held []Post) []RoutingPoint {
+	along, haveAlong := carProgress(leg, held)
 	var out []RoutingPoint
 	for _, rp := range leg.RoutingPoints {
 		passed := false
 		for _, c := range leg.Checkpoints {
 			if c.Ord > rp.AfterOrd && (c.ArrivedAt != "" || c.SkippedAt != "") {
+				passed = true
+			}
+		}
+		if !passed && haveAlong {
+			if a, _, _, ok := alongLine(leg.Line, rp.Lat, rp.Lng); ok && along >= a+passedMarginKm {
 				passed = true
 			}
 		}
@@ -108,8 +202,9 @@ func googleDirVia(destPt, name string, via []string) string {
 }
 
 // dayEnd builds the block for the leg being driven (the page's default leg).
-// nil when the leg's last stop is settled, or is the trip's start.
-func dayEnd(legs []Leg, leg *Leg, multi bool, addr map[int]string) *dayEndView {
+// nil when the leg's last stop is settled, or is the trip's start. held is the
+// ride's posts and trail points, the positions a routing point is passed by.
+func dayEnd(legs []Leg, leg *Leg, multi bool, addr map[int]string, held []Post) *dayEndView {
 	if leg == nil {
 		return nil
 	}
@@ -128,7 +223,7 @@ func dayEnd(legs []Leg, leg *Leg, multi bool, addr map[int]string) *dayEndView {
 		destPt = pointText(term.Lat, term.Lng)
 	}
 	v.Waze, v.Google, v.Apple = dest.Waze, dest.Google, dest.Apple
-	if ahead := routingAhead(leg); len(ahead) > 0 {
+	if ahead := routingAhead(leg, held); len(ahead) > 0 {
 		first := mapLinks(ahead[0].Lat, ahead[0].Lng, ahead[0].Name)
 		v.Waze, v.Apple, v.ViaFirst = first.Waze, first.Apple, ahead[0].Name
 		var wps []string

@@ -39,6 +39,7 @@ var routingFixes = map[string][2]float64{
 
 func initRoutingPointsScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	w := &routingWorld{t: t}
+	registerWazePassedSteps(sc, w)
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		*w = routingWorld{t: t}
 		return ctx, nil
