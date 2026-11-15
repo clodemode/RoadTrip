@@ -82,6 +82,22 @@ func (s *Store) trailNear(rideSlug string, at time.Time) (lat, lng float64, ok b
 			best, lat, lng, ok = d, la, ln, true
 		}
 	}
+	// A Chester ask and a track play are fixes too (trail_points.go).
+	if pts, err := s.TrailPoints(rideSlug); err == nil {
+		for _, p := range pts {
+			t, tok := parseUTC(p.OccurredAt)
+			if !tok {
+				continue
+			}
+			d := t.Sub(at)
+			if d < 0 {
+				d = -d
+			}
+			if d <= trailWindow && d < best {
+				best, lat, lng, ok = d, p.Lat, p.Lng, true
+			}
+		}
+	}
 	return lat, lng, ok
 }
 

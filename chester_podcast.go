@@ -15,7 +15,7 @@ import (
 )
 
 // Chester and podcasts. Chester can search Apple's free podcast search (no key)
-// and recommend one episode as a card that opens in Apple Podcasts. Kris,
+// and recommend an episode, with up to two alternates, as cards that open in Apple Podcasts. Kris,
 // 2026-11-12: a podcast that fits the place, from a publisher worth hearing,
 // not the first hit.
 //
@@ -30,6 +30,7 @@ const (
 	chesterSearchPodcastsTool = "search_podcasts"
 	chesterShowPodcastTool    = "show_podcast"
 	chesterPodcastResults     = 8  // episodes one search hands the model
+	chesterPodcastCards       = 3  // the pick and up to two alternates (Kris, 2026-11-14)
 	chesterPodcastSearches    = 5  // searches one answer may run
 	chesterPodcastMinMinutes  = 5  // shorter is a clip, not a listen
 	chesterPodcastMaxMinutes  = 30 // longer is more than a stretch of road holds
@@ -41,7 +42,7 @@ const (
 
 const chesterPodcastPrompt = `
 
-Podcasts. When the traveller asks for a podcast, or to learn about where the car is, call search_podcasts with words only (a place, its history, its rivers, its people). Search several times with different words, as separate calls. Prefer established publishers (public radio, universities, museums, the park service, well-known history shows) over thin machine-made shows, and judge by publisher, length and how well the episode fits the place, never by the first result. Recommend only episodes the searches return. Then call show_podcast once with the reference of the one episode you choose and one short sentence on why it fits where the car is. The page turns it into a card with an Open in Apple Podcasts button; you cannot play anything yourself, so say that they tap it to open the episode. If search_podcasts says the search is unavailable, say so plainly and do not suggest an episode. Write the answer after your last tool call, as for places.`
+Podcasts. When the traveller asks for a podcast, or to learn about where the car is, call search_podcasts with words only (a place, its history, its rivers, its people). Search several times with different words, as separate calls. Prefer established publishers (public radio, universities, museums, the park service, well-known history shows) over thin machine-made shows, and judge by publisher, length and how well the episode fits the place, never by the first result. Recommend only episodes the searches return. Then call show_podcast once with one to three episodes: your best pick first, then up to two alternates, preferring different shows, each with its reference and one short sentence on why it fits where the car is. The page turns each into its own card with an Open in Apple Podcasts button; you cannot play anything yourself, so say that they tap one to open the episode. If search_podcasts says the search is unavailable, say so plainly and do not suggest an episode. Write the answer after your last tool call, as for places.`
 
 // podcastSvc is Apple's podcast search. nil is the feature off.
 type podcastSvc struct {
@@ -179,12 +180,16 @@ func chesterPodcastTools() []anthropic.BetaToolUnionParam {
 			map[string]any{"query": map[string]any{"type": "string", "description": "Words only, under 80 characters. No coordinates."}},
 			[]string{"query"}),
 		clientTool(chesterShowPodcastTool,
-			"Show the one episode you picked as a card with an Open in Apple Podcasts button. Give its reference from search_podcasts and one short "+
-				"sentence on why it fits where the car is. The card goes with the written answer and does not replace it: write the answer after this call.",
-			map[string]any{
-				"ref": map[string]any{"type": "string", "description": "A reference from search_podcasts, such as p1."},
-				"why": map[string]any{"type": "string", "description": "One short sentence saying why it fits where the car is."}},
-			[]string{"ref", "why"}),
+			"Show the episodes you picked as cards with an Open in Apple Podcasts button: your best pick first, then up to two alternates, "+
+				"from different shows when you can. Give each one's reference from search_podcasts and one short "+
+				"sentence on why it fits where the car is. The cards go with the written answer and do not replace it: write the answer after this call.",
+			map[string]any{"episodes": map[string]any{"type": "array", "minItems": 1, "maxItems": chesterPodcastCards,
+				"items": map[string]any{"type": "object",
+					"properties": map[string]any{
+						"ref": map[string]any{"type": "string", "description": "A reference from search_podcasts, such as p1."},
+						"why": map[string]any{"type": "string", "description": "One short sentence saying why it fits where the car is."}},
+					"required": []string{"ref", "why"}, "additionalProperties": false}}},
+			[]string{"episodes"}),
 	}
 }
 
@@ -196,7 +201,7 @@ func (p *chesterPodcastRun) search(ctx context.Context, raw string) (string, boo
 		return "Give a short search in words, such as a place and its history.", true
 	}
 	if p.searches >= chesterPodcastSearches {
-		return "That is enough searching. Pick one episode from the results you have and call show_podcast, or say none fit.", true
+		return "That is enough searching. Pick one to three episodes from the results you have and call show_podcast, or say none fit.", true
 	}
 	p.searches++
 	q := podcastTerm(in.Query)
@@ -232,31 +237,50 @@ func (p *chesterPodcastRun) search(ctx context.Context, raw string) (string, boo
 
 func (p *chesterPodcastRun) show(raw string) string {
 	var in struct {
-		Ref string `json:"ref"`
-		Why string `json:"why"`
+		Episodes []struct {
+			Ref string `json:"ref"`
+			Why string `json:"why"`
+		} `json:"episodes"`
 	}
-	if err := json.Unmarshal([]byte(raw), &in); err != nil {
+	if err := json.Unmarshal([]byte(raw), &in); err != nil || len(in.Episodes) == 0 {
 		p.drops++
-		return "The episode was not readable. Do not call show_podcast again; write the answer."
+		return "The episodes were not readable. Do not call show_podcast again; write the answer."
 	}
-	ref := strings.TrimSpace(in.Ref)
-	if _, err := strconv.Atoi(ref); err == nil {
-		ref = "p" + ref
+	if len(p.cards) > 0 {
+		return "The episodes are already on the page. Write the answer now."
 	}
-	e, ok := p.refs[ref]
-	if !ok {
-		p.drops++
-		return "No card was shown: that reference was not in this question's search results. Write the answer without recommending an episode."
+	shown := map[string]bool{}
+	for _, want := range in.Episodes {
+		if len(p.cards) >= chesterPodcastCards {
+			break
+		}
+		ref := strings.TrimSpace(want.Ref)
+		if _, err := strconv.Atoi(ref); err == nil {
+			ref = "p" + ref
+		}
+		e, ok := p.refs[ref]
+		if !ok {
+			p.drops++
+			continue
+		}
+		if shown[ref] {
+			continue
+		}
+		shown[ref] = true
+		p.cards = append(p.cards, chesterPodcastCard{Show: cleanLine(e.Show, 120), Episode: cleanLine(e.Episode, 160), Minutes: e.Minutes,
+			Year: e.Year, Why: cleanLine(want.Why, 400), Href: e.URL, Label: chesterPodcastLabel})
 	}
-	if len(p.cards) >= 1 {
-		return "One episode per answer: the first is on the page. Write the answer now."
+	if len(p.cards) == 0 {
+		return "No card was shown: those references were not in this question's search results. Write the answer without recommending an episode."
 	}
-	p.cards = append(p.cards, chesterPodcastCard{Show: cleanLine(e.Show, 120), Episode: cleanLine(e.Episode, 160), Minutes: e.Minutes,
-		Year: e.Year, Why: cleanLine(in.Why, 400), Href: e.URL, Label: chesterPodcastLabel})
-	return "The episode card is on the page with an Open in Apple Podcasts button. Nothing you wrote before this call was shown to the traveller. " +
-		"Now write the whole answer: one short sentence on why it fits, and that tapping the button opens it. Do not call show_podcast again."
+	return "The episode cards are on the page, each with an Open in Apple Podcasts button. Nothing you wrote before this call was shown to the traveller. " +
+		"Now write the whole answer: one short sentence on why the first fits, and that tapping a button opens it. Do not call show_podcast again."
 }
 
 func chesterPodcastSynth(cs []chesterPodcastCard) string {
-	return "Chester picked a podcast episode and wrote nothing about it: " + cs[0].Episode + " from " + cs[0].Show + ". The card below says why."
+	said := "Chester picked a podcast episode and wrote nothing about it: " + cs[0].Episode + " from " + cs[0].Show + "."
+	if len(cs) > 1 {
+		said += " The other cards are alternates."
+	}
+	return said + " The card below says why."
 }

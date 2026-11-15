@@ -1111,15 +1111,17 @@ func TestChesterIsToldNothingPrivate(t *testing.T) {
 		form  url.Values
 		point string // the published point the request must carry instead
 		label string
+		zone  bool // whether the point is a private place's, said to be approximate
 	}{
 		// The phone, standing on the raw start.
 		{"the phone at the private place", url.Values{"preset": {"fuel"}, "lat": {"40.1234"}, "lng": {"-100.4321"}},
-			"40.100, -100.450", "near Alder"},
-		// The phone a few kilometres off, outside the place's own cell.
-		{"the phone just outside its cell", url.Values{"preset": {"fuel"}, "lat": {"40.1534"}, "lng": {"-100.4321"}},
-			"40.100, -100.450", "near Alder"},
+			"40.120, -100.430", "near Alder", true},
+		// The phone a couple of kilometres off, outside the one-kilometre radius:
+		// published as itself, rounded, with no private place named.
+		{"the phone just outside the radius", url.Values{"preset": {"fuel"}, "lat": {"40.1434"}, "lng": {"-100.4321"}},
+			"40.143, -100.432", "", false},
 		// No phone position: the last pinned post, which sits on the raw finish.
-		{"the last pinned post", url.Values{"preset": {"fuel"}}, "44.300, -106.300", "near Elm"},
+		{"the last pinned post", url.Values{"preset": {"fuel"}}, "44.320, -106.280", "near Elm", true},
 	}
 	for i, ask := range asks {
 		askEvents(t, askForm(t, app, ask.form))
@@ -1131,12 +1133,16 @@ func TestChesterIsToldNothingPrivate(t *testing.T) {
 			}
 		}
 		// And the point it gives is the published one, said to be approximate.
-		for _, want := range []string{ask.point, "private place"} {
+		wants := []string{ask.point}
+		if ask.zone {
+			wants = append(wants, "private place")
+		}
+		for _, want := range wants {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s: the request does not carry %q", ask.name, want)
 			}
 		}
-		for _, raw := range append(append([]string{}, fixtureRaw...), "40.123", "100.432", "44.321", "44.322", "106.278", "106.279", "40.153") {
+		for _, raw := range append(append([]string{}, fixtureRaw...), "40.123", "44.321", "44.322", "106.278", "106.279", "40.1434") {
 			if strings.Contains(body, raw) {
 				t.Errorf("%s: the request carries the raw private number %s", ask.name, raw)
 			}
@@ -1182,8 +1188,9 @@ func TestPublishPosition(t *testing.T) {
 		private  string
 	}{
 		{"on the private start", 40.1234, -100.4321, fixtureStart, "Alder"},
-		{"in its cell", 40.11, -100.46, fixtureStart, "Alder"},
-		{"outside its cell, inside the mask", 40.1534, -100.4321, fixtureStart, "Alder"},
+		{"in its cell", 40.1249, -100.4290, fixtureStart, "Alder"},
+		{"outside its cell, inside the radius", 40.1255, -100.4321, fixtureStart, "Alder"},
+		{"just outside the radius", 40.1434, -100.4321, LatLng{Lat: 40.143, Lng: -100.432}, ""},
 		{"on the private finish", 44.3217, -106.2789, fixtureFinish, "Elm"},
 		{"on the open road", 41.00049, -101.00051, LatLng{Lat: 41, Lng: -101.001}, ""},
 		{"well clear of the start", 40.3, -100.7, LatLng{Lat: 40.3, Lng: -100.7}, ""},

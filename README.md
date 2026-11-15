@@ -47,7 +47,7 @@ The seed is the RWGPS-import shape — one `LineString` feature per leg, in
 order; `Point` features with `kind=checkpoint` (each with its own `tz`) and
 `kind=candidate` for sights. The origin is public-safe: it is named
 "Hudson Bend (home)", carries `precision: "fuzzed"`, and the app snaps any
-fuzzed checkpoint to the 0.05° grid on the way out of the store, so no page,
+fuzzed checkpoint to the 0.01° grid on the way out of the store, so no page,
 pin or GeoJSON ever sees the real point. Street addresses never enter the
 seed at all — they live in `$DATA_DIR/private.json` on the volume and show
 only to the signed-in trip-keeper (the EagleLakeRocks dedications pattern).
@@ -403,7 +403,7 @@ leg and how many miles of it are left, the local time in the zone of the
 nearest checkpoint, and one position: the phone's when the trip-keeper taps
 *Send my position*, else the last pinned post. That position goes through the
 store's fuzz seam first, so a point at or near a private place is replaced by
-the same 0.05° cell a post's pin would get. The private overlay
+the same 0.01° cell a post's pin would get. The private overlay
 and photos are never sent. The nearest checkpoint's town is
 said only when that checkpoint's own name is one. The web search tool is given
 the ride-day's time zone and nothing else: never a coordinate, and not the
@@ -523,8 +523,8 @@ string would let anyone put a sentence of their choosing on the site with a
 link. curl is unaffected: it gets the status and the full reason as JSON.
 
 **Every coordinate on `/plan` has been through the store's fuzz seam**, the
-roads not taken included: a `precision: "fuzzed"` checkpoint is its 0.05° cell,
-and no line is drawn within 8 km of one — the line runs to the cell point
+roads not taken included: a `precision: "fuzzed"` checkpoint is its 0.01° cell,
+and no line is drawn within 1 km of one — the line runs to the cell point
 instead. The same mask now covers the ride pages and `/route.geojson`, which
 used to hand back the un-snapped vertex where a leg met a private checkpoint.
 
@@ -749,20 +749,20 @@ as a choice. `features/old_photo_without_place.feature` states it.
 
 **Fuzz location** is the privacy control, and it is on every post:
 
-- **Ticked** — the published point is snapped to the 0.05° grid and the
+- **Ticked** — the published point is snapped to the 0.01° grid and the
   accuracy is dropped. If it falls in a `precision: "fuzzed"` checkpoint's
   cell the post is stored as that checkpoint's snapped point and the popup
   says *near <checkpoint>*; anywhere else — a friend's driveway, somewhere
   with no checkpoint at all — it is a nameless cell.
 - **Unticked** — the exact point and its accuracy are stored.
 - Its **default is per post**: ticked when the point falls inside or within
-  2 km of a fuzzed checkpoint, clear everywhere else. `PIN_PRECISION=exact`
+  1 km of a fuzzed checkpoint, clear everywhere else. `PIN_PRECISION=exact`
   flips that one default; it means nothing anywhere else. Kris ruled the
   shape on 2026-09-02: *"protect personal locations, be precise with public
   locations"*.
 
 The form says which case it is in before you post — *publishes as: near
-<checkpoint> — a 5 km cell, not the point (this is a private place)* or
+<checkpoint> — a 1 km cell, not the point (this is a private place)* or
 *publishes as: 34.2100, -118.5000 — the exact point, not a private place* —
 and the line updates live when the toggle flips. `posts.pin_fuzzed` records
 the outcome so a fuzzed (or an exact) post is findable later.

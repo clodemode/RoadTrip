@@ -28,7 +28,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
    ```
 2. **`app_scope` is `roadtrip`** (ruled 2026-09-08). LORE homes in `roadtrip/LORE/<character>/<slug>.yaml`. Rows still reading `app_scope='bloodride'` are pre-ruling history.
 3. **Nothing private goes in the repo or the seed.** `$DATA_DIR/private.json` on the volume holds addresses and notes, keyed by ride and then by checkpoint ord (the top-level block is the first ride's), rendered only to the signed-in trip-keeper. Read one ride's entries with `privateData.forRide`, never the map directly. `git check-ignore` it before you commit anything near it.
-4. **Never render a coordinate that did not come out of the store.** Fuzzed checkpoints are snapped to 0.05° on the way out; a direct read bypasses the only place that protection exists.
+4. **Never render a coordinate that did not come out of the store.** Fuzzed checkpoints are snapped to 0.01° on the way out; a direct read bypasses the only place that protection exists.
 5. **Timezones are per-event, never per-ride.** Store UTC plus the IANA zone. A ride-wide zone misprints every stamp after the first state line.
 6. **`Deploy` is `workflow_dispatch` only, and `plan` is the default.** Never add a push trigger — the site is live under someone's thumb from a car.
 7. **The repo is PUBLIC** (`clodemode/RoadTrip`, CamelCaps = public under `naming-clodemode-repo-case-signals-visibility`). Do not treat it as publishable without an explicit ruling.
@@ -46,6 +46,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 | `main.go`, `store.go`, `handlers.go`, `auth.go`, `photo.go`, `private.go` | the whole app — Go sources at the repo root, no code subdirectory |
 | `trip.go`, `plan_handlers.go`, `convert.go` | trips on the volume and the planner: the trip file and its options, `/plan`, `/driver/trip`, `/driver/plan`, `/driver/ride/active`, and the `-convert` flag |
 | `chester.go`, `chester_handlers.go` | Chester, the en-route helper: settings, the price table, what the API is told, the place cards, the one request, the log and its summary; `/chester`, `/chester/ask`, `/driver/chester/log`, `/driver/chester/log.json`, `/driver/chester/log/{id}` |
+| `trail_points.go` | Trail points: a Chester ask and a track play, when the phone sent a position, each store one published point (through `publishPosition`, never raw) on the ride; `driven()` reads them beside the posts for the been-here line, `trailNear` for an old photo. Not a post |
 | `freelance.go` | FreeLance: Destined on `/driver`: per-user mode and destination in memory (never the plan), TomTom search/route/along-route, the HUD view and "Find picks" with one Chester call logged as mode `picks`; `POST /driver/freelance/{mode,dest,picks}` |
 | `seed/*.geojson` | RWGPS-import shape: one `LineString` per leg; `Point` features `kind=checkpoint` (each with its own `tz`) and `kind=candidate`. The embedded history; nothing is added here |
 | `testdata/` | synthetic fixtures (invented places), each marked `"synthetic": true` |

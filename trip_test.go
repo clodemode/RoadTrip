@@ -23,10 +23,10 @@ const fixtureSlug = "fixture-trip"
 
 var fixtureRaw = []string{"40.1234", "100.4321", "44.3217", "106.2789"}
 
-// What the store must hand out instead: the 0.05° cell of each.
+// What the store must hand out instead: the 0.01° cell of each.
 var (
-	fixtureStart  = LatLng{Lat: 40.1, Lng: -100.45}
-	fixtureFinish = LatLng{Lat: 44.3, Lng: -106.3}
+	fixtureStart  = LatLng{Lat: 40.12, Lng: -100.43}
+	fixtureFinish = LatLng{Lat: 44.32, Lng: -106.28}
 )
 
 func fixtureTrip(t *testing.T) []byte {
@@ -914,17 +914,17 @@ func TestStoreLegLinesStopAtThePrivatePlace(t *testing.T) {
 }
 
 func TestMaskLine(t *testing.T) {
-	home := Checkpoint{Lat: 40.1, Lng: -100.45, Precision: precisionFuzzed}
+	home := Checkpoint{Lat: 40.12, Lng: -100.43, Precision: precisionFuzzed}
 	line := func(pts string) json.RawMessage { return json.RawMessage(pts) }
 	cases := []struct{ name, in, want string }{
 		{"a run at the start collapses to the cell point",
-			`[[-100.4321,40.1234],[-100.44,40.13],[-100.6,40.5],[-101,41]]`, `[[-100.45,40.1],[-100.6,40.5],[-101,41]]`},
+			`[[-100.4321,40.1234],[-100.43,40.126],[-100.6,40.5],[-101,41]]`, `[[-100.43,40.12],[-100.6,40.5],[-101,41]]`},
 		{"a run at the end",
-			`[[-101,41],[-100.6,40.5],[-100.44,40.13],[-100.4321,40.1234]]`, `[[-101,41],[-100.6,40.5],[-100.45,40.1]]`},
+			`[[-101,41],[-100.6,40.5],[-100.43,40.126],[-100.4321,40.1234]]`, `[[-101,41],[-100.6,40.5],[-100.43,40.12]]`},
 		{"a pass through the middle leaves no gap",
-			`[[-101,41],[-100.44,40.13],[-100.43,40.12],[-99.9,39.6]]`, `[[-101,41],[-100.45,40.1],[-99.9,39.6]]`},
+			`[[-101,41],[-100.43,40.126],[-100.43,40.12],[-99.9,39.6]]`, `[[-101,41],[-100.43,40.12],[-99.9,39.6]]`},
 		{"a line wholly inside stays a line",
-			`[[-100.44,40.13],[-100.43,40.12]]`, `[[-100.45,40.1],[-100.45,40.1]]`},
+			`[[-100.43,40.126],[-100.43,40.12]]`, `[[-100.43,40.12],[-100.43,40.12]]`},
 		{"a line nowhere near is untouched",
 			`[[-101,41],[-102,42]]`, `[[-101,41],[-102,42]]`},
 		{"a line that cannot be read comes back empty, not raw",

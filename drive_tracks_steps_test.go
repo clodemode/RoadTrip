@@ -99,6 +99,8 @@ func initDriveTracksScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^both questions say to use where the car is$`, w.bothUseCar)
 	sc.Step(`^the trouble record holds a drivetracks_pick drawn with seed (\d+) and the angle "([^"]*)"$`, w.meltAngle)
 
+	registerDriveAlbumSteps(sc, w)
+
 	sc.Step(`^the driver opens the driver screen$`, w.openDriver)
 	sc.Step(`^the driver taps Drive Tracks$`, w.tap)
 

@@ -328,6 +328,14 @@ func (a *App) roadtracksState(w http.ResponseWriter, r *http.Request) {
 	// resume point is saved either way; a play that cannot be kept is not an error.
 	if sp, ok := startedOf(r, id, idx); ok {
 		_ = a.recordPlay(a.userOf(r), sp, time.Now())
+		// A start that came with the phone's position is a trail point too.
+		lat, lng := formCoord(r, "lat", 90), formCoord(r, "lng", 180)
+		if lat == nil || lng == nil {
+			lat, lng = a.simFix(r)
+		}
+		if lat != nil && lng != nil {
+			a.dropTrailPoint(*lat, *lng, trailSourcePlay, time.Now())
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

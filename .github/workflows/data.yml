@@ -150,7 +150,7 @@ jobs:
           # Where the ride has actually got to. Names, stamps and the privacy
           # posture — never the points, which is why precision is worth
           # printing: "fuzzed" is the assurance that the pin on the map is a
-          # 5 km cell and not a doorstep.
+          # 1 km cell and not a doorstep.
           curl -sS -o /tmp/route.json -H "Authorization: Bearer $PUSH_TOKEN" \
             --max-time 30 "$SITE/route.geojson"
           echo "checkpoints:"

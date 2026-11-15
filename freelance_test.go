@@ -610,7 +610,7 @@ func TestEveryStopPageOffersWazeGoogleAndApple(t *testing.T) {
 
 // --- the private-place mask on the along-route search ---------------------------
 
-// The fixture trip's Alder (40.10, -100.45) and Elm (44.30, -106.30) are
+// The fixture trip's Alder (40.12, -100.43) and Elm (44.32, -106.28) are
 // fuzzed checkpoints, invented places. A route is written as lat,lng pairs.
 func routeJSON(pts [][2]float64) string {
 	var sb strings.Builder
@@ -652,15 +652,15 @@ func findPicksAt(t *testing.T, app *App, c *http.Cookie, lat, lng string) freePi
 
 func TestAlongRouteSearchNeverSendsPointsNearAPrivatePlace(t *testing.T) {
 	// Starts at Alder's door, passes it again, runs far, then passes Elm.
-	route := [][2]float64{{40.10, -100.45}, {40.12, -100.43}, {40.50, -100.30}, {41.00, -101.00}, {42.00, -102.50},
-		{43.00, -104.00}, {44.28, -106.28}, {44.30, -106.31}, {45.00, -107.50}}
+	route := [][2]float64{{40.12, -100.43}, {40.123, -100.428}, {40.50, -100.30}, {41.00, -101.00}, {42.00, -102.50},
+		{43.00, -104.00}, {44.318, -106.282}, {44.32, -106.28}, {45.00, -107.50}}
 	tt := newTT(t)
 	app, c := maskedPicksApp(t, tt, route)
-	o := findPicksAt(t, app, c, "40.1000", "-100.4500")
+	o := findPicksAt(t, app, c, "40.1200", "-100.4300")
 	if o.State != "ok" || tt.along.Load() == 0 {
 		t.Fatalf("a mostly-open route must still be searched: %+v along=%d", o, tt.along.Load())
 	}
-	fuzzed := []Checkpoint{{Lat: 40.10, Lng: -100.45}, {Lat: 44.30, Lng: -106.30}}
+	fuzzed := []Checkpoint{{Lat: 40.12, Lng: -100.43}, {Lat: 44.32, Lng: -106.28}}
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
 	for _, pts := range tt.alongPts {
@@ -676,10 +676,10 @@ func TestAlongRouteSearchNeverSendsPointsNearAPrivatePlace(t *testing.T) {
 }
 
 func TestAlongRouteSearchFailsClosedWhenTheWholeRouteIsPrivate(t *testing.T) {
-	route := [][2]float64{{40.10, -100.45}, {40.12, -100.43}, {40.14, -100.41}, {40.16, -100.39}}
+	route := [][2]float64{{40.12, -100.43}, {40.123, -100.428}, {40.125, -100.425}, {40.127, -100.424}}
 	tt := newTT(t)
 	app, c := maskedPicksApp(t, tt, route)
-	o := findPicksAt(t, app, c, "40.1000", "-100.4500")
+	o := findPicksAt(t, app, c, "40.1200", "-100.4300")
 	if tt.along.Load() != 0 {
 		t.Fatalf("%d along-route calls were made for a route inside a private radius", tt.along.Load())
 	}
@@ -874,7 +874,7 @@ func TestAimlessFindPicksNearbyAsksTomTomAroundTheFixAndNotAlongARoute(t *testin
 }
 
 func TestAimlessFindPicksFailsClosedNearAPrivatePlace(t *testing.T) {
-	for _, fix := range [][2]string{{"40.1000", "-100.4500"}, {"40.1500", "-100.4000"}, {"44.3000", "-106.3000"}} {
+	for _, fix := range [][2]string{{"40.1200", "-100.4300"}, {"40.1250", "-100.4250"}, {"44.3200", "-106.2800"}} {
 		tt := newTT(t)
 		app, c := aimlessApp(t, tt)
 		o := findPicksAt(t, app, c, fix[0], fix[1])

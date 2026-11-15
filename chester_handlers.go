@@ -338,6 +338,11 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusInternalServerError, chesterSaidNoRide)
 		return
 	}
+	// The phone said where the car is: that is a trail point (trail_points.go),
+	// published before it is stored. No position, no point.
+	if lat != nil && lng != nil {
+		a.dropTrailPoint(*lat, *lng, trailSourceChester, now)
+	}
 
 	// Every call says which drive it is part of, and what Chester remembers
 	// of this traveller: both after the cache breakpoint, in the volatile part.

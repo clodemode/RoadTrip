@@ -178,11 +178,11 @@ func (w *fuzzWorld) insert(lat, lng *float64) error {
 // --- what is published ---------------------------------------------------------------------
 
 func onGrid(v float64) bool {
-	q := v / 0.05
+	q := v / 0.01
 	return math.Abs(q-math.Round(q)) < 1e-6
 }
 
-// fuzzy: pin_fuzzed is set, the published point is on the 0.05 degree grid (or
+// fuzzy: pin_fuzzed is set, the published point is on the 0.01 degree grid (or
 // is a stop's own point) and is not the exact one.
 func (w *fuzzWorld) fuzzy() error {
 	post, err := w.thePost()
@@ -200,7 +200,7 @@ func (w *fuzzWorld) fuzzy() error {
 		}
 	}
 	if !atStop && !(onGrid(la) && onGrid(ln)) {
-		return fmt.Errorf("the published point %v, %v is on neither the 0.05 degree grid nor a stop's cell", la, ln)
+		return fmt.Errorf("the published point %v, %v is on neither the 0.01 degree grid nor a stop's cell", la, ln)
 	}
 	if w.same(la, ln) {
 		return fmt.Errorf("the published point is the exact one")
@@ -457,7 +457,7 @@ const (
 )
 
 // bPrivate moves B off the grid and marks it a private place; the store then
-// publishes only its 0.05 degree cell.
+// publishes only its 0.01 degree cell.
 func (w *fuzzWorld) bPrivate() error {
 	if err := w.s.moveStop(1, bRawLat, bRawLng); err != nil {
 		return err

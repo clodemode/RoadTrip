@@ -304,14 +304,29 @@
     if (!(startMark && startMark.id === id && startMark.idx === i && t - startMark.at < 30000)) startMark = { id: id, idx: i, key: t, at: t, sent: false };
     if (!startMark.sent) pend = startMark;
   }
+  // A track start also says where the car is, when the phone will tell: one
+  // fix, asked for after the sound has begun, never waited on for more than
+  // three seconds. The server publishes it (trail_points.go) before it keeps it.
+  function startFix(cb) {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { cb(''); return; }
+    var done = false, timer = setTimeout(function () { end(''); }, 3500);
+    function end(s) { if (!done) { done = true; clearTimeout(timer); cb(s); } }
+    try {
+      navigator.geolocation.getCurrentPosition(function (p) {
+        end('&lat=' + encodeURIComponent(p.coords.latitude.toFixed(4)) + '&lng=' + encodeURIComponent(p.coords.longitude.toFixed(4)));
+      }, function () { end(''); }, { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 });
+    } catch (e) { end(''); }
+  }
   function sendStarted(m) {
     m.sent = true;
-    try {
-      fetch('/driver/roadtracks/state', { method: 'POST', credentials: 'same-origin', keepalive: true,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: startedBody(album, tracks[m.idx], m.idx, audio.currentTime || 0, m.key) })
-        .then(function (r) { if (!r.ok) m.sent = false; }, function () { m.sent = false; });
-    } catch (e) { m.sent = false; }
+    var body = startedBody(album, tracks[m.idx], m.idx, audio.currentTime || 0, m.key);
+    startFix(function (fix) {
+      try {
+        fetch('/driver/roadtracks/state', { method: 'POST', credentials: 'same-origin', keepalive: true,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body + fix })
+          .then(function (r) { if (!r.ok) m.sent = false; }, function () { m.sent = false; });
+      } catch (e) { m.sent = false; }
+    });
   }
   function playTrack(i, at) {
     cur = i; startAt = at || 0; lastPos = startAt;

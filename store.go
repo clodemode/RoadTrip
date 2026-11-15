@@ -59,7 +59,7 @@ type Leg struct {
 // the first border.
 //
 // Precision "fuzzed" means the point is private (the origin is a home). The
-// store snaps such a point to the 0.05° grid on the way OUT, so nothing
+// store snaps such a point to the 0.01° grid on the way OUT, so nothing
 // downstream — pages, GeoJSON, pins — ever sees the real coordinate.
 type Checkpoint struct {
 	ID            int64   `json:"id"`
@@ -160,7 +160,7 @@ type Post struct {
 	// hidden post stores nothing here.
 	//
 	// PinFuzzed marks a post whose raw fix was deliberately coarsened by the
-	// form's "Fuzz location" toggle: the point is on the 0.05° grid and the
+	// form's "Fuzz location" toggle: the point is on the 0.01° grid and the
 	// accuracy is gone. It exists so a fuzzed — or, by its absence, an exact —
 	// post is findable later; nothing renders it to the public.
 	Lat       *float64
@@ -403,6 +403,17 @@ CREATE TABLE IF NOT EXISTS plays (
   UNIQUE (user, album_id, track_idx, start_key)
 );
 CREATE INDEX IF NOT EXISTS plays_ride ON plays(ride_slug, started_at);
+CREATE TABLE IF NOT EXISTS trail_points (
+  id         INTEGER PRIMARY KEY,
+  ride_slug  TEXT NOT NULL,
+  leg_id     INTEGER NOT NULL,
+  occurred_at TEXT NOT NULL,
+  tz         TEXT NOT NULL DEFAULT 'UTC',
+  lat        REAL NOT NULL,
+  lng        REAL NOT NULL,
+  source     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS trail_points_ride ON trail_points(ride_slug, occurred_at);
 `
 
 type Store struct{ db *sql.DB }
@@ -726,8 +737,9 @@ func loadLoc(tz string) *time.Location {
 
 // --- fuzzing -----------------------------------------------------------------
 
-// fuzzGrid is the snap size for private points: 0.05° ≈ 5.5 km of latitude.
-const fuzzGrid = 0.05
+// fuzzGrid is the snap size for private points: 0.01° ≈ 1.1 km of latitude
+// (Kris, 2026-11-14: 0.05° was too big).
+const fuzzGrid = 0.01
 
 func snap(v float64) float64 {
 	// Round the product too, or 30.4 comes back as 30.400000000000002.
@@ -744,7 +756,7 @@ func (c *Checkpoint) fuzz() {
 // place. A browser fix from the driveway at departure, or a library photo's
 // EXIF from the Cloudcroft street, would otherwise draw the home on the
 // public map at 11 m precision.
-const privateRadiusKm = 2.0
+const privateRadiusKm = 1.0
 
 // haversineKm is the great-circle distance in kilometres.
 func haversineKm(lat1, lng1, lat2, lng2 float64) float64 {
@@ -760,8 +772,8 @@ func haversineKm(lat1, lng1, lat2, lng2 float64) float64 {
 // nearPrivate returns the fuzzed checkpoint a raw (EXIF or browser) pin
 // belongs to, or nil. The checkpoints must already be snapped — anything
 // from scanCheckpoint is. A pin belongs to a fuzzed checkpoint when it snaps
-// into the same 0.05° cell (the cell IS the fuzz, and a home need not sit at
-// its centre: the half-diagonal is ~3.7 km at this latitude) or when it lies
+// into the same 0.01° cell (the cell IS the fuzz, and a home need not sit at
+// its centre: the half-diagonal is ~0.75 km at this latitude) or when it lies
 // within privateRadiusKm of the cell point, which catches a driveway just
 // over a cell edge. The nearest wins if two qualify.
 func nearPrivate(lat, lng float64, cps []Checkpoint) *Checkpoint {
@@ -837,12 +849,12 @@ func rideCheckpoints(legs []Leg) []Checkpoint {
 	return out
 }
 
-// lineMaskKm is how far around a private place a polyline is not drawn. The
-// snapped point is the centre of a 0.05° cell and the real place can sit in
-// its corner, about 3.7 km out, so a radius the size of the cell would still
-// let a line walk up to the door from the far side. 8 km leaves every drawn
-// vertex at least ~4 km from anywhere the real place can be.
-const lineMaskKm = 8.0
+// lineMaskKm is how far around a private place a polyline is not drawn: the
+// same 1 km as the protected radius (Kris, 2026-11-14, ruled from 8 km). The
+// snapped point is the centre of a 0.01° cell and the real place can sit in
+// its corner, about 0.75 km out, so every drawn vertex is still clear of the
+// cell the real place is in.
+const lineMaskKm = 1.0
 
 // fuzzedOf picks the private places out of a checkpoint list. The list must
 // have come through scanCheckpoint or Checkpoint.fuzz, so each is already its
