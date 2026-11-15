@@ -69,6 +69,7 @@ func chesterPreset(id string) (string, bool) {
 // goes to the page as it is, and the question stays in the box.
 const (
 	chesterSaidOff      = "Chester is not set up on this site."
+	chesterSaidResting  = "Chester is resting until the next trip starts."
 	chesterSaidBusy     = "Chester is busy with another question. Ask again when it has finished."
 	chesterSaidEmpty    = "Ask a question first."
 	chesterSaidLong     = "The question is too long. Keep it under 1,000 characters."
@@ -98,6 +99,20 @@ func chesterSaidOverLimit(cfg *chesterConfig, mode string, spent float64) string
 // chesterOverLimit is the rule: a question is refused when the day's
 // spending plus the most it could cost is above the limit. The hair's width
 // keeps two sums that should be equal from differing in the last bit.
+// rideZone is the zone the ride is in right now: where the last arrival was,
+// else where the day's leg starts.
+func (a *App) rideZone(slug string) string {
+	ride, err := a.store.Ride(slug)
+	if err != nil {
+		return "UTC"
+	}
+	legs, err := a.store.Legs(slug)
+	if err != nil {
+		return "UTC"
+	}
+	return defaultTZ(legs, defaultLeg(legs, dayOf(ride, legs, time.Now())))
+}
+
 // chesterDay is the day the daily cap runs on: the driver's own day, in the
 // zone the app already reads "today" in (rideZone), never the UTC day, which
 // ended at 18:00 on a Central afternoon.
@@ -225,6 +240,12 @@ func (a *App) chesterAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	if a.chester == nil {
 		refuse(http.StatusServiceUnavailable, chesterSaidOff)
+		return
+	}
+	// No trip running: Chester spends nothing (Kris, 2026-11-14). Refused before
+	// the form is read and before anything is built, so no API call can follow.
+	if a.rideIsFinished() {
+		refuse(http.StatusServiceUnavailable, chesterSaidResting)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)

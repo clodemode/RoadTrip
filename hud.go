@@ -202,7 +202,8 @@ func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, movin
 	// ETA at plan pace, only while the car is moving and we know where it is:
 	// a promise made to a parked car, or from a guess at today's leg, is not
 	// one to make.
-	if moving && onLine && end != nil && leg.EstHours > 0 && haveLine && totalKm > 0 {
+	// A finished ride makes no promise at all (the record has no ETA).
+	if moving && onLine && end != nil && leg.EstHours > 0 && haveLine && totalKm > 0 && !rideFinished(legs) {
 		leftFrac := math.Max(0, (totalKm-posAlong)/totalKm)
 		eta := now.Add(time.Duration(leg.EstHours * leftFrac * float64(time.Hour)))
 		eta = notBeforeRoadLimit(now, eta, totalKm-posAlong)
@@ -307,7 +308,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 	}
 	// The trip switcher is for the KATE only: elsewhere it costs no query.
 	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h, "DriveStarted": a.driveStarted(),
-		"Notice": r.URL.Query().Get("notice"), "NoticePost": a.noticePost(r, a.activeSlug()), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
+		"Finished": a.rideIsFinished(), "Notice": r.URL.Query().Get("notice"), "NoticePost": a.noticePost(r, a.activeSlug()), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 
 // hudJSON is the live HUD: position-aware, with the hazard chips of the leg.

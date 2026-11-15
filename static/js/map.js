@@ -226,8 +226,9 @@
     npCtl.addTo(map);
     var drawPlays = function (doc) {
       var t = NP.chipText(doc);
-      npEl.hidden = !t;
-      if (t) { npLabel.textContent = t.label; npLine.textContent = t.line; }
+      /* A finished ride has no chip but keeps the Listen Inn history. */
+      npEl.hidden = !t && !doc.finished;
+      if (t && npLabel && npLine) { npLabel.textContent = t.label; npLine.textContent = t.line; }
       npPanel.innerHTML = NP.panelHtml(doc.tracks || [], esc, doc.listen && !!document.getElementById('np-audio'));
       if (window.RTListen && window.RTListen.update) window.RTListen.update(doc);
       playLayer.clearLayers();

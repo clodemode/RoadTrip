@@ -168,11 +168,6 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /tracks.json", a.tracksJSON)
 	// A visitor hears one play of the active ride (listen.go): checked, then handed on.
 	mux.HandleFunc("GET /tracks/{id}/audio", a.tracksAudio)
-	// The checklist: the active ride's steps and questions. Private text is
-	// read only for a signed-in request; /checklist.json never carries it.
-	// Both are driver-only (Kris, 2026-11-07).
-	mux.Handle("GET /checklist", a.requireRide(a.checklistPage))
-	mux.Handle("GET /checklist.json", a.requireRide(a.checklistJSON))
 
 	mux.HandleFunc("GET /driver/login", a.loginForm)
 	mux.HandleFunc("POST /driver/login", a.loginSubmit)
@@ -225,10 +220,6 @@ func (a *App) routes() http.Handler {
 	mux.Handle("GET /driver/rides.json", a.requireAuth(a.ridesJSON))
 	mux.Handle("POST /driver/plan", a.requireRide(a.planSave))
 	mux.Handle("POST /driver/routing", a.requireRide(a.routingAdd))
-	// The checklist carriage, its signed-in census, and the check-off.
-	mux.Handle("POST /driver/checklist", a.requireAuth(a.checklistPush))
-	mux.Handle("GET /driver/checklist.json", a.requireRide(a.checklistCensus))
-	mux.Handle("POST /driver/checklist/{kind}/{id}", a.requireRide(a.checklistMark))
 	// Chester, the en-route helper, and its log. Signed in only, every one:
 	// a question spends money and the log is the trip-keeper's own.
 	mux.Handle("GET /chester", a.requireAuth(a.chesterPage))
@@ -338,7 +329,7 @@ func logRequests(h http.Handler) http.Handler {
 // requireRide is requireAuth plus a ride check: a driver is on the ride the
 // request is for or gets a 403. The ride is ?ride= when named, else the ride the
 // site shows. An admin and the push token are on every ride. A write that names
-// its ride in the form (a checklist mark) is checked again where the form is read.
+// its ride in the form is checked again where the form is read.
 func (a *App) requireRide(next http.HandlerFunc) http.Handler {
 	return a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		slug := a.activeSlug()
@@ -428,7 +419,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	data["Authed"] = authed
 	data["IsAdmin"] = a.auth.IsAdmin(r)
 	// Driver: signed in AND on the ride the site shows. The ride's tools (post,
-	// lodging, checklist, GeoJSON, plan controls) are drawn only for these.
+	// lodging, GeoJSON, plan controls) are drawn only for these.
 	data["Driver"] = authed && a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
 	if data["Driver"] == true && (name == "index.html" || name == "plan.html") {
 		data["TripSwitch"] = a.tripSwitch()
@@ -463,7 +454,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	}
 	data["SimOn"] = data["SimBanner"] != ""
 	// Whether the masthead links to Chester: signed in, and switched on.
-	data["ChesterOn"] = authed && a.chester != nil
+	data["ChesterOn"] = authed && a.chester != nil && !a.rideIsFinished()
 	// Whether the plan and ride pages link to Chester's route change.
 	data["RerouteOn"] = data["ChesterOn"] == true && a.hasRouteChoices()
 	data["CreatureName"] = CreatureName
@@ -982,16 +973,13 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, posts), plannedStarts(rv.Legs, posts)), bars)}
 	// The day's end and Add a stop: the trip-keeper's, and nobody else's. A
 	// visitor's page carries no navigator link and no place search.
-	if a.isDriver(r) {
+	// A finished ride has no day's end to navigate to: the page is a record.
+	if a.isDriver(r) && !rideFinished(rv.Legs) {
 		if de := dayEnd(rv.Legs, dl, len(rv.Legs) > 1, a.navAddresses(r)); de != nil {
 			de.CanAdd = a.freeSvc().key != ""
 			a.lookupStop(r, de)
 			data["DayEnd"] = de
 		}
-	}
-	// The checklist in one line, n of m done. Counts only.
-	if sum, ok := a.store.ChecklistSummary(rv.Ride.Slug); ok {
-		data["Checklist"] = sum
 	}
 	data["NowPlaying"] = a.nowPlayingFor(rv.Ride.Slug, time.Now()) // nil: no plays, no chip
 	a.render(w, r, "index.html", data)

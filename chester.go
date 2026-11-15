@@ -21,7 +21,7 @@ package main
 //     at its stored precision, so its exact point, unless the post is fuzzed
 //     (then it is already fuzzy) or lies near a private stop (then it is that
 //     stop's cell): publishPostPosition, ruled 2026-11-08. It is never told
-//     the private overlay, a checklist's private text, or a photo.
+//     the private overlay or a photo.
 //   - Chester only suggests. Nothing it says is written into the plan.
 
 import (

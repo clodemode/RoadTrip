@@ -421,18 +421,15 @@ func TestEmbeddedSeedPassesTheLineCheck(t *testing.T) {
 // --- 4. ?error= prints a fixed sentence or nothing -----------------------------------
 
 func TestErrorQueryPrintsOnlyFixedSentences(t *testing.T) {
-	app := checklistApp(t)
+	app := activeTripApp(t)
 	free := []string{
 		"Free cake at example.test",
 		"<script>alert(1)</script>",
 		"conflict zzqx-more", // a known code is matched whole, not as a prefix
 		"CONFLICT",
 	}
-	for _, page := range []string{"/plan", "/checklist"} {
+	for _, page := range []string{"/plan"} {
 		for _, token := range []string{"", testToken} {
-			if token == "" && page == "/checklist" {
-				continue // driver-only: a visitor is redirected, with the query in the next= link
-			}
 			for _, text := range free {
 				body := send(t, app, "GET", page+"?error="+url.QueryEscape(text)+"&ok="+url.QueryEscape(text), token, "", nil).Body.String()
 				for _, leak := range []string{"Free cake", "example.test", "alert(1)", "zzqx-more", "CONFLICT", "Not saved", "Saved."} {
@@ -444,10 +441,10 @@ func TestErrorQueryPrintsOnlyFixedSentences(t *testing.T) {
 		}
 	}
 	// Positive control, and the whole table: every code prints its sentence.
-	if len(planRefusals) < 5 || len(checklistRefusals) < 5 {
+	if len(planRefusals) < 5 {
 		t.Fatal("the code tables are nearly empty; the checks above would pass on nothing")
 	}
-	for page, table := range map[string]map[string]string{"/plan": planRefusals, "/checklist": checklistRefusals} {
+	for page, table := range map[string]map[string]string{"/plan": planRefusals} {
 		for code, sentence := range table {
 			body := send(t, app, "GET", page+"?error="+url.QueryEscape(code), testToken, "", nil).Body.String()
 			if want := "Not saved: " + template.HTMLEscapeString(sentence) + "."; !strings.Contains(body, want) {
@@ -464,17 +461,13 @@ func TestErrorQueryPrintsOnlyFixedSentences(t *testing.T) {
 	}
 	redirects := map[string]*httptest.ResponseRecorder{
 		"/plan": browserPost(t, app, "/driver/plan", url.Values{"opt-finish": {"stopover"}}),
-		"/plan (a choice the trip does not have)":   browserPost(t, app, "/driver/plan", url.Values{"opt-day1": {"tunnel"}}),
-		"/plan (a start that is not a date)":        browserPost(t, app, "/driver/plan", url.Values{"start": {"the 2nd"}}),
-		"/checklist (a public note that is a VIN)":  browserPost(t, app, "/driver/checklist/step/inspect", url.Values{"outcome": {fixtureVIN}}),
-		"/checklist (a time that has not happened)": browserPost(t, app, "/driver/checklist/step/inspect", url.Values{"at": {"2999-01-01T00:00"}}),
+		"/plan (a choice the trip does not have)": browserPost(t, app, "/driver/plan", url.Values{"opt-day1": {"tunnel"}}),
+		"/plan (a start that is not a date)":      browserPost(t, app, "/driver/plan", url.Values{"start": {"the 2nd"}}),
 	}
 	wantCode := map[string]string{
 		"/plan": planErrConflict,
-		"/plan (a choice the trip does not have)":   planErrChoice,
-		"/plan (a start that is not a date)":        planErrStart,
-		"/checklist (a public note that is a VIN)":  clErrVIN,
-		"/checklist (a time that has not happened)": clErrFuture,
+		"/plan (a choice the trip does not have)": planErrChoice,
+		"/plan (a start that is not a date)":      planErrStart,
 	}
 	for name, rec := range redirects {
 		loc, err := url.Parse(rec.Header().Get("Location"))
@@ -503,18 +496,15 @@ func parseUTCMust(t *testing.T, s string) time.Time {
 // --- 5. a signed-in page is never cached ---------------------------------------------
 
 func TestSignedInPagesAreNeverCached(t *testing.T) {
-	app := privateTextApp(t)
+	app := activeTripApp(t)
 	rec := httptest.NewRecorder()
 	app.auth.Issue(rec, false, testAdminUser(t, app))
 	cookie := rec.Result().Cookies()[0]
 
-	for _, p := range []string{"/checklist", "/", "/plan", "/photos"} {
+	for _, p := range []string{"/", "/plan", "/photos"} {
 		// Anonymous: exactly as it was. No cache header and no Vary.
 		anon := send(t, app, "GET", p, "", "", nil)
 		wantAnon := http.StatusOK
-		if p == "/checklist" {
-			wantAnon = http.StatusFound // driver-only
-		}
 		if anon.Code != wantAnon {
 			t.Fatalf("anonymous %s: status %d, want %d", p, anon.Code, wantAnon)
 		}
@@ -540,16 +530,6 @@ func TestSignedInPagesAreNeverCached(t *testing.T) {
 			}
 			if vary := w.Header().Values("Vary"); len(vary) != 1 || vary[0] != "Cookie" {
 				t.Errorf("%s by %s: Vary %v, want [Cookie]", p, how, vary)
-			}
-		}
-		// Positive control: the signed-in /checklist really is the page with
-		// private text on it, the thing a cache must not keep.
-		if p == "/checklist" {
-			if !strings.Contains(byToken.Body.String(), privateMark) || !strings.Contains(byCookie.Body.String(), privateMark) {
-				t.Error("the signed-in /checklist carries no private text; the header check is about nothing")
-			}
-			if strings.Contains(anon.Body.String(), privateMark) {
-				t.Error("the anonymous /checklist carries private text")
 			}
 		}
 	}

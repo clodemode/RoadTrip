@@ -99,7 +99,6 @@ Feature: The menu follows the ride's state, Drive Tracks rides along, every page
       | /                | Alder to Elm > Ride                   | Ride                    |
       | /plan            | Alder to Elm > Plan                   | Plan                    |
       | /photos          | Alder to Elm > Photos                 | Photos                  |
-      | /checklist       | Alder to Elm > Checklist              | Checklist               |
       | /chester         | Alder to Elm > Chester                | Chester                 |
       | /driver          | Alder to Elm > Driver                 | Driver                  |
       | /driver/post     | Alder to Elm > Driver > Start the drive | Start the drive       |

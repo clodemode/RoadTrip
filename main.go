@@ -243,11 +243,6 @@ func main() {
 	if loaded, failed := loadVolumeTrips(store, dataDir); loaded+failed > 0 {
 		log.Printf("volume trips: %d loaded, %d not loaded", loaded, failed)
 	}
-	// And each trip's checklist, after its trip: open steps take the file's
-	// text, done ones are never written.
-	if loaded, failed := loadVolumeChecklists(store, dataDir); loaded+failed > 0 {
-		log.Printf("volume checklists: %d loaded, %d not loaded", loaded, failed)
-	}
 
 	app := &App{
 		store:    store,

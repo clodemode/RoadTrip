@@ -15,9 +15,6 @@ import (
 func ridesApp(t *testing.T) (app *App, ann, bob, admin *http.Cookie) {
 	t.Helper()
 	app = activeTripApp(t)
-	if w := pushChecklist(t, app, fixtureChecklist(t), ""); w.Code != http.StatusOK {
-		t.Fatalf("push checklist: %d", w.Code)
-	}
 	ann = asUser(t, app, "ann", roleEditor)
 	bob = asUser(t, app, "bob", roleEditor)
 	admin = asUser(t, app, "root", roleAdmin)
@@ -34,7 +31,7 @@ func ridesApp(t *testing.T) (app *App, ann, bob, admin *http.Cookie) {
 // own ride they work; an admin and the push token are on every ride.
 func TestDriverIsRefusedOnARideTheyAreNotAssignedTo(t *testing.T) {
 	app, ann, bob, admin := ridesApp(t)
-	reads := []string{"/checklist", "/checklist.json", "/route.geojson", "/driver/post", "/driver/posts.json", "/driver/lodging"}
+	reads := []string{"/route.geojson", "/driver/post", "/driver/posts.json", "/driver/lodging"}
 	for _, p := range reads {
 		if w := doAs(t, app, ann, "GET", p, nil); w.Code != http.StatusOK {
 			t.Errorf("ann (on the ride) GET %s: %d, want 200", p, w.Code)
@@ -50,7 +47,7 @@ func TestDriverIsRefusedOnARideTheyAreNotAssignedTo(t *testing.T) {
 		}
 	}
 	writes := []string{"/driver/post", "/driver/lodging", "/driver/plan", "/driver/checkpoint/1/arrive",
-		"/driver/post/1/delete", "/driver/post/1/pin", "/driver/post/1/edit", "/driver/checklist/step/x"}
+		"/driver/post/1/delete", "/driver/post/1/pin", "/driver/post/1/edit"}
 	for _, p := range writes {
 		if w := doAs(t, app, bob, "POST", p, url.Values{"x": {"1"}}); w.Code != http.StatusForbidden {
 			t.Errorf("bob POST %s: %d, want 403", p, w.Code)
@@ -68,14 +65,11 @@ func TestDriverIsRefusedOnARideTheyAreNotAssignedTo(t *testing.T) {
 func TestDriverCannotReachAnotherRideByNamingIt(t *testing.T) {
 	app, ann, bob, _ := ridesApp(t)
 	other := app.rideSlug
-	if w := doAs(t, app, ann, "GET", "/driver/checklist.json?ride="+other, nil); w.Code != http.StatusForbidden {
+	if w := doAs(t, app, ann, "GET", "/driver/posts.json?ride="+other, nil); w.Code != http.StatusForbidden {
 		t.Errorf("ann reading ride %s by name: %d, want 403", other, w.Code)
 	}
-	if w := doAs(t, app, ann, "POST", "/driver/checklist/step/x", url.Values{"ride": {other}}); w.Code != http.StatusForbidden {
-		t.Errorf("ann marking on ride %s by name: %d, want 403", other, w.Code)
-	}
-	// Bob is on the other ride: naming it is allowed (it may 404 for want of a checklist, never 403).
-	if w := doAs(t, app, bob, "GET", "/driver/checklist.json?ride="+other, nil); w.Code == http.StatusForbidden {
+	// Bob is on the other ride: naming it is allowed (never 403).
+	if w := doAs(t, app, bob, "GET", "/driver/posts.json?ride="+other, nil); w.Code == http.StatusForbidden {
 		t.Errorf("bob reading his own ride by name was refused")
 	}
 }
@@ -83,7 +77,7 @@ func TestDriverCannotReachAnotherRideByNamingIt(t *testing.T) {
 // The nav and tool bar show a driver only what their ride has.
 func TestNavShowsOnlyTheDriversRides(t *testing.T) {
 	app, ann, bob, admin := ridesApp(t)
-	tools := []string{`href="/checklist"`, `href="/driver/post"`, `href="/driver/lodging"`}
+	tools := []string{`href="/driver/post"`, `href="/driver/lodging"`}
 	for _, c := range []struct {
 		who  string
 		ck   *http.Cookie
@@ -102,12 +96,11 @@ func TestNavShowsOnlyTheDriversRides(t *testing.T) {
 // ride; boot pins that list; a later switch of the active ride then refuses them.
 func TestLegacyUserKeepsTheActiveRideAndIsPinned(t *testing.T) {
 	app := activeTripApp(t)
-	pushChecklist(t, app, fixtureChecklist(t), "")
 	old := asUser(t, app, "old", roleEditor)
 	if u, _ := app.auth.users.get("old"); u.Rides != nil {
 		t.Fatalf("a fresh user has a list: %v", u.Rides)
 	}
-	if w := doAs(t, app, old, "GET", "/checklist", nil); w.Code != http.StatusOK {
+	if w := doAs(t, app, old, "GET", "/driver/lodging", nil); w.Code != http.StatusOK {
 		t.Fatalf("legacy user on the active ride: %d, want 200", w.Code)
 	}
 	n, err := app.auth.users.migrateLegacyRides(app.activeSlug())
@@ -180,13 +173,13 @@ func TestAdminAssignsRidesOnTheUsersPage(t *testing.T) {
 	if r := set(admin, fixtureSlug, app.rideSlug); r.code != http.StatusFound {
 		t.Fatalf("assign: %d, want 302", r.code)
 	}
-	if w := doAs(t, app, bob, "GET", "/checklist", nil); w.Code != http.StatusOK {
+	if w := doAs(t, app, bob, "GET", "/driver/lodging", nil); w.Code != http.StatusOK {
 		t.Errorf("bob after being assigned the active ride: %d, want 200", w.Code)
 	}
 	if r := set(admin); r.code != http.StatusFound {
 		t.Fatalf("unassign all: %d", r.code)
 	}
-	if w := doAs(t, app, bob, "GET", "/checklist", nil); w.Code != http.StatusForbidden {
+	if w := doAs(t, app, bob, "GET", "/driver/lodging", nil); w.Code != http.StatusForbidden {
 		t.Errorf("bob after being unassigned: %d, want 403", w.Code)
 	}
 }
@@ -205,7 +198,7 @@ func TestFreeLanceStaysAvailableToADriverOnNoRide(t *testing.T) {
 	}
 	if w := doAs(t, app, nora, "GET", "/driver", nil); w.Code != http.StatusOK {
 		t.Fatalf("driver home for a driver on no ride: %d, want 200", w.Code)
-	} else if strings.Contains(w.Body.String(), fixtureSlug) || strings.Contains(w.Body.String(), `href="/checklist"`) {
+	} else if strings.Contains(w.Body.String(), fixtureSlug) || strings.Contains(w.Body.String(), `href="/driver/lodging"`) {
 		t.Error("the home screen shows a ride the driver is not on")
 	}
 	if w := doAs(t, app, nora, "POST", "/driver/freelance/mode", url.Values{"mode": {"destined"}}); w.Code != http.StatusSeeOther {

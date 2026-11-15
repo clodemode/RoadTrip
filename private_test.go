@@ -355,7 +355,7 @@ func TestOverlayOneRidesTextNeverRendersOnAnother(t *testing.T) {
 		t.Error("the first ride's block is no longer the top-level checkpoints")
 	}
 	// No anonymous page has any of it, for either ride.
-	for _, p := range []string{"/", "/plan", "/route.geojson", "/photos", "/checklist"} {
+	for _, p := range []string{"/", "/plan", "/route.geojson", "/photos"} {
 		if body := send(t, app, "GET", p, "", "", nil).Body.String(); strings.Contains(body, "OVERLAY-") {
 			t.Errorf("%s carries overlay text", p)
 		}
