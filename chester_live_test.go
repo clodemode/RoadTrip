@@ -129,14 +129,21 @@ func TestChesterNeverShowsCardsWithNoWords(t *testing.T) {
 	}
 	// The log page says both, and renders the sentence as text.
 	page := send(t, app, "GET", "/driver/chester/log", testToken, "", nil).Body.String()
-	for _, w := range []string{"Not Chester's words", "<dd>no words</dd>", "Pump &lt;b&gt;&amp; Go&lt;/b&gt; (Birch Gate, ZZ)"} {
+	for _, w := range []string{"Not Chester's words", firstWordField("no words"), "Pump &lt;b&gt;&amp; Go&lt;/b&gt; (Birch Gate, ZZ)"} {
 		if !strings.Contains(page, w) {
 			t.Errorf("the log page lacks %q", w)
 		}
 	}
-	if strings.Contains(page, "<dd>0 ms</dd>") {
+	// Only the First word row says it: the Total row is a real elapsed time
+	// and prints 0 ms whenever a stubbed answer finishes inside a millisecond.
+	if strings.Contains(page, firstWordField("0 ms")) {
 		t.Error("the log page shows a first word at 0 ms")
 	}
+}
+
+// firstWordField is the log page's First word row as it renders, for a value.
+func firstWordField(value string) string {
+	return "<dt>First word</dt><dd>" + value + "</dd>"
 }
 
 // Asked for its words, the model may show its cards again instead. That is
