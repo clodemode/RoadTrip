@@ -48,10 +48,10 @@ files it renders with.
 | `GET /driver/posts.json` | every post with its photo's identity (see [Taking a census](OPERATIONS.md#taking-a-census)) |
 | `POST /driver/checkpoint/{id}/arrive` | stamp, re-stamp or clear an arrival (see [Made it to](DESIGN.md#made-it-to)) |
 | `GET /driver/lodging`, `POST /driver/lodging` | private addresses and notes for the ride's stops |
-| `POST /driver/private` | replace the private overlay by machine |
-| `POST /driver/trip` | push a trip document (see [Trips](TRIPS.md)) |
-| `POST /driver/ride/active` | choose the ride the site shows |
-| `GET /driver/rides.json` | every ride, its row counts, and which one is showing |
+| `POST /driver/private` | replace the private overlay by machine; an admin or the push token |
+| `POST /driver/trip` | push a trip document (see [Trips](TRIPS.md)); an admin or the push token |
+| `POST /driver/ride/active` | choose the ride the site shows; an admin or the push token |
+| `GET /driver/rides.json` | every ride, its row counts, and which one is showing; an admin or the push token |
 | `POST /driver/plan` | save a plan selection or start date |
 | `POST /driver/routing` | add a routing point for the navigation link |
 | `POST /driver/freelance/mode`, `…/dest`, `…/picks` | the free-drive mode: no plan, an optional destination |

@@ -137,7 +137,7 @@ func (a *App) routes() http.Handler {
 
 	sub, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/",
-		cacheControl(http.FileServer(http.FS(sub)), "public, max-age=31536000, immutable")))
+		cacheControl(noIndex(http.FileServer(http.FS(sub))), "public, max-age=31536000, immutable")))
 	// Media paths are content-addressed (sha256 prefix), so they are immutable
 	// by construction and can be cached as hard as the static assets.
 	mux.Handle("GET /media/", http.StripPrefix("/media/",
@@ -307,17 +307,33 @@ func (a *App) canonicalHost(h http.Handler) http.Handler {
 	})
 }
 
+// cacheControl marks a file answer cacheable. A refusal is not a file: a 404
+// kept for a year would hide a photo that arrives later at that address.
 func cacheControl(h http.Handler, v string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", v)
-		h.ServeHTTP(w, r)
+		h.ServeHTTP(&okCached{ResponseWriter: w}, r)
 	})
 }
 
-// noIndex refuses directory listings under /media/.
+// okCached drops the cache header from any answer of 400 or above.
+type okCached struct{ http.ResponseWriter }
+
+func (o *okCached) WriteHeader(code int) {
+	if code >= 400 {
+		o.Header().Set("Cache-Control", "no-store")
+	}
+	o.ResponseWriter.WriteHeader(code)
+}
+func (o *okCached) Unwrap() http.ResponseWriter { return o.ResponseWriter }
+
+// noIndex refuses directory listings under /media/ and /static/, and any
+// path with a dot-file in it: an upload is staged in the media folder under a
+// dot name before its EXIF is scrubbed, and that file is never an answer.
 func noIndex(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/") || r.URL.Path == "" {
+		if strings.HasSuffix(r.URL.Path, "/") || r.URL.Path == "" ||
+			strings.HasPrefix(r.URL.Path, ".") || strings.Contains(r.URL.Path, "/.") {
 			http.NotFound(w, r)
 			return
 		}
@@ -1340,8 +1356,10 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 		"features": feats,
 	}
 	w.Header().Set("Content-Type", "application/geo+json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "public, max-age=300")
+	// Drivers only since 2026-11-07, so no shared cache may keep it and no
+	// other origin is offered it.
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Vary", "Cookie, Authorization")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(out); err != nil {
@@ -1966,6 +1984,10 @@ type pinInput struct {
 	// because an unticked checkbox sends nothing). Unset = the per-post
 	// default: ticked at a private place, clear everywhere else.
 	Fuzz, FuzzSet bool
+	// ExactAtPrivate is the second yes: with the toggle off AT A PRIVATE
+	// PLACE the exact point is published only when the form also carries
+	// exact_at_private=yes. One un-ticked box is not enough to publish a door.
+	ExactAtPrivate bool
 }
 
 // pinResult is what the store gets, plus the one log line.
@@ -2097,6 +2119,12 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	fuzz := pc != nil && precision != pinPrecisionExact
 	if in.FuzzSet {
 		fuzz = in.Fuzz
+		if !fuzz && pc != nil && precision != pinPrecisionExact && !in.ExactAtPrivate {
+			// Per-post choice is ruled, so this is not a refusal: it is the
+			// toggle not being enough by itself here (audit, 2026-11-16).
+			fuzz = true
+			res.Note += " (fuzz off was not confirmed for a private place)"
+		}
 	}
 	if res.Trail && pc != nil {
 		// A point from the trail at a private place is never published as it
@@ -2170,6 +2198,8 @@ func pinInputFrom(r *http.Request, cp *Checkpoint, exifLat, exifLng *float64) pi
 		CP:      cp,
 		Fuzz:    r.PostFormValue("fuzz_location") != "",
 		FuzzSet: r.PostFormValue("fuzz_choice") != "",
+
+		ExactAtPrivate: r.PostFormValue("exact_at_private") == "yes",
 	}
 	if !validPinSource(in.Want) {
 		in.Want = ""
@@ -2777,12 +2807,22 @@ func (a *App) postDelete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// A deleted post's photo comes off the public path first, by the same road
+	// as Remove photo: held for the undo window, then swept. A photo another
+	// post still shows stays where it is (removePhoto counts the references).
+	if p.Photo != nil {
+		now := a.photoNow()
+		a.sweepPhotoHolds(now)
+		if err := a.removePhoto(p.ID, now); err != nil {
+			log.Printf("ERROR post %d: delete refused, its photo could not be taken off the public path: %v", p.ID, err)
+			http.Error(w, "could not delete: the photo could not be removed", 500)
+			return
+		}
+	}
 	if err := a.store.DeletePost(p.ID); err != nil {
 		http.Error(w, "could not delete", 500)
 		return
 	}
-	// The photo file stays on the volume: content-addressed, and a second
-	// post may reference it. Nothing on this site deletes bytes.
 	http.Redirect(w, r, backTo(r, "/"), http.StatusSeeOther)
 }
 
@@ -2924,9 +2964,19 @@ func (a *App) postUnfuzz(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, err := a.ridePost(id); err != nil {
+	post, err := a.ridePost(id)
+	if err != nil {
 		http.NotFound(w, r)
 		return
+	}
+	// A fuzzed post at a private place sits on that place's cell point. One
+	// tap does not put the door back on the map: it takes the second yes.
+	if post.Lat != nil && post.Lng != nil && r.PostFormValue("exact_at_private") != "yes" {
+		if rv, err := a.loadRide(); err == nil && nearPrivate(*post.Lat, *post.Lng, rideCheckpoints(rv.Legs)) != nil {
+			log.Printf("post %d: unfuzz at a private place was not confirmed, left fuzzy", id)
+			http.Redirect(w, r, backTo(r, "/"), http.StatusSeeOther)
+			return
+		}
 	}
 	changed, err := a.store.UnfuzzPost(id)
 	if err != nil {

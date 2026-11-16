@@ -7,6 +7,8 @@ fly.toml
 README.md
 docs/
 /roadtrip
+/RoadTrip
+.wt/
 .claude/
 coWork_input/
 # The local secrets file stays out of the build context: a secret is never
