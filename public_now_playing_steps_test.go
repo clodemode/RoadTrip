@@ -29,6 +29,7 @@ type npWorld struct {
 }
 
 type npTrack struct {
+	ID        string   `json:"id"`
 	Track     string   `json:"track"`
 	Album     string   `json:"album"`
 	Artist    string   `json:"artist"`
@@ -44,7 +45,7 @@ type npDoc struct {
 	Tracks []npTrack `json:"tracks"`
 }
 
-func initPublicNowPlayingScenarios(t *testing.T, sc *godog.ScenarioContext) {
+func initPublicNowPlayingScenarios(t *testing.T, sc *godog.ScenarioContext) *npWorld {
 	w := &npWorld{t: t}
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		*w = npWorld{t: t, key: 1760000000000}
@@ -222,6 +223,7 @@ func initPublicNowPlayingScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	return w
 }
 
 func (w *npWorld) send(form url.Values) error {

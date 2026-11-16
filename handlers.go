@@ -172,6 +172,9 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /tracks.json", a.tracksJSON)
 	// A visitor hears one play of the active ride (listen.go): checked, then handed on.
 	mux.HandleFunc("GET /tracks/{id}/audio", a.tracksAudio)
+	// The Ride page with the Listen Inn card open: on the newest song, or on one (listeninn.go).
+	mux.HandleFunc("GET /listeninn", a.listenInn)
+	mux.HandleFunc("GET /listeninn/song/{id}", a.listenInnSong)
 
 	mux.HandleFunc("GET /driver/login", a.loginForm)
 	mux.HandleFunc("POST /driver/login", a.loginSubmit)
@@ -953,7 +956,11 @@ func buildMap(legs []Leg, posts []Post, tracks map[int64][][]float64, planned ma
 
 // --- public pages ----------------------------------------------------------------
 
-func (a *App) index(w http.ResponseWriter, r *http.Request) {
+func (a *App) index(w http.ResponseWriter, r *http.Request) { a.ridePage(w, r, nil) }
+
+// ridePage is the Ride page. ask is nil for "/", and what a Listen Inn address
+// asks for otherwise (listeninn.go).
+func (a *App) ridePage(w http.ResponseWriter, r *http.Request, ask *listenAsk) {
 	rv, err := a.loadRide()
 	if err != nil {
 		http.Error(w, "ride "+a.activeSlug()+" is not seeded", http.StatusNotFound)
@@ -990,8 +997,12 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 			data["DayEnd"] = de
 		}
 	}
-	data["NowPlaying"] = a.nowPlayingFor(rv.Ride.Slug, time.Now()) // nil: no plays, no chip
+	np := a.nowPlayingFor(rv.Ride.Slug, time.Now()) // nil: no plays, no card
+	data["NowPlaying"] = np
 	data["ListenLine"] = a.listenLine(rv.Ride.Slug)
+	if !a.listenCard(w, r, data, np, rv.Ride.Name, ask) {
+		return
+	}
 	a.render(w, r, "index.html", data)
 }
 

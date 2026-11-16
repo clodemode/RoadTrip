@@ -47,7 +47,7 @@ func TestFeatures(t *testing.T) {
 				initTestDriveSwitchScenarios(t, sc)
 				initContinuousMusicScenarios(t, sc)
 				initPlayerTroubleScenarios(t, sc)
-				initPublicNowPlayingScenarios(t, sc)
+				initListenInnCardScenarios(t, sc, initPublicNowPlayingScenarios(t, sc))
 				initListenInnScenarios(t, sc)
 				initChesterPreferencesScenarios(t, sc)
 				initChesterPositionHistoryScenarios(t, sc)

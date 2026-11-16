@@ -48,3 +48,34 @@ test('a row shows the time with a zone, the album, the track and the note, escap
   assert.equal(N.rowHtml({ ...play, note: '' }, esc).includes('np-note'), false);
   assert.equal(N.fmtWhen('not a time'), '');
 });
+
+test('a time is shown in the zone where the song played, never the viewer\'s', () => {
+  const t = N.fmtWhen('2026-11-13T23:23:00Z', 'America/Chicago').replace(/ /g, ' ');
+  assert.match(t, /5:23 PM/);
+  assert.doesNotMatch(t, /UTC/);
+  // No zone, or one the browser does not know: still a time, never a throw.
+  assert.notEqual(N.fmtWhen('2026-11-13T23:23:00Z', ''), '');
+  assert.notEqual(N.fmtWhen('2026-11-13T23:23:00Z', 'Not/AZone'), '');
+});
+
+test('the list runs oldest to newest though the document is newest first', () => {
+  const esc = (s) => String(s);
+  const doc = [
+    { id: 'c3', track: 'Third', album: 'B', artist: 'R', started_at: '2026-11-12T14:15:00Z' },
+    { id: 'b2', track: 'Second', album: 'A', artist: 'R', started_at: '2026-11-12T14:10:00Z' },
+    { id: 'a1', track: 'First', album: 'A', artist: 'R', started_at: '2026-11-12T14:05:00Z' },
+  ];
+  const h = N.panelHtml(doc, esc, true, true);
+  assert.ok(h.indexOf('First') < h.indexOf('Second') && h.indexOf('Second') < h.indexOf('Third'));
+  assert.equal(doc[0].id, 'c3'); // the document itself is not reordered
+  assert.equal((h.match(/class="np-group"/g) || []).length, 2);
+});
+
+test('a row with a name links to its own address; a row without one does not', () => {
+  const esc = (s) => String(s);
+  const p = { id: 'a1', track: 'T', album: 'A', artist: 'R', started_at: '2026-11-12T14:05:00Z' };
+  assert.match(N.rowHtml(p, esc, false, true, true), /<a class="np-link" href="\/listeninn\/song\/a1"/);
+  assert.doesNotMatch(N.rowHtml(p, esc, false, true), /np-link/);
+  assert.doesNotMatch(N.rowHtml({ ...p, id: '' }, esc, true, true, true), /np-link|np-play/);
+  assert.equal(N.songHref('a b'), '/listeninn/song/a%20b');
+});

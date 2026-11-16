@@ -30,6 +30,8 @@ test('the chip plays what is current, else the newest', () => {
   assert.equal(L.currentId({ now: { id: 'n1' }, last: null }), 'n1');
   assert.equal(L.currentId({ now: null, last: { id: 'l1' } }), 'l1');
   assert.equal(L.currentId({ now: null, last: null }), null);
+  // A finished trip has no current song: the newest row of the list.
+  assert.equal(L.currentId({ now: null, last: null, tracks: [{ id: 'c3' }, { id: 'a1' }] }), 'c3');
   assert.equal(L.currentId({ now: { track: 'x' } }), null);
 });
 
@@ -50,4 +52,14 @@ test('a Play button is drawn only when listening is on and the row has a name', 
   assert.doesNotMatch(N.rowHtml(p, esc, false), /np-play/);
   assert.doesNotMatch(N.rowHtml(p, esc), /np-play/);
   assert.doesNotMatch(N.rowHtml({ track: 'T', album: 'A', artist: 'R' }, esc, true), /np-play/);
+});
+
+const I = load('./listeninn.js');
+
+test('the card opens on the newest song unless a listed song was asked for', () => {
+  assert.equal(I.focusId(tracks, ''), 'c3');
+  assert.equal(I.focusId(tracks, 'b2'), 'b2');
+  assert.equal(I.focusId(tracks, 'zz'), 'c3');
+  assert.equal(I.focusId([], 'a1'), null);
+  assert.equal(I.focusId(null), null);
 });

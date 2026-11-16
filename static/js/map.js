@@ -212,57 +212,29 @@
     all.push([p.lat, p.lng]);
   });
 
-  /* --- what is playing (nowplaying.js, text only) ------------------------
-     The skeleton in the page becomes a small control in the map's corner: the
-     "Currently playing" chip and the Listen Inn toggle that opens the list
-     over the map's edge. Each play with a published point is a music note. */
-  var NP = window.RTNowPlaying, npEl = document.getElementById('np');
+  /* --- music notes (nowplaying.js, text only) ----------------------------
+     Each play with a published point is a music note on the map. The Listen
+     Inn itself is a card of its own, off the map (listeninn.js); it asks
+     /tracks.json once a minute and tells this map what it read. */
+  var NP = window.RTNowPlaying;
   var playLayer = L.layerGroup().addTo(map);
-  if (NP && npEl) {
-    var npLine = document.getElementById('np-line'), npLabel = document.getElementById('np-label'),
-        npPanel = document.getElementById('np-panel'), npBtn = document.getElementById('np-toggle'), npLast = 0;
-    var npCtl = L.control({ position: 'bottomleft' });
-    npCtl.onAdd = function () { L.DomEvent.disableClickPropagation(npEl); L.DomEvent.disableScrollPropagation(npEl); return npEl; };
-    npCtl.addTo(map);
-    var drawPlays = function (doc) {
-      var t = NP.chipText(doc);
-      /* A finished ride has no chip but keeps the Listen Inn history. */
-      npEl.hidden = !t && !doc.finished;
-      if (t && npLabel && npLine) { npLabel.textContent = t.label; npLine.textContent = t.line; }
-      npPanel.innerHTML = NP.panelHtml(doc.tracks || [], esc, doc.listen && !!document.getElementById('np-audio'));
-      if (window.RTListen && window.RTListen.update) window.RTListen.update(doc);
-      playLayer.clearLayers();
-      (doc.tracks || []).forEach(function (p) {
-        if (typeof p.lat !== 'number' || typeof p.lng !== 'number' || !isFinite(p.lat) || !isFinite(p.lng)) return;
-        /* A track often starts at a stop, so a note sits above the stop pins
-           (500 and 600) and under a photo (1000); it is drawn as a pin whose tip
-           is the spot, 30 px across, so it can be seen and tapped beside the
-           stop's own circle. */
-        L.marker([p.lat, p.lng], {
-          icon: L.divIcon({ className: 'np-pin', iconSize: [30, 30], iconAnchor: [15, 34], html: '<span>&#9834;</span>' }),
-          keyboard: false, zIndexOffset: 700
-        }).addTo(playLayer).bindPopup('<div class="popup">' + NP.rowHtml(p, esc) + '</div>');
-      });
-    };
-    npBtn.addEventListener('click', function () {
-      var open = npPanel.hidden;
-      npPanel.hidden = !open;
-      npBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  var drawPlays = function (doc) {
+    playLayer.clearLayers();
+    ((doc && doc.tracks) || []).forEach(function (p) {
+      if (typeof p.lat !== 'number' || typeof p.lng !== 'number' || !isFinite(p.lat) || !isFinite(p.lng)) return;
+      /* A track often starts at a stop, so a note sits above the stop pins
+         (500 and 600) and under a photo (1000); it is drawn as a pin whose tip
+         is the spot, 30 px across, so it can be seen and tapped beside the
+         stop's own circle. */
+      L.marker([p.lat, p.lng], {
+        icon: L.divIcon({ className: 'np-pin', iconSize: [30, 30], iconAnchor: [15, 34], html: '<span>&#9834;</span>' }),
+        keyboard: false, zIndexOffset: 700
+      }).addTo(playLayer).bindPopup('<div class="popup">' + NP.rowHtml(p, esc) + '</div>');
     });
-    drawPlays(window.RIDE_TRACKS || { tracks: [] });
-    npLast = Date.now();
-    /* Once a minute, and only while the tab is visible: a hidden tab must not
-       keep the machine awake. Coming back to the tab asks at once if it is due. */
-    var npAsk = function () {
-      if (!NP.shouldPoll(document.hidden, npLast, Date.now())) return;
-      npLast = Date.now();
-      fetch('/tracks.json', { headers: { Accept: 'application/json' } })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (doc) { if (doc) drawPlays(doc); })
-        .catch(function () { /* the chip keeps what it had */ });
-    };
-    setInterval(npAsk, NP.EVERY_MS);
-    document.addEventListener('visibilitychange', npAsk);
+  };
+  if (NP && window.RIDE_TRACKS) {
+    drawPlays(window.RIDE_TRACKS);
+    document.addEventListener('rt:tracks', function (e) { if (e && e.detail) drawPlays(e.detail); });
   }
 
   L.control.layers(null, {
