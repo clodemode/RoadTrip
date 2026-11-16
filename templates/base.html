@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{if .Title}}{{.Title}} — {{end}}{{.Ride.Name}}</title>
-<meta name="description" content="{{.Ride.Name}}: a one-way drive, live from the road.">
+<meta name="description" content="{{if .Description}}{{.Description}}{{else}}{{.Ride.Name}}: a one-way drive, live from the road.{{end}}">
 {{if .SiteURL}}<link rel="canonical" href="{{.Canonical}}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="{{.Ride.Name}}">
 <meta property="og:title" content="{{if .Title}}{{.Title}} — {{end}}{{.Ride.Name}}">
-<meta property="og:description" content="{{.Ride.Name}}: a one-way drive, live from the road.">
+<meta property="og:description" content="{{if .Description}}{{.Description}}{{else}}{{.Ride.Name}}: a one-way drive, live from the road.{{end}}">
 <meta property="og:url" content="{{.Canonical}}">
 <meta property="og:image" content="{{.SiteURL}}/static/img/creature.svg?v={{.V}}">
 {{end}}<link rel="icon" href="/static/img/creature.svg?v={{.V}}">
@@ -71,7 +71,7 @@
 
 {{define "foot"}}
 </main>
-{{template "drive_strip_scripts" .}}{{if .Embed}}<script defer src="/static/js/frame.js?v={{.V}}"></script>{{end}}
+{{template "listen_card" .}}{{template "drive_strip_scripts" .}}{{if .Embed}}<script defer src="/static/js/frame.js?v={{.V}}"></script>{{end}}
 <footer>
   <p>Route coordinates are planning-grade: town centroids, about a kilometre.
      Times are shown in the zone where they happened.</p>
@@ -82,7 +82,7 @@
 </html>
 {{end}}
 
-{{define "stop_row"}}<li class="cp{{if .IsStart}} start{{end}}{{if .Next}} next{{end}}{{if .ArrivedAt}} arrived{{end}}{{if .SkippedAt}} skipped{{end}}" style="--leg:{{legColor .LegOrd}}">
+{{define "stop_row"}}<li class="cp{{if .IsStart}} start{{end}}{{if .Next}} next{{end}}{{if .ArrivedAt}} arrived{{end}}{{if .SkippedAt}} skipped{{end}}" id="cp-{{.ID}}" style="--leg:{{legColor .LegOrd}}">
       <span class="cp-n">{{.Mark}}</span>
       <span class="cp-main">
         <span class="cp-name">{{.Name}}</span>
@@ -135,7 +135,8 @@
       <span class="muted small">make this location inexact</span></form>
     {{else if .CanUnfuzz}}<form method="post" action="/driver/post/{{.ID}}/unfuzz" class="post-fuzz">
       <button class="btn btn-sm btn-outline-secondary">Unfuzz</button>
-      <span class="muted small">this location is fuzzy</span></form>{{end}}
+      <span class="muted small">this location is fuzzy</span>
+      <label class="form-check small m-0"><input class="form-check-input" type="checkbox" name="exact_at_private" value="yes"> exact even at a private place</label></form>{{end}}
     {{if .Photo}}<form method="post" action="/driver/post/{{.ID}}/photo/remove" class="post-photo-remove">
       <button class="btn btn-sm btn-outline-danger">Remove photo</button>
       <span class="muted small">keeps the post as a marker</span></form>
@@ -153,6 +154,7 @@
           <option value="none">no pin</option>
         </select></label>
       <label class="form-check touch"><input class="form-check-input" type="checkbox" name="fuzz_location" value="1"{{if .PinFuzzed}} checked{{end}}> Fuzz</label>
+      <label class="form-check small m-0"><input class="form-check-input" type="checkbox" name="exact_at_private" value="yes"> exact even at a private place</label>
       <button class="btn btn-sm btn-outline-primary">Apply</button>
     </form>
     {{end}}
@@ -179,7 +181,7 @@
      visit) and, on a page that is not framed (the driver screen while the ride
      is Planning), once inline. A page inside the frame has none. */}}
 {{define "drive_card"}}<section class="drive-card" id="rt-player" aria-labelledby="rt-card-h">
-  <h2 class="drive-card-title" id="rt-card-h"><button type="button" class="rt-toggle" id="rt-toggle" aria-expanded="false" aria-controls="rt-card-body"><img class="ch-icon" src="/static/img/chester.svg?v={{.V}}" alt="" width="28" height="28"> Drive Tracks <span class="rt-chevron" aria-hidden="true">&#9662;</span></button> <span class="rt-nest" id="rt-nest" role="status">0 ready</span></h2>
+  <h2 class="drive-card-title" id="rt-card-h"><button type="button" class="rt-toggle" id="rt-toggle" aria-expanded="false" aria-controls="rt-card-body"><img class="tune-icon" src="/static/img/charter.svg?v={{.V}}" alt="" width="28" height="28"> Drive Tracks <span class="rt-chevron" aria-hidden="true">&#9662;</span></button> <span class="rt-nest" id="rt-nest" role="status">0 ready</span></h2>
   <audio id="rt-audio" preload="none"></audio>
   <div id="rt-card-body" hidden>
   <div class="rt-row">
@@ -201,6 +203,28 @@
   <p id="rt-status" role="status" aria-live="polite"></p>
   </div>
 </section>{{end}}
+
+{{/* listen_card: the Listen Inn, for everyone, on the Ride page (the only page
+     that sets NowPlaying). ONE card docked at the bottom of the window, off the
+     map, its title its header button, the same family as the music card above.
+     Hearing it (listen.go): one shared audio element and one Play button, drawn
+     only when ListenPlay says this page has no other player. listeninn.js fills
+     the list, oldest at the top, and keeps it fresh. */}}
+{{define "listen_card"}}{{with .NowPlaying}}<section class="tune-card listen-card listen-dock" id="np" aria-labelledby="np-card-h" data-open="{{if $.ListenOpen}}1{{else}}0{{end}}"{{with $.ListenSong}} data-song="{{.ID}}"{{end}}>
+  <h2 class="tune-card-title" id="np-card-h"><button type="button" class="rt-toggle" id="np-toggle" aria-expanded="{{if $.ListenOpen}}true{{else}}false{{end}}" aria-controls="np-body"><img class="tune-icon" src="/static/img/charter.svg?v={{$.V}}" alt="" width="28" height="28"> Listen Inn <span class="rt-chevron" aria-hidden="true">&#9662;</span></button></h2>
+  {{if not .Finished}}<p class="np-chip" id="np-chip"><span class="np-label" id="np-label">Currently playing</span> <span id="np-line"></span></p>{{end}}
+  {{if $.ListenPlay}}<audio id="np-audio" preload="none"></audio>{{end}}
+  <div id="np-body"{{if not $.ListenOpen}} hidden{{end}}>
+  {{with $.ListenSong}}<p class="np-ready" id="np-ready"><span class="np-label">{{if $.ListenPlay}}Ready to play{{else}}Played on this trip{{end}}</span> <b>{{.Track}}</b> &middot; {{.Artist}}</p>{{end}}
+  {{if $.ListenPlay}}<button type="button" class="btn btn-dark rt-big np-listen" id="np-listen" data-id="{{$.ListenArm}}">Play</button>{{end}}
+  <p class="np-msg" id="np-msg" role="status"{{if not $.ListenMissing}} hidden{{end}}>{{if $.ListenMissing}}That song is not on this trip&rsquo;s list.{{end}}</p>
+  <div class="np-panel" id="np-panel"></div>
+  </div>
+</section>
+<script>window.RIDE_TRACKS = {{json .}};</script>
+<script defer src="/static/js/listeninn.js?v={{$.V}}"></script>
+{{if $.ListenPlay}}<script defer src="/static/js/listen.js?v={{$.V}}"></script>{{end}}
+{{end}}{{end}}
 
 {{define "drive_card_inline"}}{{if .StripOn}}{{template "drive_card" .}}{{end}}{{end}}
 

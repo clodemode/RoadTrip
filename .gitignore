@@ -5,6 +5,7 @@ data/
 *.sqlite3-shm
 # The built binary.
 /roadtrip
+/RoadTrip
 # Local scratch.
 .DS_Store
 # A planning handoff is trip input: real places and dates. It stays local,

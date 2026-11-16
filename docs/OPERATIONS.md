@@ -17,7 +17,8 @@ and by the image build); on Fly the secrets are Fly secrets and the rest is
 |---|---|
 | `PORT` | the port the server listens on; default `8080` |
 | `DATA_DIR` | default `/data`; holds `roadtrip.sqlite3`, `users.json`, `media/`, `tmp/` (upload spill, swept at start), the optional `private.json` and the trip files in `trips/`. This directory is the whole of an instance's state: back it up |
-| `ADMIN_PASSWORD_HASH` | a bcrypt hash (print one with the `-hash` flag); used once, to create the first user, an admin **named `kris`**, when `$DATA_DIR/users.json` does not exist. After that the users file is the source of truth. No users ⇒ the site is read-only |
+| `ADMIN_USERNAME` | the first user's name, `admin` when unset; read only when `ADMIN_PASSWORD_HASH` creates that user |
+| `ADMIN_PASSWORD_HASH` | a bcrypt hash (print one with the `-hash` flag); used once, to create the first user, an admin named by `ADMIN_USERNAME`, when `$DATA_DIR/users.json` does not exist. After that the users file is the source of truth. No users ⇒ the site is read-only |
 | `SESSION_KEY` | HMAC key for session cookies; unset ⇒ random per start (everyone signs in again after a restart) |
 | `PUSH_TOKEN` | fixed bearer token accepted wherever the session is; unset ⇒ the header path does not exist. See [Pushing with the token](#pushing-with-the-token) |
 | `COOKIE_SECURE` | default `1`; set `0` only for a plain-HTTP local run, or the session cookie never comes back |
@@ -67,7 +68,7 @@ No coordinate, typed destination or private text is ever written to it.
 
 | variable | purpose |
 |---|---|
-| `MELT_FILE` | optional path of a file that keeps every record as one JSON line, written in the background and rotated to `<path>.1` past 2 MB (the repository's `fly.toml` sets `/data/melt/roadtrip.jsonl`). Read it signed in at `GET /driver/melt.json?stream=events\|errors\|all&n=200&event=<name>` (newest first, at most 1000); with no file it answers `{"sink":"off","records":[]}` |
+| `MELT_FILE` | optional path of a file that keeps every record as one JSON line, written in the background and rotated to `<path>.1` past 2 MB (the repository's `fly.toml` sets `/data/melt/roadtrip.jsonl`). Read it signed in as an admin at `GET /driver/melt.json?stream=events\|errors\|all&n=200&event=<name>` (newest first, at most 1000); with no file it answers `{"sink":"off","records":[]}` |
 | `MELT_REDIS_ADDR` | optional `host:port` of a Redis; the app then also publishes the records to the lists `clode:state:melt:roadtrip:{events,errors}`. Used by the maintainers' own tooling; leave it unset |
 | `MELT_VENUE` | the `venue` label stamped on every record; default `kate` (the maintainers' name for a local test instance), `fly` in the repository's `fly.toml`. Any word that names your instance will do |
 | `SIM_ALLOWED` | `1` allows a simulated drive on `/driver` (see [Testing the driver screen without driving](#testing-the-driver-screen-without-driving)); anything else and the route is a 404. Never set it on the live site |

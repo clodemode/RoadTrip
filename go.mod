@@ -1,6 +1,6 @@
 module github.com/clodemode/RoadTrip
 
-go 1.25
+go 1.26.11
 
 require (
 	github.com/anthropics/anthropic-sdk-go/v2 v2.7.0

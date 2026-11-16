@@ -1361,15 +1361,28 @@ func scanPost(sc interface{ Scan(...any) error }) (Post, error) {
 	return p, nil
 }
 
-// Posts returns a ride's posts newest-first. legID 0 = all legs.
+// Posts returns a ride's posts oldest first, the way time flows and the way
+// every page lists them (Kris, 2026-11-16). legID 0 = all legs. Two posts at
+// the same instant keep the order they were made in.
 func (s *Store) Posts(rideSlug string, legID int64) ([]Post, error) {
+	return s.postsOrdered(rideSlug, legID, `p.occurred_at, p.id`)
+}
+
+// PostsNewestFirst is the same rows the other way round, for a reader that
+// wants the latest one and stops: where the car last was, the latest photo.
+// No page lists posts in this order.
+func (s *Store) PostsNewestFirst(rideSlug string, legID int64) ([]Post, error) {
+	return s.postsOrdered(rideSlug, legID, `p.occurred_at DESC, p.id DESC`)
+}
+
+func (s *Store) postsOrdered(rideSlug string, legID int64, order string) ([]Post, error) {
 	q := postSelect + ` WHERE l.ride_slug=?`
 	args := []any{rideSlug}
 	if legID != 0 {
 		q += ` AND p.leg_id=?`
 		args = append(args, legID)
 	}
-	rows, err := s.db.Query(q+` ORDER BY p.occurred_at DESC, p.id DESC`, args...)
+	rows, err := s.db.Query(q+` ORDER BY `+order, args...)
 	if err != nil {
 		return nil, err
 	}

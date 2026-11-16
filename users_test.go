@@ -1,13 +1,16 @@
 package main
 
 import (
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -48,6 +51,7 @@ func TestSeedsKrisFromAdminPasswordHash(t *testing.T) {
 	dir := t.TempDir()
 	h, _ := HashPassword("old-secret")
 	t.Setenv("ADMIN_PASSWORD_HASH", h)
+	t.Setenv("ADMIN_USERNAME", "kris")
 	a := NewAuth()
 	if err := a.LoadUsers(dir); err != nil {
 		t.Fatal(err)
@@ -355,4 +359,56 @@ func testAdminUser(t *testing.T, app *App) string {
 	t.Helper()
 	asUser(t, app, "kris", roleAdmin)
 	return "kris"
+}
+
+// With no ADMIN_USERNAME the first user is "admin"; a name that is not a
+// username falls back to it rather than seeding nobody.
+func TestSeedNameDefaultsToAdmin(t *testing.T) {
+	h, _ := HashPassword("old-secret")
+	t.Setenv("ADMIN_PASSWORD_HASH", h)
+	for _, name := range []string{"", "Not A Name!"} {
+		t.Setenv("ADMIN_USERNAME", name)
+		a := NewAuth()
+		if err := a.LoadUsers(t.TempDir()); err != nil {
+			t.Fatal(err)
+		}
+		if u, ok := a.users.get("admin"); !ok || u.Role != roleAdmin || !a.Check("admin", "old-secret") {
+			t.Errorf("ADMIN_USERNAME=%q: admin not seeded: %+v ok=%v", name, u, ok)
+		}
+	}
+}
+
+// A session from before the epoch existed ("<exp>.<user>.<sig>") still opens,
+// as epoch 0, until the user signs out or the password changes.
+func TestSessionFromBeforeTheEpochStillOpensUntilRevoked(t *testing.T) {
+	app := testApp(t)
+	asUser(t, app, "ann", roleEditor)
+	payload := strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10) + ".ann"
+	old := &http.Cookie{Name: sessionCookie, Value: base64.RawURLEncoding.EncodeToString([]byte(payload + "." + app.auth.sign(payload)))}
+	if w := doAs(t, app, old, "GET", "/driver", nil); w.Code != http.StatusOK {
+		t.Fatalf("an old-format session: %d, want 200", w.Code)
+	}
+	if err := app.auth.users.endSessions("ann"); err != nil {
+		t.Fatal(err)
+	}
+	if w := doAs(t, app, old, "GET", "/driver", nil); w.Code == http.StatusOK {
+		t.Error("an old-format session still opens after the user's sessions were ended")
+	}
+	// A forged epoch does not verify.
+	forged := &http.Cookie{Name: sessionCookie, Value: base64.RawURLEncoding.EncodeToString([]byte(payload + ".1." + app.auth.sign(payload)))}
+	if w := doAs(t, app, forged, "GET", "/driver", nil); w.Code == http.StatusOK {
+		t.Error("a session with an unsigned epoch opens")
+	}
+}
+
+func TestSafeNext(t *testing.T) {
+	for in, want := range map[string]string{
+		"/plan": "/plan", "/driver/post?x=1": "/driver/post?x=1", "": "/driver", "plan": "/driver",
+		"//evil.example": "/driver", "/\\evil.example": "/driver", "/\t/evil.example": "/driver",
+		"https://evil.example": "/driver", "/a\nb": "/driver", "/%5Cevil.example": "/%5Cevil.example",
+	} {
+		if got := safeNext(in); got != want {
+			t.Errorf("safeNext(%q) = %q, want %q", in, got, want)
+		}
+	}
 }

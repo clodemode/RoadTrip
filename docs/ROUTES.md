@@ -48,17 +48,17 @@ files it renders with.
 | `GET /driver/posts.json` | every post with its photo's identity (see [Taking a census](OPERATIONS.md#taking-a-census)) |
 | `POST /driver/checkpoint/{id}/arrive` | stamp, re-stamp or clear an arrival (see [Made it to](DESIGN.md#made-it-to)) |
 | `GET /driver/lodging`, `POST /driver/lodging` | private addresses and notes for the ride's stops |
-| `POST /driver/private` | replace the private overlay by machine |
-| `POST /driver/trip` | push a trip document (see [Trips](TRIPS.md)) |
-| `POST /driver/ride/active` | choose the ride the site shows |
-| `GET /driver/rides.json` | every ride, its row counts, and which one is showing |
+| `POST /driver/private` | replace the private overlay by machine; an admin or the push token |
+| `POST /driver/trip` | push a trip document (see [Trips](TRIPS.md)); an admin or the push token |
+| `POST /driver/ride/active` | choose the ride the site shows; an admin or the push token |
+| `GET /driver/rides.json` | every ride, its row counts, and which one is showing; an admin or the push token |
 | `POST /driver/plan` | save a plan selection or start date |
 | `POST /driver/routing` | add a routing point for the navigation link |
 | `POST /driver/freelance/mode`, `…/dest`, `…/picks` | the free-drive mode: no plan, an optional destination |
 | `GET /driver/roadtracks/search`, `GET /driver/roadtracks/album/{id}` | album search and one album's tracks |
 | `POST /driver/roadtracks/state`, `…/mark`, `…/mark/{id}/delete`, `…/event` | what is playing, favourites, and player trouble |
 | `POST /driver/sim/start`, `POST /driver/sim/stop`, `GET /driver/sim.json` | the simulated drive; start is a 404 unless `SIM_ALLOWED=1` |
-| `GET /driver/melt.json` | the event log, when `MELT_FILE` is set |
+| `GET /driver/melt.json` | the event log, when `MELT_FILE` is set; admins only |
 | `GET /chester`, `POST /chester/ask` | the trip helper (see [Chester](CHESTER.md)) |
 | `GET /chester/preferences`, `POST /chester/preferences` | the traveller's standing preferences |
 | `GET /driver/chester/memory`, `POST /driver/chester/memory/clear` | what Chester remembers about the signed-in traveller's tastes, and clearing it |

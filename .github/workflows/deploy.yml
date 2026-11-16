@@ -71,7 +71,7 @@ jobs:
     name: ${{ inputs.mode }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Fail closed: `proven` is true only on a positive answer about exactly
       # this commit. Every lookup that errors, comes back empty or surprises
@@ -128,7 +128,7 @@ jobs:
           fi
           { echo "proven=$proven"; echo "proof=$proof"; echo "digest=$digest"; } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         if: steps.prove.outputs.proven != 'true'
         with:
           go-version-file: go.mod
@@ -137,7 +137,7 @@ jobs:
       - uses: ./.github/actions/gates
         if: steps.prove.outputs.proven != 'true'
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master, 2026-11-16
 
       # --remote-only: the image is built on Fly's builder, so it does not
       # depend on this runner's docker state. --push with a label named for the

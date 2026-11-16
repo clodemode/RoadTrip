@@ -58,7 +58,12 @@ as a choice. `features/old_photo_without_place.feature` states it.
   cell the post is stored as that checkpoint's snapped point and the popup
   says *near <checkpoint>*; anywhere else — a friend's driveway, somewhere
   with no checkpoint at all — it is a nameless cell.
-- **Unticked** — the exact point and its accuracy are stored.
+- **Unticked** — the exact point and its accuracy are stored. At a private
+  place (inside or within 1 km of a fuzzed checkpoint) unticking is not
+  enough by itself: the form must also carry the second box, *publish the
+  exact point anyway* (`exact_at_private=yes`), or the post is fuzzed as if
+  the toggle were ticked. Unfuzz on a post at a private place asks for the
+  same box. `PIN_PRECISION=exact` turns this second yes off with the default.
 - Its **default is per post**: ticked when the point falls inside or within
   1 km of a fuzzed checkpoint, clear everywhere else. `PIN_PRECISION=exact`
   flips that one default; it means nothing anywhere else. Kris ruled the

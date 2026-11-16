@@ -4,6 +4,10 @@
     <a class="photo-back" href="/legs/{{.P.LegSlug}}#post-{{.P.ID}}">&larr; Back to the timeline</a>
     <a class="photo-original" href="/media/{{.Photo.Path}}">Open the original</a>
   </p>
+  {{if or .PrevID .NextID}}<p class="photo-view-links photo-step">
+    {{if .PrevID}}<a class="photo-prev" href="/photo/{{.PrevID}}">&larr; Previous</a>{{else}}<span></span>{{end}}
+    {{if .NextID}}<a class="photo-next" href="/photo/{{.NextID}}">Next &rarr;</a>{{end}}
+  </p>{{end}}
   <img class="photo-view-fit" src="/media/{{.Photo.Path}}" alt="{{.P.Title}}">
   <p class="muted small figure">{{if .P.Title}}{{.P.Title}} &middot; {{end}}<time>{{local .P.OccurredAt .P.TZ}}</time></p>
   {{if .P.Body}}<p class="post-text">{{.P.Body}}</p>{{end}}

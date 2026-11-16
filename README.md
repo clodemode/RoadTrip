@@ -63,10 +63,10 @@ curl -s -H 'Authorization: Bearer local-dev-token' -H 'Content-Type: application
 ```
 
 Open <http://localhost:8080>. To post, sign in at
-<http://localhost:8080/driver/login> with username `kris` and the password
-`change-me-please`. The first user is always named `kris` (see
-[Known limits](#known-limits-for-self-hosters)); once signed in you can add
-a user under your own name at `/driver/users`.
+<http://localhost:8080/driver/login> with username `admin` and the password
+`change-me-please`. The first user is named by `ADMIN_USERNAME` (`admin` when
+unset); once signed in you can add a user under your own name at
+`/driver/users`.
 
 What those settings did:
 
@@ -82,7 +82,7 @@ What those settings did:
 Stop and remove it with `docker rm -f roadtrip`. Add
 `docker volume rm roadtrip-data` to delete the data too.
 
-**Without Docker**, with Go 1.25 or newer:
+**Without Docker**, with Go 1.26.11 or newer:
 
 ```bash
 mkdir -p data
@@ -229,7 +229,8 @@ most people. The long version, with every edge, is in
 
 | Variable | Default | What it does |
 |---|---|---|
-| `ADMIN_PASSWORD_HASH` | none | Creates the first user (`kris`, an admin) on first start. Print a hash with `roadtrip -hash '<password>'`. No users means a read-only site. |
+| `ADMIN_PASSWORD_HASH` | none | Creates the first user, an admin, on first start. Print a hash with `roadtrip -hash '<password>'`. No users means a read-only site. |
+| `ADMIN_USERNAME` | `admin` | The name that first user gets. Read only when the first user is created. |
 | `SESSION_KEY` | random at each start | Signs the sign-in cookie. Set it, or everyone is signed out at every restart. |
 | `PUSH_TOKEN` | none (off) | A password for scripts, sent as `Authorization: Bearer <token>`. Opens what a signed-in user can open, except user management. |
 | `SITE_URL` | none | Your public address, e.g. `https://trip.example.com`. When set, every other host name redirects to it and pages carry link-preview tags. |
@@ -314,8 +315,6 @@ More on Chester, including what it is told and what each question costs:
 RoadTrip was built for one family's trips and is being opened up. These
 still assume the maintainers' setup:
 
-- The first user is always named `kris`. Sign in as that user, create your
-  own admin at `/driver/users`, then disable `kris` there.
 - The ride page prints "Trip-keeper: Kris", and the footer and badge say
   "Built with CLODE" and link to the maintainers' GitHub organisation.
 - The maintainers' first trip (a route between two cities, with its private

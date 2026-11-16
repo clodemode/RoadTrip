@@ -1,7 +1,8 @@
 Feature: Anyone can see what is playing and what played, without signing in
-  Kris, 2026-11-12: friends follow the trip signed out. They see a small
-  "Currently playing" chip on the map and a "Listen Inn" list of what played,
-  newest first, with Chester's note on each. It is text only: no audio, no
+  Kris, 2026-11-12: friends follow the trip signed out. They see what is
+  "Currently playing" and a "Listen Inn" list of what played, with Chester's
+  note on each (since 2026-11-16 in a card of its own, off the map: see
+  listen_inn_floating_card.feature). /tracks.json is text only: no audio, no
   library address, no key and no user name. A play is one track that started
   sounding on the driver's player; the same start reported twice is one play.
 

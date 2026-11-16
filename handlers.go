@@ -137,7 +137,7 @@ func (a *App) routes() http.Handler {
 
 	sub, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/",
-		cacheControl(http.FileServer(http.FS(sub)), "public, max-age=31536000, immutable")))
+		cacheControl(noIndex(http.FileServer(http.FS(sub))), "public, max-age=31536000, immutable")))
 	// Media paths are content-addressed (sha256 prefix), so they are immutable
 	// by construction and can be cached as hard as the static assets.
 	mux.Handle("GET /media/", http.StripPrefix("/media/",
@@ -172,6 +172,9 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /tracks.json", a.tracksJSON)
 	// A visitor hears one play of the active ride (listen.go): checked, then handed on.
 	mux.HandleFunc("GET /tracks/{id}/audio", a.tracksAudio)
+	// The Ride page with the Listen Inn card open: on the newest song, or on one (listeninn.go).
+	mux.HandleFunc("GET /listeninn", a.listenInn)
+	mux.HandleFunc("GET /listeninn/song/{id}", a.listenInnSong)
 
 	mux.HandleFunc("GET /driver/login", a.loginForm)
 	mux.HandleFunc("POST /driver/login", a.loginSubmit)
@@ -193,7 +196,7 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/roadtracks/mark", a.requireAuth(a.trackMarkAdd))
 	mux.Handle("POST /driver/roadtracks/mark/{id}/delete", a.requireAuth(a.trackMarkDelete))
 	mux.Handle("POST /driver/roadtracks/event", a.requireAuth(a.roadtracksEvent))
-	mux.Handle("GET /driver/melt.json", a.requireAuth(a.meltRead))
+	mux.Handle("GET /driver/melt.json", a.requireAdmin(a.meltRead))
 	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
 	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))
@@ -218,15 +221,14 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/post/{id}/edit", a.requireRide(a.postEditSave))
 	mux.Handle("GET /driver/lodging", a.requireRide(a.lodgingForm))
 	mux.Handle("POST /driver/lodging", a.requireRide(a.lodgingSave))
-	// The data carriage's landing point. Same admin session as every other
-	// /driver route — the carriage signs in the way a person does, so there is
-	// no second credential and no second auth path to get wrong.
-	mux.Handle("POST /driver/private", a.requireAuth(a.privatePush))
+	// The data carriage's landing point: an admin's session or the push token
+	// (requireKeeper). A driver is not the trip-keeper and gets a 403.
+	mux.Handle("POST /driver/private", a.requireKeeper(a.privatePush))
 	// The trip carriage and its switches: a trip document onto the volume,
 	// which ride the site shows, and the saved selection. Same gate as above.
-	mux.Handle("POST /driver/trip", a.requireAuth(a.tripPush))
-	mux.Handle("POST /driver/ride/active", a.requireAuth(a.rideActivate))
-	mux.Handle("GET /driver/rides.json", a.requireAuth(a.ridesJSON))
+	mux.Handle("POST /driver/trip", a.requireKeeper(a.tripPush))
+	mux.Handle("POST /driver/ride/active", a.requireKeeper(a.rideActivate))
+	mux.Handle("GET /driver/rides.json", a.requireKeeper(a.ridesJSON))
 	mux.Handle("POST /driver/plan", a.requireRide(a.planSave))
 	mux.Handle("POST /driver/routing", a.requireRide(a.routingAdd))
 	// Chester, the en-route helper, and its log. Signed in only, every one:
@@ -308,17 +310,33 @@ func (a *App) canonicalHost(h http.Handler) http.Handler {
 	})
 }
 
+// cacheControl marks a file answer cacheable. A refusal is not a file: a 404
+// kept for a year would hide a photo that arrives later at that address.
 func cacheControl(h http.Handler, v string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", v)
-		h.ServeHTTP(w, r)
+		h.ServeHTTP(&okCached{ResponseWriter: w}, r)
 	})
 }
 
-// noIndex refuses directory listings under /media/.
+// okCached drops the cache header from any answer of 400 or above.
+type okCached struct{ http.ResponseWriter }
+
+func (o *okCached) WriteHeader(code int) {
+	if code >= 400 {
+		o.Header().Set("Cache-Control", "no-store")
+	}
+	o.ResponseWriter.WriteHeader(code)
+}
+func (o *okCached) Unwrap() http.ResponseWriter { return o.ResponseWriter }
+
+// noIndex refuses directory listings under /media/ and /static/, and any
+// path with a dot-file in it: an upload is staged in the media folder under a
+// dot name before its EXIF is scrubbed, and that file is never an answer.
 func noIndex(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/") || r.URL.Path == "" {
+		if strings.HasSuffix(r.URL.Path, "/") || r.URL.Path == "" ||
+			strings.HasPrefix(r.URL.Path, ".") || strings.Contains(r.URL.Path, "/.") {
 			http.NotFound(w, r)
 			return
 		}
@@ -336,16 +354,15 @@ func logRequests(h http.Handler) http.Handler {
 }
 
 // requireRide is requireAuth plus a ride check: a driver is on the ride the
-// request is for or gets a 403. The ride is ?ride= when named, else the ride the
-// site shows. An admin and the push token are on every ride. A write that names
-// its ride in the form is checked again where the form is read.
+// site shows or gets a 403. Every handler behind it reads and writes that ride
+// and no other, so nothing in the address names a ride: a ?ride= here was once
+// checked instead of the shown ride and let a driver of one ride write to
+// another (audit, 2026-11-16). An admin and the push token are on every ride.
+// A handler that takes a post by its number asks ridePost for it.
 func (a *App) requireRide(next http.HandlerFunc) http.Handler {
 	return a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		slug := a.activeSlug()
-		if v := strings.TrimSpace(r.URL.Query().Get("ride")); v != "" {
-			slug = v
-		}
-		if !a.auth.mayRide(r, slug, a.activeSlug()) {
+		if !a.auth.mayRide(r, slug, slug) {
 			a.refuseRide(w, r)
 			return
 		}
@@ -356,6 +373,40 @@ func (a *App) requireRide(next http.HandlerFunc) http.Handler {
 func (a *App) refuseRide(w http.ResponseWriter, r *http.Request) {
 	log.Printf("refused: %s %s, %s is not assigned to that ride", r.Method, r.URL.Path, a.userOf(r))
 	http.Error(w, "not your ride: an admin has not assigned you to it", http.StatusForbidden)
+}
+
+// requireKeeper guards the trip-keeper's carriage routes: a trip document, the
+// ride the site shows, the private overlay and the list of every ride. An
+// admin or the push token passes; a driver gets a 403. It is not requireAdmin
+// because the push token is how the carriage arrives (the Data workflow posts
+// /driver/private with it), and requireAdmin refuses a machine.
+func (a *App) requireKeeper(next http.HandlerFunc) http.Handler {
+	return a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if !a.auth.pushAuthed(r) && !a.auth.IsAdmin(r) {
+			log.Printf("refused: %s %s, %s is not an admin", r.Method, r.URL.Path, a.userOf(r))
+			http.Error(w, "admins only", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	})
+}
+
+// ridePost is Store.Post for a handler behind requireRide: the post, only if
+// it is on a leg of the ride the site shows. A post of any other ride is the
+// same answer as no such post, so its number tells a driver nothing.
+func (a *App) ridePost(id int64) (*Post, error) {
+	p, err := a.store.Post(id)
+	if err != nil {
+		return nil, err
+	}
+	legs, err := a.store.Legs(a.activeSlug())
+	if err != nil {
+		return nil, err
+	}
+	if !legInRide(legs, p.LegID) {
+		return nil, fmt.Errorf("post %d is not on the ride the site shows", id)
+	}
+	return p, nil
 }
 
 // requireAdmin is requireAuth plus a role check: a signed-in editor, and the
@@ -953,7 +1004,11 @@ func buildMap(legs []Leg, posts []Post, tracks map[int64][][]float64, planned ma
 
 // --- public pages ----------------------------------------------------------------
 
-func (a *App) index(w http.ResponseWriter, r *http.Request) {
+func (a *App) index(w http.ResponseWriter, r *http.Request) { a.ridePage(w, r, nil) }
+
+// ridePage is the Ride page. ask is nil for "/", and what a Listen Inn address
+// asks for otherwise (listeninn.go).
+func (a *App) ridePage(w http.ResponseWriter, r *http.Request, ask *listenAsk) {
 	rv, err := a.loadRide()
 	if err != nil {
 		http.Error(w, "ride "+a.activeSlug()+" is not seeded", http.StatusNotFound)
@@ -990,8 +1045,13 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 			data["DayEnd"] = de
 		}
 	}
-	data["NowPlaying"] = a.nowPlayingFor(rv.Ride.Slug, time.Now()) // nil: no plays, no chip
+	np := a.nowPlayingFor(rv.Ride.Slug, time.Now()) // nil: no plays, no card
+	data["NowPlaying"] = np
+	data["Latest"] = a.latestFor(rv, posts, time.Now()) // nil: nothing yet, no strip
 	data["ListenLine"] = a.listenLine(rv.Ride.Slug)
+	if !a.listenCard(w, r, data, np, rv.Ride.Name, ask) {
+		return
+	}
 	a.render(w, r, "index.html", data)
 }
 
@@ -1308,8 +1368,10 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 		"features": feats,
 	}
 	w.Header().Set("Content-Type", "application/geo+json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "public, max-age=300")
+	// Drivers only since 2026-11-07, so no shared cache may keep it and no
+	// other origin is offered it.
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Vary", "Cookie, Authorization")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(out); err != nil {
@@ -1327,14 +1389,46 @@ func (a *App) loginForm(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "login.html", data)
 }
 
+// maxLoginBytes caps the sign-in form: a name, a password and a next address.
+const maxLoginBytes = 8 << 10
+
 func (a *App) loginSubmit(w http.ResponseWriter, r *http.Request) {
+	// The form is open to anyone, so it gets what requireAuth gives a
+	// signed-in write: a browser's POST from another origin is refused.
+	if !a.ownOrigin(r) {
+		http.Error(w, "this request came from another site", http.StatusForbidden)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginBytes)
 	if err := r.ParseForm(); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			http.Error(w, "that is too large to be a sign-in", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "bad form", 400)
 		return
 	}
 	username := strings.ToLower(strings.TrimSpace(r.PostFormValue("username")))
+	addr := clientAddr(r)
+	if no, wait := a.auth.brake.refused(addr, username); no {
+		// Refused before the password is looked at, right or wrong.
+		a.melt.Event("login_refused", map[string]any{"reason": "too_many"})
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		w.WriteHeader(http.StatusTooManyRequests)
+		a.render(w, r, "login.html", map[string]any{"Title": "Sign in",
+			"Error": "Too many wrong passwords. Wait a few minutes and try again.", "Next": r.PostFormValue("next")})
+		return
+	}
 	okLogin := a.auth.Check(username, r.PostFormValue("password"))
-	a.melt.Event("login", map[string]any{"user": username, "ok": okLogin})
+	if okLogin {
+		a.melt.Event("login", map[string]any{"user": username, "ok": true})
+	} else {
+		// What was typed in the name box is not written anywhere: people type
+		// passwords there. Its length is enough to tell a typo from a probe.
+		a.auth.brake.failed(addr, username)
+		a.melt.Event("login", map[string]any{"ok": false, "name_len": len(username)})
+	}
 	if !okLogin {
 		w.WriteHeader(http.StatusUnauthorized)
 		a.render(w, r, "login.html", map[string]any{"Title": "Sign in", "Error": "Incorrect username or password.",
@@ -1342,14 +1436,22 @@ func (a *App) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.auth.Issue(w, a.secure, username)
-	next := dropEmbed(r.PostFormValue("next"))
-	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
-		next = "/driver"
-	}
-	http.Redirect(w, r, next, http.StatusFound)
+	http.Redirect(w, r, safeNext(dropEmbed(safeNext(r.PostFormValue("next")))), http.StatusFound)
 }
 
+// logout ends the session everywhere, not only in this browser: the user's
+// epoch goes up, so a copy of the cookie on another device, or in someone
+// else's hands, stops working too.
 func (a *App) logout(w http.ResponseWriter, r *http.Request) {
+	if !a.ownOrigin(r) {
+		http.Error(w, "this request came from another site", http.StatusForbidden)
+		return
+	}
+	if u, ok := a.auth.sessionUser(r); ok {
+		if err := a.auth.users.endSessions(u.Name); err != nil {
+			log.Printf("WARN sign-out: could not end %s's other sessions: %v", u.Name, err)
+		}
+	}
 	a.auth.Clear(w)
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -1894,6 +1996,10 @@ type pinInput struct {
 	// because an unticked checkbox sends nothing). Unset = the per-post
 	// default: ticked at a private place, clear everywhere else.
 	Fuzz, FuzzSet bool
+	// ExactAtPrivate is the second yes: with the toggle off AT A PRIVATE
+	// PLACE the exact point is published only when the form also carries
+	// exact_at_private=yes. One un-ticked box is not enough to publish a door.
+	ExactAtPrivate bool
 }
 
 // pinResult is what the store gets, plus the one log line.
@@ -2025,6 +2131,12 @@ func resolvePin(in pinInput, cps []Checkpoint, precision string) pinResult {
 	fuzz := pc != nil && precision != pinPrecisionExact
 	if in.FuzzSet {
 		fuzz = in.Fuzz
+		if !fuzz && pc != nil && precision != pinPrecisionExact && !in.ExactAtPrivate {
+			// Per-post choice is ruled, so this is not a refusal: it is the
+			// toggle not being enough by itself here (audit, 2026-11-16).
+			fuzz = true
+			res.Note += " (fuzz off was not confirmed for a private place)"
+		}
 	}
 	if res.Trail && pc != nil {
 		// A point from the trail at a private place is never published as it
@@ -2098,6 +2210,8 @@ func pinInputFrom(r *http.Request, cp *Checkpoint, exifLat, exifLng *float64) pi
 		CP:      cp,
 		Fuzz:    r.PostFormValue("fuzz_location") != "",
 		FuzzSet: r.PostFormValue("fuzz_choice") != "",
+
+		ExactAtPrivate: r.PostFormValue("exact_at_private") == "yes",
 	}
 	if !validPinSource(in.Want) {
 		in.Want = ""
@@ -2476,6 +2590,11 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// A checkpoint of another ride is no checkpoint here (see ridePost).
+	if legs, err := a.store.Legs(a.activeSlug()); err != nil || !legInRide(legs, cp.LegID) {
+		http.NotFound(w, r)
+		return
+	}
 	_ = r.ParseForm()
 
 	clearing := r.PostFormValue("clear") != ""
@@ -2523,7 +2642,7 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "post_id is not a post id", http.StatusBadRequest)
 			return
 		}
-		p, err := a.store.Post(n)
+		p, err := a.ridePost(n)
 		if err != nil {
 			http.Error(w, "no post "+pid, http.StatusNotFound)
 			return
@@ -2695,17 +2814,27 @@ func (a *App) postDelete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	p, err := a.store.Post(id)
+	p, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
+	}
+	// A deleted post's photo comes off the public path first, by the same road
+	// as Remove photo: held for the undo window, then swept. A photo another
+	// post still shows stays where it is (removePhoto counts the references).
+	if p.Photo != nil {
+		now := a.photoNow()
+		a.sweepPhotoHolds(now)
+		if err := a.removePhoto(p.ID, now); err != nil {
+			log.Printf("ERROR post %d: delete refused, its photo could not be taken off the public path: %v", p.ID, err)
+			http.Error(w, "could not delete: the photo could not be removed", 500)
+			return
+		}
 	}
 	if err := a.store.DeletePost(p.ID); err != nil {
 		http.Error(w, "could not delete", 500)
 		return
 	}
-	// The photo file stays on the volume: content-addressed, and a second
-	// post may reference it. Nothing on this site deletes bytes.
 	http.Redirect(w, r, backTo(r, "/"), http.StatusSeeOther)
 }
 
@@ -2719,7 +2848,7 @@ func (a *App) postRepin(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	post, err := a.store.Post(id)
+	post, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -2813,7 +2942,7 @@ func (a *App) postFuzz(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	post, err := a.store.Post(id)
+	post, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -2847,9 +2976,19 @@ func (a *App) postUnfuzz(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, err := a.store.Post(id); err != nil {
+	post, err := a.ridePost(id)
+	if err != nil {
 		http.NotFound(w, r)
 		return
+	}
+	// A fuzzed post at a private place sits on that place's cell point. One
+	// tap does not put the door back on the map: it takes the second yes.
+	if post.Lat != nil && post.Lng != nil && r.PostFormValue("exact_at_private") != "yes" {
+		if rv, err := a.loadRide(); err == nil && nearPrivate(*post.Lat, *post.Lng, rideCheckpoints(rv.Legs)) != nil {
+			log.Printf("post %d: unfuzz at a private place was not confirmed, left fuzzy", id)
+			http.Redirect(w, r, backTo(r, "/"), http.StatusSeeOther)
+			return
+		}
 	}
 	changed, err := a.store.UnfuzzPost(id)
 	if err != nil {
@@ -3106,7 +3245,7 @@ func (a *App) postEditForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	post, err := a.store.Post(id)
+	post, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -3149,7 +3288,7 @@ func (a *App) postEditSave(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	post, err := a.store.Post(id)
+	post, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -3326,9 +3465,26 @@ func (a *App) photoView(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// Previous is the older photo and Next the newer one, over the whole ride
+	// in the order the photos page lists them. Zero means there is none.
+	var prev, next int64
+	if posts, err := a.store.Posts(rv.Ride.Slug, 0); err == nil {
+		var last int64
+		for _, p := range posts {
+			if p.Photo == nil {
+				continue
+			}
+			if p.ID == post.ID {
+				prev = last
+			} else if last == post.ID {
+				next = p.ID
+			}
+			last = p.ID
+		}
+	}
 	a.render(w, r, "photo.html", map[string]any{
 		"Title": "Photo", "Ride": rv.Ride, "PageLeg": post.LegSlug,
-		"P": post, "Photo": post.Photo})
+		"P": post, "Photo": post.Photo, "PrevID": prev, "NextID": next})
 }
 
 func legInRide(legs []Leg, id int64) bool {
