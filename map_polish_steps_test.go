@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -257,6 +256,13 @@ func initMapPolishScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		w.addTrack(a, album, artist, strings.Join(ws, " "))
 		return nil
 	})
+	sc.Step(`^the song "([^"]*)" played before the song "([^"]*)"$`, func(first, second string) error {
+		// Newest first, as /tracks.json sends them.
+		w.plays = []map[string]any{
+			{"id": "t2", "track": second, "artist": "Other Band", "album": "Red Album", "started_at": "2026-11-12T12:05:00Z"},
+			{"id": "t1", "track": first, "artist": "Some Band", "album": "Blue Album", "started_at": "2026-11-12T12:00:00Z"}}
+		return nil
+	})
 	panel := func() (string, error) {
 		w.size = map[string]int{"w": 375, "h": 380}
 		w.legs, w.cps, w.tracks = nil, nil, nil
@@ -284,6 +290,17 @@ func initMapPolishScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		if !strings.Contains(h, "Song One") || !strings.Contains(h, "Song Two") {
 			return fmt.Errorf("a track is missing: %s", h)
+		}
+		return nil
+	})
+	sc.Step(`^the list shows "([^"]*)" above "([^"]*)"$`, func(first, second string) error {
+		h, err := panel()
+		if err != nil {
+			return err
+		}
+		a, b := strings.Index(h, first), strings.Index(h, second)
+		if a < 0 || b < 0 || a > b {
+			return fmt.Errorf("%q is not above %q: %s", first, second, h)
 		}
 		return nil
 	})
@@ -323,33 +340,6 @@ func initMapPolishScenarios(t *testing.T, sc *godog.ScenarioContext) {
 			return fmt.Errorf("the blurb is %d characters", c)
 		}
 		return nil
-	})
-	sc.Step(`^at phone width the open list is capped at ([0-9.]+)rem or less$`, func(n string) error {
-		max, _ := strconv.ParseFloat(n, 64)
-		b, err := os.ReadFile("static/css/app.css")
-		if err != nil {
-			return err
-		}
-		css := string(b)
-		for i := strings.Index(css, "@media (max-width"); i >= 0; {
-			end := strings.Index(css[i:], "\n}")
-			blk := css[i:]
-			if end > 0 {
-				blk = css[i : i+end]
-			}
-			if m := regexp.MustCompile(`\.np-panel\s*\{[^}]*max-height:\s*([0-9.]+)rem`).FindStringSubmatch(blk); m != nil {
-				if v, _ := strconv.ParseFloat(m[1], 64); v <= max {
-					return nil
-				}
-				return fmt.Errorf("the phone rule caps the list at %srem", m[1])
-			}
-			next := strings.Index(css[i+1:], "@media (max-width")
-			if next < 0 {
-				break
-			}
-			i += 1 + next
-		}
-		return fmt.Errorf("no rule at phone width caps the open list")
 	})
 }
 

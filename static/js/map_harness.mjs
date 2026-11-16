@@ -73,9 +73,8 @@ const el = {
   addEventListener(ev, f) { (domListeners[ev] = domListeners[ev] || []).push(f); },
   _leafletMap: null,
 };
-const mk = () => ({ hidden: false, textContent: '', innerHTML: '', addEventListener() {}, setAttribute() {} });
-const np = { el: mk(), line: mk(), label: mk(), panel: mk(), btn: mk() };
-np.panel.hidden = true;
+// A control map.js builds for itself (the Listen Inn used to be one).
+let customControls = 0;
 
 const L = {
   map() { state.size = { ...cur }; return map; },
@@ -101,12 +100,12 @@ const L = {
     return m;
   },
 };
-L.control = Object.assign(function (o) { const c = { onAdd: null, addTo(m) { if (c.onAdd) c.onAdd(); return c; } }; return c; }, L.control);
+L.control = Object.assign(function (o) { customControls++; const c = { onAdd: null, addTo(m) { if (c.onAdd) c.onAdd(); return c; } }; return c; }, L.control);
 // Leaflet turns a marker's anchor and size into a screen offset; the note's own
 // marker is the one under test, so keep its anchor and size as given.
 L.map = function () { state.size = { ...cur }; map._el = el; el._leafletMap = map; return map; };
 
-const byId = { map: el, np: np.el, 'np-line': np.line, 'np-label': np.label, 'np-panel': np.panel, 'np-toggle': np.btn };
+const byId = { map: el };
 let resizeCb = null;
 const win = { listeners: {}, addEventListener(ev, f) { (win.listeners[ev] = win.listeners[ev] || []).push(f); } };
 const ctx = {
@@ -115,10 +114,9 @@ const ctx = {
   ResizeObserver: class { constructor(cb) { resizeCb = cb; } observe() {} },
   setInterval() {}, setTimeout() {}, fetch: () => new Promise(() => {}),
 };
-ctx.window = Object.assign(ctx, { RIDE: i.data, RIDE_TRACKS: i.tracks || { tracks: [] }, addEventListener: win.addEventListener });
+ctx.window = Object.assign(ctx, { RIDE: i.data, RIDE_TRACKS: (i.tracks && i.tracks.tracks) ? i.tracks : undefined, addEventListener: win.addEventListener });
 vm.createContext(ctx);
 vm.runInContext(readFileSync(new URL('./nowplaying.js', import.meta.url), 'utf8'), ctx);
-if (!i.tracks || !i.tracks.tracks) { byId.np = null; }
 vm.runInContext(readFileSync(new URL('./map.js', import.meta.url), 'utf8'), ctx);
 
 for (const s of i.steps || []) {
@@ -138,7 +136,9 @@ const inView = (lat, lng) => {
 process.stdout.write(JSON.stringify({
   contains: (i.probes || []).map((q) => inView(q[0], q[1])),
   zoom: state.zoom, fits: state.fits,
-  panel: np.panel.innerHTML,
+  // The Listen Inn list as the card draws it (listeninn.js calls this same function).
+  panel: ctx.RTNowPlaying.panelHtml((i.tracks && i.tracks.tracks) || [], (s) => String(s == null ? '' : s), false, true),
+  customControls,
   layerNames: Object.keys(layers),
   markers: markers.map((m) => ({ ...m.rec, inView: inView(m.rec.lat, m.rec.lng) })),
 }));

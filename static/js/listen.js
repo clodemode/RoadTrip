@@ -1,7 +1,7 @@
 /* roadtrip — hearing what played (Kris, 2026-11-12: "Let them hear it").
  *
- * One shared audio element on the public home page. A visitor taps Play on a
- * Listen Inn row, or Listen on the chip; the element's address is
+ * One shared audio element in the Listen Inn card. A visitor taps Play on a
+ * row, or the card's own Play button; the element's address is
  * /tracks/<name>/audio, which the server checks and sends on. Nothing starts by
  * itself: when a track ends the next NEWER row in the list is played, so a
  * visitor who tapped once can listen along with the drive. The pure parts are
@@ -17,9 +17,10 @@
     return i > 0 && tracks[i - 1].id ? tracks[i - 1].id : null;
   }
 
-  // What the chip's Listen button plays: what is current, else the newest row.
+  // What the card's Play button plays when no song was asked for: what is
+  // current, else the newest row (a finished trip has no current song).
   function currentId(doc) {
-    var p = doc && (doc.now || doc.last);
+    var p = doc && (doc.now || doc.last || (doc.tracks || [])[0]);
     return p && p.id ? p.id : null;
   }
 
@@ -44,6 +45,11 @@
 
   var doc = window.RIDE_TRACKS || { tracks: [] };
   var cur = null;
+  // The song the page was opened on (/listeninn/song/<name>): the Play button
+  // is armed on it, so one tap plays it. Nothing sounds before that tap.
+  var card = document.getElementById('np');
+  var armed = (card && card.getAttribute('data-song')) || null;
+  function known(id) { return (doc.tracks || []).some(function (p) { return p && p.id === id; }); }
 
   function say(text) { if (msg) { msg.textContent = text || ''; msg.hidden = !text; } }
 
@@ -56,7 +62,7 @@
       var b = row.querySelector('.np-play');
       if (b) b.textContent = on && playing ? 'Pause' : 'Play';
     });
-    if (chipBtn) chipBtn.textContent = playing ? 'Pause' : 'Listen';
+    if (chipBtn) chipBtn.textContent = playing ? 'Pause' : 'Play';
   }
 
   function start(id) {
@@ -100,9 +106,9 @@
     var b = e.target && e.target.closest ? e.target.closest('.np-play') : null;
     if (b) tap(b.getAttribute('data-id'));
   });
-  if (chipBtn) chipBtn.addEventListener('click', function () { tap(cur || currentId(doc)); });
+  if (chipBtn) chipBtn.addEventListener('click', function () { tap(cur || (armed && known(armed) ? armed : currentId(doc))); });
 
-  // map.js redraws the list every minute; it calls this after each redraw.
+  // listeninn.js redraws the list every minute; it calls this after each redraw.
   window.RTListen.update = function (d) {
     doc = d || doc;
     if (chipBtn) chipBtn.hidden = !(doc.listen && currentId(doc));

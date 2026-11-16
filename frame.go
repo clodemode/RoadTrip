@@ -100,11 +100,11 @@ var shellPostEdit = regexp.MustCompile(`^/driver/post/\d+/edit$`)
 // the shell may wrap. Data, media and the sign-in page are never wrapped.
 func shellPage(p string) bool {
 	switch p {
-	case "/", "/plan", "/photos", "/chester", "/driver", "/driver/post",
+	case "/", "/listeninn", "/plan", "/photos", "/chester", "/driver", "/driver/post",
 		"/driver/lodging", "/driver/chester/log", "/driver/chester/memory", "/driver/users":
 		return true
 	}
-	return strings.HasPrefix(p, "/legs/") || shellPostEdit.MatchString(p)
+	return strings.HasPrefix(p, "/legs/") || strings.HasPrefix(p, "/listeninn/song/") || shellPostEdit.MatchString(p)
 }
 
 // shell answers a signed-in page request with the player shell while the ride

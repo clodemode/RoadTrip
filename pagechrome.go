@@ -161,6 +161,12 @@ func (a *App) chrome(r *http.Request, name string, data map[string]any, authed, 
 	if data["StripOn"] == true {
 		data["Resume"] = a.resumeFor(r)
 	}
+	// The Listen Inn card plays for whoever has no other player on the page: a
+	// driver's page that carries the music card, or sits in the frame under it,
+	// shows the list and nothing that could sound (two players would fight).
+	if np, ok := data["NowPlaying"].(*tracksDoc); ok && np != nil {
+		data["ListenPlay"] = np.Listen && data["StripOn"] != true && !(emb && authed)
+	}
 	rideName := "Roadtrip"
 	if rd, ok := data["Ride"].(*Ride); ok && rd != nil {
 		rideName = rd.Name

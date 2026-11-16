@@ -9,6 +9,11 @@
   --rt-pin: #1f2937; --rt-post-pin: #f59e0b;
   --rt-amber: #b45309;   /* a caution edge, never a figure */
   --rt-ok: #198754;      /* done, arrived */
+  /* The music cards take their colours from the music mark (the MusicOrgan
+     mascot drawing in static/img/charter.svg) and that app's light player. */
+  --rt-tune-ink: #2b3b47; --rt-tune-text: #1a202c; --rt-tune-muted: #5b6b7f;
+  --rt-tune-warm: #ff905f; --rt-tune-cool: #4aa3ff;
+  --rt-tune-stage: #eef2f7; --rt-tune-edge: #d8e0ea; --rt-tune-on: #e6f1ff;
 }
 
 main { max-width: 1000px; margin: 0 auto; padding: 0 1rem 3rem; }
@@ -141,37 +146,11 @@ h2 { margin: 1.5rem 0 .5rem; }
 .popup p { margin: .15rem 0; font-size: .86rem; }
 .popup .muted { color: #555; }
 .popup-photo { display: block; width: 100%; max-width: 240px; border-radius: 6px; margin-bottom: .4rem; }
-/* What is playing: a small corner control on the map. The panel grows upward
-   from the bottom corner and scrolls inside itself, so it never widens the page. */
-.np { box-sizing: border-box; width: min(20rem, calc(100vw - 2.5rem)); background: rgba(255, 255, 255, .94);
-  border: 1px solid var(--ds-hairline); border-radius: 8px; box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
-  padding: .3rem .5rem; font-size: .75rem; line-height: 1.3; color: #1f2937; }
-.np[hidden], .np-panel[hidden] { display: none; }
-.np-chip { margin: 0; overflow-wrap: anywhere; }
-.np-label { font-weight: 700; }
-.np-toggle { margin-top: .2rem; padding: .25rem .6rem; min-height: 32px; font-size: .75rem; font-weight: 700;
-  background: #fff; border: 1px solid var(--ds-hairline); border-radius: 6px; }
-.np-panel { margin-top: .3rem; max-height: 9rem; overflow-y: auto; border-top: 1px solid var(--ds-hairline); }
-.np-row { padding: .25rem 0; border-bottom: 1px solid var(--ds-hairline); }
-.np-row p, .popup .np-row p { margin: 0; font-size: .75rem; overflow-wrap: anywhere; }
-.np-when, .np-album { color: #555; }
-.np-note { font-size: .7rem; font-style: italic; }
-.np-play, .np-listen { padding: .25rem .6rem; min-height: 32px; font-size: .75rem; font-weight: 700; background: #fff;
-  border: 1px solid var(--ds-hairline); border-radius: 6px; }
-.np-play { float: right; margin: 0 0 .2rem .4rem; }
-.np-listen { margin: .2rem .3rem 0 0; }
-.np-listen[hidden], .np-msg[hidden] { display: none; }
-.np-msg { margin: .25rem 0 0; font-size: .75rem; color: #7a1f1f; overflow-wrap: anywhere; }
-.np-row.np-on { background: #eef4ff; }
+/* A play with a published point: a music note on the map. The Listen Inn
+   itself is a card of its own, off the map (see the music cards below). */
 .np-pin span { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
   border-radius: 50%; background: #fff; color: #1f2937; border: 2px solid #1f2937; font-size: 16px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
-.np-group { border-bottom: 1px solid var(--ds-hairline); padding-bottom: .15rem; }
-.np-group .np-row { border-bottom: 0; padding: .15rem 0; }
-.np-album-h { font-weight: 700; color: #1f2937; padding-top: .25rem; }
-/* On a phone the map is only about 380px tall: the open list is short and scrolls
-   inside itself, so most of the map stays in sight above it. */
-@media (max-width: 575px) { .np-panel { max-height: 6rem; } }
 #map[data-mode="plan"] .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 1.4rem; }
 
 /* --- the day's end: first navigation target, with Add a stop ---------------------- */
@@ -551,21 +530,29 @@ button.hud-tool { width: 100%; font-family: inherit; cursor: pointer; }
 .post-done { margin: .6rem 0; padding: .7rem .9rem; border: 1px solid #059669; border-radius: var(--ds-radius); background: #ecfdf5; color: #065f46; font-weight: 600; }
 .start-drive { display: block; width: 100%; margin: .75rem 0; font-size: 1.25rem; }
 
-/* Drive Tracks: ONE full-width card; its title is its header. In the player
-   shell it is docked at the bottom, within thumb reach, and the frame takes the
-   rest of the screen. Light theme only; type is large for a driver. */
-.drive-card { box-sizing: border-box; width: 100%; background: #fff; border: 3px solid #111827; border-radius: 1rem;
-  padding: .55rem .8rem .7rem; display: flex; flex-direction: column; gap: .45rem; }
-.drive-card-title { display: flex; align-items: center; gap: .4rem; margin: 0; font-size: 1.1rem; font-weight: 800; }
-.drive-card-title .rt-nest { margin-left: auto; font-size: .85rem; font-weight: 600; color: #374151; }
+/* The music cards: Drive Tracks (the driver's) and the Listen Inn (everyone's).
+   ONE family, dressed by the same rules: a white card in the music mark's ink,
+   with the mark's two skin colours as a thin band along the top, the mark as the
+   title's icon, and the title as the header button that opens the card in
+   place. Drive Tracks is docked in the player shell, within thumb reach;
+   the Listen Inn is docked at the bottom of the Ride page, off the map.
+   Light theme only; type is large enough for a phone at arm's length. */
+.drive-card, .listen-card { box-sizing: border-box; position: relative; overflow: hidden; width: 100%; background: #fff;
+  border: 2px solid var(--rt-tune-ink); border-radius: 1rem; padding: .7rem .8rem .7rem; display: flex; flex-direction: column;
+  gap: .45rem; color: var(--rt-tune-text); }
+.drive-card::before, .listen-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px;
+  background: linear-gradient(90deg, var(--rt-tune-warm), var(--rt-tune-cool)); }
+.drive-card-title, .tune-card-title { display: flex; align-items: center; gap: .4rem; margin: 0; font-size: 1.1rem; font-weight: 800; }
+.tune-icon { width: 28px; height: 28px; flex: 0 0 auto; vertical-align: middle; }
+.drive-card-title .rt-nest { margin-left: auto; font-size: .85rem; font-weight: 600; color: var(--rt-tune-muted); }
 .rt-row { display: flex; align-items: center; gap: .7rem; min-width: 0; }
 .rt-art { flex: 0 0 auto; width: 64px; height: 64px; border-radius: .5rem; object-fit: cover; }
 .rt-art[hidden] { display: none; }
 .rt-meta { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; line-height: 1.25; }
 .rt-meta b { font-size: 1.15rem; }
-.rt-meta span { font-size: .95rem; color: #374151; }
+.rt-meta span { font-size: .95rem; color: var(--rt-tune-muted); }
 .rt-controls { display: flex; flex-wrap: wrap; gap: .5rem; }
-.drive-card .btn { min-height: 44px; border-radius: .8rem; font-weight: 700; }
+.drive-card .btn, .listen-card .btn { min-height: 44px; border-radius: .8rem; font-weight: 700; }
 .rt-big { flex: 1 1 7rem; font-size: 1.3rem; }
 .rt-next { flex: 0 0 auto; font-size: 1.1rem; padding: .5rem 1.2rem; }
 .rt-ask { flex: 1 1 100%; font-size: 1.05rem; }
@@ -582,6 +569,43 @@ body.rt-shell { margin: 0; display: flex; flex-direction: column; height: 100dvh
 .rt-chevron { margin-left: .25rem; transition: transform .15s; }
 .rt-toggle[aria-expanded="false"] .rt-chevron { transform: rotate(-90deg); }
 #rt-card-body[hidden] { display: none; }
+
+/* The Listen Inn card. Docked: fixed to the bottom of the window, full width
+   on a phone and a corner card on a wider screen, above the map's own layers.
+   The page keeps room under its last line so the closed card covers nothing.
+   The song list scrolls inside itself, oldest at the top; on a phone it is
+   short, so most of the page (and the map) stays in sight above the open card. */
+.listen-dock { position: fixed; left: .5rem; right: .5rem; bottom: calc(.5rem + env(safe-area-inset-bottom)); width: auto;
+  max-width: 30rem; margin: 0 auto; z-index: 1100; box-shadow: 0 4px 16px rgba(0, 0, 0, .28); }
+body:has(.listen-dock) { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) { .listen-dock { left: auto; right: 1rem; bottom: 1rem; width: 24rem; margin: 0; } }
+.np-chip, .np-ready { margin: 0; font-size: .9rem; line-height: 1.3; overflow-wrap: anywhere; }
+/* Closed, the card is two lines: its title and what is playing, on one line.
+   Open, the list says what played, so the line steps aside for it. */
+.np-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.listen-card:has(#np-toggle[aria-expanded="true"]) .np-chip { display: none; }
+.np-label { font-weight: 700; color: var(--rt-tune-muted); }
+.np-ready { padding: .35rem .5rem; border-radius: .5rem; background: var(--rt-tune-stage); }
+#np-body { display: flex; flex-direction: column; gap: .45rem; min-height: 0; }
+.np-listen { flex: 0 0 auto; width: 100%; font-size: 1.2rem; }
+.np-msg { margin: 0; font-size: .9rem; font-weight: 600; overflow-wrap: anywhere; }
+.np-panel { position: relative; max-height: 40vh; overflow-y: auto; border-top: 1px solid var(--rt-tune-edge); }
+.np-group { border-bottom: 1px solid var(--rt-tune-edge); padding: .1rem 0 .3rem; }
+.np-group:last-child { border-bottom: 0; }
+.np-row { display: flow-root; padding: .3rem .35rem; border-radius: .5rem; }
+.np-row p, .popup .np-row p { margin: 0; font-size: .85rem; overflow-wrap: anywhere; }
+.popup .np-row { padding: 0; }
+.np-when, .np-album { color: var(--rt-tune-muted); }
+.np-when { font-variant-numeric: tabular-nums; }
+.np-album-h { margin: 0; padding: .35rem .35rem 0; font-size: .85rem; font-weight: 700; color: var(--rt-tune-text); }
+.np-note { margin: 0; padding: 0 .35rem; font-size: .8rem; font-style: italic; }
+.np-play, .np-link { float: right; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 3.6rem;
+  margin: 0 0 .2rem .4rem; padding: .25rem .7rem; white-space: nowrap; font-size: .85rem; font-weight: 700; background: #fff; color: var(--rt-tune-text);
+  border: 1px solid var(--rt-tune-ink); border-radius: .8rem; text-decoration: none; }
+.np-link { border-color: var(--rt-tune-edge); font-weight: 600; }
+.np-row.np-sel { background: var(--rt-tune-stage); box-shadow: inset 3px 0 0 var(--rt-tune-warm); }
+.np-row.np-on { background: var(--rt-tune-on); box-shadow: inset 3px 0 0 var(--rt-tune-cool); }
+@media (max-width: 575px) { .np-panel { max-height: 28vh; } }
 
 /* The RoadTracks card: one full-width block directly under the gauges in every
    mode, the search box taking the whole row, the result box only once it has
