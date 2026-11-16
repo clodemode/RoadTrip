@@ -1,70 +1,53 @@
-# roadtrip
+# RoadTrip
 
-A live surface for one road trip: the planned legs and checkpoints from a
-seed file, and posts with photos from the phone as the miles go by. First
-ride: **Austin → San Jose**, 2026-09-04 to 09-07, one way.
+A live web page for one road trip. You plan the days, then post from your
+phone as the miles go by: check-ins, photos and notes land on a map your
+friends and family can follow. It is one small Go program with a SQLite file
+beside it, so it runs on the cheapest virtual machine you can rent and there
+is nothing to patch from the car.
 
-**Live:** https://roadtrip.opeongo.net (the Fly host https://roadtrip-clodemode.fly.dev 301s there)
-**Route data:** https://roadtrip.opeongo.net/route.geojson
+![The ride page: a map of the trip, the days, and the stops](docs/img/ride.jpg)
 
-## What it is
+*The sample trip that ships in `testdata/`: invented places, not a real drive.*
 
-- `/` — the ride: hero with the day-of-trip badge, a map (leg polylines,
-  numbered checkpoint pins, muted candidate stops, photo pins), the
-  checkpoint list with arrival stamps, and the timeline newest-first.
-- `/legs/<slug>` — one leg: its map, checkpoints, candidate stops, posts.
-- `/photos` — the gallery, grouped by leg.
-- `/route.geojson` — signed-in drivers only (session cookie or `PUSH_TOKEN` bearer; a visitor is sent to sign-in, and the masthead link shows only when signed in): legs, checkpoints and pinned posts as GeoJSON,
-  CORS `*`, plus a `kind=track` line per leg for what was actually driven.
-- `/plan` — the planner: the days with miles, hours and a long-day flag, the
-  trip totals, and — for a trip that carries route options — each option as a
-  control, with the roads not taken drawn dashed on the map. `/plan.json` is
-  the same arithmetic as data. See "Trips on the volume".
-- `/driver/post` — **Post a Photo**, the driver's one screen: photo, kind,
-  title, body, leg, zone, hide-location. By default it posts just a photo;
-  before the drive starts the one choice is "Start the drive from <start>", and
-  afterwards a photo near the next open stop checks in there. The form has no
-  milestone list. `POST /driver/checkpoint/{id}/arrive` is a repair tool with
-  no page button except a small Undo on a settled row (arrived, left or
-  skipped), which posts `clear=1` and needs no position. The start is a
-  departure: no page offers navigation to it, and only the next open stop is a
-  destination.
-- `/driver/posts.json` — the census: **every** post with its photo's identity,
-  signed-in only. See "Taking a census".
+## What you get
 
-The masthead creature is **Odo**, a nine-banded armadillo — the slow land
-migrator that walked out of Texas and kept going, armoured like a car, his
-banded shell a segmented odometer. *Odo counts every mile.* (The name is a
-phonomeme: say it and you hear the odometer.)
+- **A ride page for visitors.** The map, each day's leg, the stops with
+  arrival times, and the posts and photos from the road.
+- **One-tap posting from the phone.** Take a photo and post it; near a
+  planned stop it checks you in. Each time is shown in the time zone it
+  happened in, so a trip across zones reads correctly.
+- **A planner.** Days, miles and driving hours, long days flagged, and
+  optional forks ("ridge road or valley road?") that visitors can compare
+  and you can settle on the road.
+- **Privacy by default.** Your home and your hosts' homes are published as a
+  roughly one-kilometre square, never the point. Photos have their GPS and
+  camera details stripped before they are stored. Street addresses live in a
+  private file only signed-in users see.
+- **A driver screen.** Large type for a dash mount: the next stop, an honest
+  ETA, a link into your navigation app, and weather alerts for the road
+  ahead (United States and Canada).
+- **Optional extras**, each off until you give it a key: a trip helper that
+  answers "where is fuel, food, a bed?" through the Claude API, traffic and
+  destination search through TomTom, and the music that played on the drive.
+  See [Optional features](#optional-features).
 
-Every time is stored as UTC **plus the IANA zone it happened in**, and
-rendered local. There is deliberately no ride-wide zone: this trip crosses
-CDT → MDT → MST (Arizona keeps no DST) → PDT, and one zone would misprint
-every time after the first border. Picking a checkpoint on the post form
-selects its zone; stamping an arrival moves the default zone with the car.
+When the trip ends, the site stays up as a record of it and costs almost
+nothing to keep.
 
-The seed is the RWGPS-import shape — one `LineString` feature per leg, in
-order; `Point` features with `kind=checkpoint` (each with its own `tz`) and
-`kind=candidate` for sights. The origin is public-safe: it is named
-"Hudson Bend (home)", carries `precision: "fuzzed"`, and the app snaps any
-fuzzed checkpoint to the 0.01° grid on the way out of the store, so no page,
-pin or GeoJSON ever sees the real point. Street addresses never enter the
-seed at all — they live in `$DATA_DIR/private.json` on the volume and show
-only to the signed-in trip-keeper (the EagleLakeRocks dedications pattern).
+![The plan page: totals, route options and the days](docs/img/plan.jpg)
 
-Planning data is **seed-owned until actualized**: on every boot the seed
-refreshes legs, any checkpoint that has not been stamped as arrived, and the
-candidate-stop set. Arrived checkpoints, posts and photos are never touched.
-So a seed edit reaches the site on the next deploy.
+## Quick start
 
-## Running it
-
-Local settings and secrets live in `.env`, which git and the image build both
-ignore. The tracked `.env.example` lists every variable; copy it once and fill
-in the blanks (`-n` never overwrites a `.env` you already have):
+You need Docker. This builds the image, starts it on your machine, and loads
+the sample trip. Every command runs as written.
 
 ```bash
-cp -n .env.example .env
+git clone https://github.com/clodemode/RoadTrip.git
+```
+
+```bash
+cd RoadTrip
 ```
 
 ```bash
@@ -72,950 +55,297 @@ docker build -t roadtrip .
 ```
 
 ```bash
-docker run -p 8080:8080 --env-file .env -v "$PWD/data:/data" roadtrip
+docker run -d --name roadtrip -p 8080:8080 -v roadtrip-data:/data -e COOKIE_SECURE=0 -e PUSH_TOKEN=local-dev-token -e ADMIN_PASSWORD_HASH="$(docker run --rm roadtrip -hash 'change-me-please')" roadtrip
 ```
-
-Then open http://localhost:8080. On first boot it seeds itself from
-`seed/*.geojson` onto the volume; after that the volume is the source of
-truth and a redeploy never clobbers rows edited through the UI.
-
-To enable posting, set an admin password hash:
 
 ```bash
-docker run --rm roadtrip -hash 'your-password'      # prints a bcrypt hash
+curl -s -H 'Authorization: Bearer local-dev-token' -H 'Content-Type: application/geo+json' --data-binary @testdata/trip-fixture.geojson 'http://localhost:8080/driver/trip?activate=1'
 ```
 
-then pass it as `ADMIN_PASSWORD_HASH`. With no hash set the site runs
-read-only. For a plain-HTTP local run also pass `COOKIE_SECURE=0`, or the
-session cookie will never come back.
+Open <http://localhost:8080>. To post, sign in at
+<http://localhost:8080/driver/login> with username `kris` and the password
+`change-me-please`. The first user is always named `kris` (see
+[Known limits](#known-limits-for-self-hosters)); once signed in you can add
+a user under your own name at `/driver/users`.
 
-### Configuration
+What those settings did:
 
-| variable | purpose |
-|---|---|
-| `ADMIN_PASSWORD_HASH` | bcrypt hash; used once, to seed user `kris` (admin) when `$DATA_DIR/users.json` does not exist. After that the users file is the source of truth. No users ⇒ read-only site |
-| `SESSION_KEY` | HMAC key for session cookies; unset ⇒ random per boot (sessions drop on restart) |
-| `PUSH_TOKEN` | fixed bearer token accepted wherever the session is; unset ⇒ the header path does not exist. See "Pushing with the token" |
-| `RIDE_SLUG` | the ride `/` shows **when no active ride has been set**; default `atx-sjc-2026-09`. The active ride is data, set by `POST /driver/ride/active` — see "Trips on the volume" |
-| `DATA_DIR` | default `/data`; holds `roadtrip.sqlite3`, `media/`, `tmp/` (upload spill, swept on boot), the optional `private.json` and the trip files in `trips/` |
-| `$DATA_DIR/trips/<slug>.geojson` | a trip that is not in the image: pushed with `POST /driver/trip`, read at boot after the embedded seeds; never in the repo. Absent = only the embedded rides |
-| `GOMEMLIMIT` | optional; unset ⇒ the GC's soft limit is 75 % of the cgroup limit or MemTotal (logged at boot as `memory limit: …`) |
-| `MELT_REDIS_ADDR` | optional `host:port` of the fleet Redis (e.g. `redis:6379`); the app then publishes MELT records to `clode:state:melt:roadtrip:{events,errors}` (read them with `melt_tail(source='roadtrip')`). Unset ⇒ the Redis sink is off; Fly has no fleet Redis, so production uses `MELT_FILE` instead. No coordinate, typed destination or private text is ever published |
-| `MELT_FILE` | optional path of a file that keeps every MELT record (both streams, each with a `stream` field) as one JSON line, written in the background and rotated to `<path>.1` past 2 MB. Set to `/data/melt/roadtrip.jsonl` on Fly. Read it signed in at `GET /driver/melt.json?stream=events\|errors\|all&n=200&event=<name>` (newest first, at most 1000); with no file it answers `{"sink":"off","records":[]}`. The same guard as the Redis sink applies. The phone reports player trouble to `POST /driver/roadtracks/event` |
-| `MELT_VENUE` | the `venue` stamped on every MELT record; default `kate`, `fly` in production |
-| `$DATA_DIR/private.json` | private overlay, keyed by ride and then by checkpoint ord: the top-level `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` is the first ride's (`RIDE_SLUG`), every other ride has its own block under `"rides":{"<slug>":{"checkpoints":{…}}}`; rendered on admin pages only, never in the repo or the seed; absent = no private data |
-| `SITE_URL` | the canonical origin, e.g. `https://roadtrip.opeongo.net`; unset (the local default) ⇒ no redirect and no canonical/og tags |
-| `SITE_VISIBILITY` | `public` (default in code) or `private`; **private puts the whole site behind the one admin password** — see below |
-| `PIN_PRECISION` | `snap` (default) or `exact`; decides only whether the post form's **Fuzz This** toggle starts ticked at a private place |
-| `ANTHROPIC_API_KEY` | the key Chester asks the Claude API with. **A secret: a Fly secret on the live site, the gitignored `.env` for a local run, never a tracked file**; unset ⇒ Chester is off, its page says so and boot logs `chester: disabled`. See "Chester" |
-| `CHESTER_MODEL_QUICK`, `CHESTER_MODEL_PLAN` | the model each mode asks; both default `claude-opus-5-5`. It must be a model the web search tool in use (`web_search_20260209`) is documented for: `claude-opus-5-5`, `claude-opus-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-5-5`, `claude-sonnet-5` or `claude-sonnet-4-6`. Any other leaves Chester off, and boot logs why |
-| `CHESTER_EFFORT_QUICK`, `CHESTER_EFFORT_PLAN` | `low`, `medium`, `high`, `xhigh` or `max`; default `low` for quick and `medium` for plan |
-| `CHESTER_DAILY_USD` | the most Chester may spend in one day, in dollars (the day runs midnight to midnight in the zone the ride is in); default `5`. Above zero and no more than `100`: anything else (a typo such as `1e308` included) leaves Chester off, and boot logs why |
-| `CHESTER_MODEL_BACKUP` | the model a request is asked again on, once, when the API answered the first model with a 5xx or 529 before any of the answer began (nothing was charged for it); default `claude-sonnet-5-5`, `off` turns it off and the old sentence is shown. It is checked like the two above. The row's note says the first model was unavailable and which model answered, its served model is the backup, and its cost is priced at the model that ran |
-| `CHESTER_FALLBACK` | `default` (the default) or `off`; whether a question the API's safety classifiers decline is re-run on the model the API recommends for that case |
-| `ANTHROPIC_BASE_URL` | optional; sends Chester's questions to another address. For a local stub only: the key goes wherever this points |
-| `PUBLIC_LISTEN` | default on; `0`, `off`, `false` or `no` stops a signed-out visitor hearing the tracks played on the active ride (Kris, 2026-11-12: "Let them hear it"). Needs `ROADTRACKS_TOKEN`. Off: `GET /tracks/{id}/audio` answers 404, `/tracks.json` says `"listen": false` and the Listen Inn panel has no Play control. The route redirects (302) to the one short-lived address the library gives for that play's track, so no audio passes through the Fly machine and the key never leaves it; one address may ask 30 times a minute, then 429 |
-| `PORT` | default `8080` |
-| `COOKIE_SECURE` | default `1`; set `0` only for plain-HTTP local runs |
+- `ADMIN_PASSWORD_HASH` created the first user. Without any user the site is
+  read-only.
+- `PUSH_TOKEN` is a password for scripts: it let `curl` push the trip
+  without signing in. Use a long random one anywhere but your own machine.
+- `COOKIE_SECURE=0` lets the sign-in cookie work over plain `http://`. Leave
+  it out wherever the site is served over HTTPS.
+- `-v roadtrip-data:/data` keeps the database and photos in a Docker volume,
+  so they survive the container.
 
-With `SITE_URL` set, every page carries `<link rel="canonical">` and `og:*`
-tags naming that origin, and a request on any other host — the `.fly.dev`
-host included — is answered with a 301 to the same path on `SITE_URL`;
-only `/healthz` answers on any host, because Fly's health check needs it to.
+Stop and remove it with `docker rm -f roadtrip`. Add
+`docker volume rm roadtrip-data` to delete the data too.
 
-### While the site is private
-
-`SITE_VISIBILITY=private` (set in `fly.toml [env]` as of 2026-09-02, ruled by
-Kris — *"we will open it later"*) makes every page require the existing admin
-session. There is no second credential and no Basic auth: an unauthenticated
-request is redirected to `/driver/login?next=…`. Exactly five paths stay open,
-and the list is load-bearing:
-
-- `/healthz` — Fly's health check arrives with an arbitrary `Host`; redirect
-  it and the machine is marked unhealthy and stops serving.
-- `/robots.txt` — so a crawler that arrives while the site is closed reads the
-  exclusions instead of a redirect to a login form.
-- `/driver/login` (GET and POST) — or there is no way in.
-- `/static/css/app.css` and `/static/img/creature.svg` — the only two files
-  the login page renders with (the creature is also the favicon). Not
-  `/static` wholesale.
-
-So while this is on, link previews are blank to anyone not signed in and
-`/route.geojson` is unreachable to them — which is the point for now.
-Re-opening the site is a one-line `fly.toml` change and a redeploy, never a
-code change. The effective mode is logged at boot beside the canonical-host
-line: `site visibility: private (…)`.
-
-### Pushing with the token
-
-`PUSH_TOKEN` is one fixed credential — 24 hex characters, set as a Fly secret —
-that a machine carries in a header instead of holding a session:
-
-```
-Authorization: Bearer $PUSH_TOKEN
-```
-
-`Auth.IsAuthed` answers yes to it, and `IsAuthed` is the single question both
-`requireAuth` and the whole-site `visibility` gate ask. So the token opens
-exactly what a signed-in browser opens — every `/driver` route, and
-`/route.geojson` while the site is private — and it is not a second auth path
-to get wrong, because it is not a second gate. The comparison is
-`subtle.ConstantTimeCompare`; an unset `PUSH_TOKEN` disables the header
-entirely rather than matching an empty one. Boot logs `push token: set` or
-`push token: unset`, never the value.
-
-It exists because signing in puts the plaintext password on the wire and leaves
-a cookie jar on whatever machine did it — a poor trade for one POST from a CI
-runner or one curl from the roadside.
-
-**A write that rides on the cookie must come from this site.** The session
-cookie is `SameSite=Lax`, which stops another site's form but not a page on a
-sibling host of the same site: a browser sends the cookie with that page's
-POST. So `requireAuth` refuses, with 403, any request that is not a GET, is
-signed in by the cookie, and carries an `Origin` header whose host is neither
-the host the request was sent to nor `SITE_URL`'s. A request with no `Origin`
-header is unchanged, and so is one carrying the token: no browser attaches
-that header by itself.
+**Without Docker**, with Go 1.25 or newer:
 
 ```bash
-H="Authorization: Bearer $PUSH_TOKEN"; S=https://roadtrip.opeongo.net
-
-# the private overlay, whole document, replaces what is on the volume
-curl -s -H "$H" -H 'Content-Type: application/json' --data-binary @private.json $S/driver/private
-
-# the census, and a post deleted by id (303 = gone)
-curl -s -H "$H" $S/driver/posts.json > posts.json
-curl -s -o /dev/null -w '%{http_code}\n' -H "$H" -X POST $S/driver/post/<id>/delete
-
-# made it to: adopt a lodging post's published pin, or give a point
-curl -s -H "$H" -X POST -d post_id=<post id> $S/driver/checkpoint/<checkpoint id>/arrive
-curl -s -H "$H" -X POST -d lat=<lat> -d lng=<lng> $S/driver/checkpoint/<checkpoint id>/arrive
-
-# repairing a checkpoint the seed stopped owning: clear, deploy, stamp it back
-curl -s -H "$H" -X POST -d clear=1 $S/driver/checkpoint/<checkpoint id>/arrive
-# … deploy, so the seed retakes the now-unstamped checkpoint …
-curl -s -H "$H" -X POST -d 'at=2026-09-06T20:06:47-07:00' $S/driver/checkpoint/<checkpoint id>/arrive
-
-# what the ride now says about itself
-curl -s -H "$H" $S/route.geojson | jq '.features[] | select(.properties.kind=="checkpoint")
-  | {id, order, name, arrived_at, precision}'
+mkdir -p data
 ```
-
-### Taking a census
-
-`GET /driver/posts.json` is every post the ride holds — pinned or not, hidden or
-not — with the leg, the checkpoint, the times, the pin decision, the published
-point, and the photo's `id`, `path`, `thumb`, `sha256`, `taken_at` and
-dimensions.
-
-`/route.geojson` cannot answer this: it is open data and drops any post without
-a pin. The image carries only a static busybox shell (no sqlite3), so the
-app itself is the only census there is.
-
-What it is for is duplicates, which a phone on a bad hotspot makes: the same
-`photo.id` or `photo.sha256` twice, or two rows whose `taken_at` are seconds
-apart. Delete the loser with `POST /driver/post/<id>/delete`. The photo bytes
-stay on the volume by design — media is content-addressed and another post may
-reference the same file.
-
-## Trips on the volume
-
-The repository is public; a trip is not — where it starts and ends, and when.
-So a new trip is **not** added to `seed/`. It is one GeoJSON document on the
-volume, `$DATA_DIR/trips/<slug>.geojson`, and it gets there by push:
 
 ```bash
-H="Authorization: Bearer $PUSH_TOKEN"; S=https://roadtrip.opeongo.net
-
-# the whole trip document; parsed completely before a byte is written
-curl -s -H "$H" -H 'Content-Type: application/geo+json' --data-binary @trip.geojson $S/driver/trip
-
-# make it the ride the site shows (or add ?activate=1 to the push)
-curl -s -H "$H" -X POST -d slug=<slug> $S/driver/ride/active
-curl -s -H "$H" -X POST -d clear=1 $S/driver/ride/active     # back to RIDE_SLUG
-
-# every ride in the database, its row counts, and which one is showing
-curl -s -H "$H" $S/driver/rides.json
+DATA_DIR=./data COOKIE_SECURE=0 PUSH_TOKEN=local-dev-token ADMIN_PASSWORD_HASH="$(go run . -hash 'change-me-please')" go run .
 ```
 
-A push is applied in the same request — the file is written atomically and the
-ride is created or refreshed at once — because a suspended machine never
-re-runs boot, and "it loads on the next boot" would mean "on the next deploy".
-Boot does read `trips/*.geojson` too, after the embedded seeds and through the
-same path, so a fresh machine or a restored volume comes up whole; a file that
-will not load is logged and skipped, never fatal. The slug is `[a-z0-9-]` and
-becomes the file name; a slug that belongs to an embedded ride is refused.
+Before you load a trip, a fresh instance shows the plan of the maintainers'
+first ride (Austin to San Jose), which is built into the program. See
+[Known limits](#known-limits-for-self-hosters).
 
-**A leg line has to be where its leg is.** A pushed or volume-loaded document
-is refused when a leg line's first or last point is more than **50 km** from
-the checkpoint at that end of the leg (a leg ends at the last checkpoint filed
-on it and starts where the leg before it ended; the first leg starts at its own
-first checkpoint). A routed line ends at its checkpoint, so the margin is
-generous on purpose: what it catches is a line written `[lat, lng]`, which at
-longitudes inside ±90 passes the range check and draws on the wrong side of the
-planet. The refusal names the leg and never a coordinate. A leg with no
-checkpoint at either end is refused too, because nothing could place its line.
-The same check runs on a saved selection. The embedded September seed passes
-it (a test holds that), though boot does not run it on an embedded seed.
+## Your own trip
 
-**The active ride** is a row in the `meta` table, read per request. Setting it
-moves every page, the post form and `/route.geojson` together. The ride that
-stops being shown is not touched: it stays in the database whole.
+A trip is one GeoJSON file. Start from a copy of
+[`testdata/trip-fixture.geojson`](testdata/trip-fixture.geojson):
 
-### A finished trip is a record
+- A `ride` block: a `slug` (lower-case letters, digits and dashes; it names
+  the trip), a `name` and a `start_date`.
+- One `LineString` per day's drive, numbered with `leg` and `day`.
+  Coordinates are `[longitude, latitude]`.
+- One `Point` with `"kind": "checkpoint"` per stop, each with an `order`, a
+  `name`, a `label` (Start, Night 1, Finish) and its own time zone in `tz`
+  (an IANA name such as `America/Denver`). Mark your home, or anyone's home,
+  with `"precision": "fuzzed"`.
+- Optionally, `Point`s with `"kind": "candidate"` for sights worth a stop,
+  and `options` for forks in the route.
 
-Once a drive has begun and its finish is reached or skipped, the ride reads
-*Finished* (`rideFinished`, the same state the banner shows; nothing extra is
-stored). The site then stays up as a record and spends nothing (Kris,
-2026-11-14): the map, the posts, the photos and the Listen Inn history stay open
-to every visitor, but the live-drive parts are not drawn: no drive HUD strip, no
-"Currently playing" chip, no ETA (the driver screen's gauge is hidden and the
-HUD makes none), and no Waze or Navigate link. **Chester is resting**: a
-question, a Drive Tracks tap or a FreeLance "Find picks" is refused with a fixed
-sentence and makes no API call, and the Chester links leave the menu. A new,
-unfinished ride made active turns all of it back on. `features/finished_trip_is_a_record.feature`
-holds it.
+Push it, and make it the trip the site shows:
 
-**A signed-in page is never cached.** `/plan`, like every page, is one
-address for the visitor and the trip-keeper. Every HTML response to a signed-in
-request (the session cookie or the push token) is sent with
-`Cache-Control: private, no-store` and `Vary: Cookie`, set once where the pages
-are rendered, so no cache keeps a page that carries private text or hands it to
-the next visitor. The anonymous response carries neither header.
+```bash
+curl -s -H "Authorization: Bearer $PUSH_TOKEN" -H 'Content-Type: application/geo+json' --data-binary @my-trip.geojson 'https://your-site.example/driver/trip?activate=1'
+```
 
-**A re-push never reaches what is done.** An open step or question takes the
-later document's text; a done step or an answered question is not written at
-all, and one the later document no longer has is kept if done and dropped if
-open. A time is stored as UTC plus the stage's IANA zone (a question takes the
-zone the ride is in), and a wall-clock time typed after the fact is read in
-that zone. The disclaimer is always shown; a document without one gets a
-default.
+The file is checked completely before anything is stored, and the answer
+says what was wrong if it is refused. You can push it again as the plan
+changes: stops you have already reached, posts and photos are never
+touched. `POST /driver/ride/active` (form field `slug=`) switches between
+trips you have pushed. Keep the file out of any public fork: it says where
+you live and when you are away.
 
-### Chester
+Full detail, including route options and converting a planning tool's
+export: [docs/TRIPS.md](docs/TRIPS.md).
 
-Chester is a helper for the road. The signed-in trip-keeper asks it about
-fuel, food, a rest stop, coffee, tonight's lodging, something worth a stop,
-the weather and roads ahead, or how far it is to tonight, in one tap or in
-their own words, and the site asks the Claude API and streams the answer back
-in large type. It is for the passenger, or for when the car is parked.
+## Deploy your own
 
-It is also an experiment. Every question is a row in a log, and the
-trip-keeper rules on each answer after checking it against a navigation app, a
-booking site, a map or the place itself. The log is what says how far such an
-answer can be trusted.
+RoadTrip needs three things from a host: it runs one container (or one
+binary), it keeps one directory (`/data`) across restarts, and it serves
+HTTPS. Phones only share their location with HTTPS pages, so do not skip
+the last one.
 
-**What it cannot do, and says so.** Chester has no live traffic and no
-routing. A drive time is an estimate from the plan's own miles; turn-by-turn
-stays with a navigation app. It can search the web for what is there now
-(lodging, hours, weather, closures), and it is told to say when it could not
-confirm something rather than guess.
+### Fly.io
 
-**Two modes.** *Quick* is a short answer with at most three places, stopped
-after 60 seconds. *Plan* is the evening question about tomorrow: longer, more
-searching, up to six places, stopped after 180 seconds. Each mode has its own
-model and effort setting; neither is fixed in the code.
+The repository's `fly.toml` is the maintainers' own. Edit three lines
+before you use it:
 
-**Every place is a card.** A place Chester names arrives as a card with its
-name, kind, town and one line of why, and links out: a navigation app, a map,
-and for lodging a booking search for that town and night. The links are built
-by the server from the card's fields. Nothing the model writes is ever placed
-on the page as markup, and a web address it gives is kept only when it is a
-plain `http` or `https` address.
+- `app`: a name of your own. It must be unique across Fly.
+- `primary_region`: a [region](https://fly.io/docs/reference/regions/) near
+  the trip.
+- `SITE_URL`: **delete this line** (or set it to your own address). Left as
+  it is, your site redirects every visitor to the maintainers' site.
 
-**An answer always has words.** Chester is asked to show its places first and
-write the answer after them, and that order is not a matter of taste: the
-default model returns words written ahead of a tool call as a thinking block,
-which arrives empty, so an answer written before its cards is never seen. When
-the cards arrive with no words, the tool is answered with a request for the
-whole answer, and that second request writes it. If the model still writes
-nothing, the page is not left with a card and no sentence: the site builds one
-fixed line from the cards' own names, shows it, and marks the row
-(`answer_synthesized`) so it is never read as Chester's words. While it works,
-the page is told *Thinking* or *Searching the web* once each, not once for
-every step the API takes.
+Then, with [`flyctl`](https://fly.io/docs/flyctl/install/) installed and
+signed in, and `<your-app>` and `<region>` replaced by the values you chose:
 
-**Signed in only, and capped.** `/chester` and everything under it answer only
-to the session or the push token, because every question spends money. One
-question runs at a time, and a second is told that Chester is busy. A question
-that fails leaves one sentence on the page and stays in the box.
+```bash
+fly apps create <your-app>
+```
 
-**The daily limit.** Before each question the day's spending (the driver's day, in the ride's zone) is read
-from the log, and the question is refused when that spending plus the most the
-question could cost is above `CHESTER_DAILY_USD`. Checked only against what is
-already spent, one long question could take the day well past the limit. The
-most a question could cost is every request it may take (three) writing its
-mode's `max_tokens` at the model's output price, plus every web search each
-request is allowed:
+```bash
+fly volumes create roadtrip_data --app <your-app> --region <region> --size 1
+```
 
-| Mode | Worst case | At the default model ($20 per million output tokens) |
+```bash
+docker run --rm roadtrip -hash '<your-password>'
+```
+
+```bash
+fly secrets set --app <your-app> ADMIN_PASSWORD_HASH='<the hash it printed>' SESSION_KEY="$(openssl rand -hex 32)" PUSH_TOKEN="$(openssl rand -hex 24)"
+```
+
+```bash
+fly deploy
+```
+
+Keep the single quotes around the hash: it contains `$` characters. Print
+the push token before you set it if you want to use it later
+(`openssl rand -hex 24`, then paste the value), because Fly will not show a
+secret again.
+
+Your site is at `https://<your-app>.fly.dev`. The machine goes to sleep
+when nobody is looking and wakes in well under a second, so an idle site
+costs very little.
+
+**Your own domain.** Run `fly certs add trip.example.com --app <your-app>`,
+create the DNS record it asks for, then set
+`SITE_URL = "https://trip.example.com"` in `fly.toml` and run `fly deploy`
+again. Every other address then redirects to that one.
+
+**Backups.** Everything is on the volume. Fly keeps daily snapshots of a
+volume for a few days (`fly volumes snapshots list <volume-id>`); for a
+copy of your own, fetch `/data/roadtrip.sqlite3`, `/data/users.json`,
+`/data/trips/` and `/data/media/` with `fly ssh sftp`.
+
+### Any other machine
+
+Anything that runs a container works. On the server:
+
+```bash
+docker run -d --name roadtrip --restart unless-stopped -p 127.0.0.1:8080:8080 -v /srv/roadtrip:/data --env-file /srv/roadtrip.env roadtrip
+```
+
+with `/srv/roadtrip.env` holding at least `ADMIN_PASSWORD_HASH`,
+`SESSION_KEY` and `PUSH_TOKEN` (copy [`.env.example`](.env.example) and fill
+it in; remove its `COOKIE_SECURE=0` line). Put a reverse proxy that handles
+HTTPS in front. With [Caddy](https://caddyserver.com) the whole
+configuration is:
+
+```
+trip.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+With another proxy, allow request bodies of at least 30 MB (a photo can be
+25 MB) and do not cut uploads off early: a photo from a weak mobile
+connection can take minutes.
+
+There is no separate binary download. To run without Docker, build it with
+`CGO_ENABLED=0 go build -o roadtrip .` and run it with `DATA_DIR` pointing
+at a directory it can write.
+
+**Backups.** Copy the data directory (`/srv/roadtrip` above). It holds the
+database, the photos, the users and your trip files, and nothing else is
+needed to restore an instance. Copy it while the container is stopped, or
+at least while nobody is posting.
+
+## Configuration
+
+Every setting is an environment variable. Only the first three matter for
+most people. The long version, with every edge, is in
+[docs/OPERATIONS.md](docs/OPERATIONS.md#configuration).
+
+| Variable | Default | What it does |
 |---|---|---|
-| quick | 3 × (8,000 tokens + 2 searches) | $0.54 |
-| plan | 3 × (32,000 tokens + 5 searches) | $2.07 |
-
-So with the default limit of $5 a plan question is asked until $2.93 is
-spent, and a quick one until $4.46. The refusal says what is left today, what
-the question could cost, and whether a quick one still fits; it lifts at
-midnight where the ride is. A question the driver cancels is charged only what
-the API had reported by then, and nothing when it had reported nothing; the
-row's note says so. What a question reads is not in the worst case, because nothing
-bounds it in advance, and a typical question costs a small part of these
-figures. A limit below a mode's worst case refuses every question in that
-mode, and boot logs a warning saying so.
-
-**What a question costs** is worked out from the API's own usage for every
-request the question took, at list prices, plus web searches at $10 per 1,000.
-Each row keeps that usage as it arrived (`usage_json` in the export: the usage
-object from the first event of each request and the one that ends it, counts
-only, nothing of the question or the answer), and the row's tokens, searches
-and dollars are worked out from that record and from nothing else, so the two
-can always be checked against each other.
-
-How the record is read. The usage that ends a request is the total for the
-whole request. A request that ran a web search is several sampling steps, and
-the response itemises them (`usage.iterations`); the steps add up to the
-top-level counts exactly, so reading either gives the same tokens. The steps
-name no model, so each is priced at the model that ran the request. The first
-live question showed why that needs saying: its steps were priced as the
-dearest model in the table and the row read $0.20 for tokens that cost $0.08.
-When the API re-ran a declined question on another model, the itemised list
-is the only full account: the top-level counts then cover the answering
-attempt alone, the declined attempt is billed too, and each entry is priced at
-the model it names. A model the price table does not know, and an entry of any
-other kind that names no model, is priced as the dearest one in the table, so
-the unknown can only reach the limit sooner. With no itemised list, each price
-takes the dearer of the model asked and the model that answered.
-
-**A question that is cut off.** When the answer stops before the API has said
-how it ended (a dropped connection, the time limit, the browser going away),
-there is no final count of what was written. The page and the log row then say
-the answer was cut off, and that request is charged the most it could have
-written: its mode's `max_tokens` at the output price. The row marks the cost
-as an estimate. Searches such a request ran are not known and are not charged.
-A request the API turned down outright, or that never left the machine, is
-charged nothing. Whatever words had arrived when a question failed (cut off,
-declined, or stopped at the length limit) are kept on the row as a partial,
-apart from the answer: the page takes them down, and the log and its summary
-never count them as an answer.
-
-**What the API is told.** The active ride's plan as the public pages show it
-(days, legs, miles, hours, checkpoint names and zones, arrival stamps), today's
-leg and how many miles of it are left, the local time in the zone of the
-nearest checkpoint, and one position: the phone's when the trip-keeper taps
-*Send my position*, else the last pinned post. That position goes through the
-store's fuzz seam first, so a point at or near a private place is replaced by
-the same 0.01° cell a post's pin would get. The private overlay
-and photos are never sent. The nearest checkpoint's town is
-said only when that checkpoint's own name is one. The web search tool is given
-the ride-day's time zone and nothing else: never a coordinate, and not the
-town. The tools come first in the prompt, ahead of the plan, so a town or a
-zone that moved with the car would discard the cached plan at every stop; the
-town is in the question's own message instead, after the cached part.
-
-**The key.** Chester needs an API key for the Claude API. The operator sets it
-as a Fly secret named `ANTHROPIC_API_KEY`, by hand, with their own key; it is
-not in this repository, not in `fly.toml`, and not in any log. For a local run
-it goes in `.env`, which git and the image build ignore and the repo guard test
-requires them to. Setting a secret
-restarts the machine, and that restart is the only thing switching Chester on
-takes. With no key the feature is absent: the
-masthead has no link, `/chester` says Chester is not set up, and boot logs
-`chester: disabled`. With one, boot logs `chester: enabled` and the two models.
-`guard_test.go` fails the build on anything shaped like a key in the tree.
-
-**The log.** `GET /driver/chester/log` lists every question: when and in which
-zone, the mode, the question, the model and effort, milliseconds to the first
-word and in all, tokens in, out, read from the cache and written to it,
-searches, dollars (marked when they are an estimate), the answer or, for a
-question that failed, what had been written, the places, how it stopped, and
-the fuzzed position that was sent. The first-word time is the first word of
-Chester's own text; when it wrote none the row has no such time, not a zero. A
-verdict is one tap in place: **Right**, **Partly**, **Wrong** or
-**Unverified**, with what it was checked against, a note, and an optional pair
-of figures (Chester's and the reference, in minutes, dollars or miles). The
-summary groups by mode and verdict and gives the count, the median time, the
-dollars, and the mean absolute percent error where pairs exist.
-`GET /driver/chester/log.json` is the whole log as data. Neither is reachable
-without signing in, and nothing of the log is on any open page.
-
-```bash
-# ask from curl: the answer streams back one JSON object a line
-curl -sN -H "$H" -d preset=fuel $S/chester/ask
-curl -sN -H "$H" -d mode=plan --data-urlencode 'q=Where should we stay tomorrow night?' $S/chester/ask
-
-# rule on question 12, and read the whole log
-curl -s -H "$H" -d verdict=partly -d against=navigation -d chester_value=50 -d reference_value=40 -d unit=minutes \
-     $S/driver/chester/log/12
-curl -s -H "$H" $S/driver/chester/log.json
-```
-
-Chester only suggests. Nothing it says is written into the plan.
-
-### Options
-
-A trip document is the seed shape plus three optional top-level keys:
-
-```json
-"avg_mph": 60, "long_day_hours": 9.5,
-"options": [{"id": "day2", "title": "Day 2 route", "default": "a",
-             "choices": [{"id": "a", "label": "…", "detail": "…"}, {"id": "b", "label": "…"}]}]
-```
-
-A feature whose properties carry `"option"` and `"choice"` belongs to that
-choice only; a feature without them is part of every plan. Two roads for one
-day are two `LineString`s with the same `leg` and different choices. A choice
-may add a day and a checkpoint — then the checkpoints after it are written once
-per choice, with the `order` each has under that choice.
-
-A fork can change more than one thing at once: where the first night is spent
-changes the road of day 1 *and* which day-2 roads make sense. So a feature may
-carry `"when": {"day1": "pawilds", "night1": "charleston"}` and belong to the
-plans where every option named holds that choice (`option` + `choice` is the
-one-pair spelling of the same thing). An option may carry a `"when"` too:
-`{"id": "day2", "when": {"night1": "greensburg"}, …}` is **in force** only
-while Night 1 is Greensburg, and otherwise it is off the plan page and every
-feature that names it is off the plan. An option may only name options
-declared before it. A push checks the document under every combination of
-choices (at most 64), so no combination the page can offer is a plan that
-fails its checks.
-
-A leg may carry `"day": N` instead of a date. It is then dated from the ride's
-start date, and **the start date is part of the stored selection** — so a
-departure that slips a day is one saved field, not an edit to every leg. With
-`avg_mph` set, a leg's hours are its miles at that speed, and a day over
-`long_day_hours` is flagged.
-
-**Once a ride exists, the saved start date wins over the document's.** The
-first push of a trip takes `ride.start_date` from the document. After that the
-start date in force is the saved selection's, exactly like the saved choices,
-and a document pushed again with a different `ride.start_date` does **not**
-move it: the start moves through `POST /driver/plan` (`start=YYYY-MM-DD`) and
-nowhere else. The push still succeeds, and says so. Its answer always carries
-`start_date`, the date in force, and when the document's differs it also
-carries `document_start_date` and `start_date_not_applied`, a sentence saying
-the document's start was not applied and where the start is moved. The boot
-pass logs the same fact, without the dates.
-
-The database holds one plan: the document under the stored selection. The
-alternatives stay in the file. `/plan` shows them all; switching there is local
-to the visitor's browser, and only the signed-in trip-keeper's **Save this
-plan** (`POST /driver/plan`, fields `opt-<option>=<choice>` and `start=`) changes
-the plan for everyone. `GET /plan.json?opt-<option>=<choice>` answers "what
-would that cost" without saving anything.
-
-**A saved change never reaches what the road has made real.** It is refused
-whole — and says why — if the new plan would drop a leg that holds posts,
-re-route one that holds posts and has been driven to its last stop (or onto a
-road that misses a stop the car has already reached), or drop, renumber or
-replace a checkpoint that is arrived or holds posts. So a fork settled on the
-road — Night 1 moved from Greensburg to Charleston at the border — is taken
-with the day's posts and arrivals kept, because the leg row is refreshed in
-place; a different road for a day already driven is not. Moving the start date
-is never refused: it moves dates and nothing else. A re-pushed document is held
-to the same rule.
-
-**What a page says about a save is a fixed sentence.** After **Save this
-plan** the page comes back to the line under the button: `Saved.`, or
-`Not saved:` and why. The redirect carries a short code (`/plan?ok=saved`,
-`/plan?error=conflict`), never words, and each page
-maps the codes it knows to its own sentences; a code it does not know prints
-nothing. `/plan` is a public page, and free text in a query
-string would let anyone put a sentence of their choosing on the site with a
-link. curl is unaffected: it gets the status and the full reason as JSON.
-
-**Every coordinate on `/plan` has been through the store's fuzz seam**, the
-roads not taken included: a `precision: "fuzzed"` checkpoint is its 0.01° cell,
-and no line is drawn within 1 km of one — the line runs to the cell point
-instead. The same mask now covers the ride pages and `/route.geojson`, which
-used to hand back the un-snapped vertex where a leg met a private checkpoint.
-
-### Converting a planning tool's route
-
-```bash
-docker run --rm -v "$PWD/in:/in:ro" -v "$PWD/data:/data" roadtrip \
-  -convert /in/route.json -slug <slug> -start <YYYY-MM-DD> \
-  -zones '<stop>=<Area/City>,<stop>=<Area/City>'
-```
-
-`-convert` reads a route document (schema `roadtrip-route/0.1`: stops, option
-groups, routed segments as `[lat, lng]`) and writes a trip file to
-`$DATA_DIR/trips/<slug>.geojson` — the local data dir, which is gitignored —
-ready to push. A stop's label is derived from what the stop is (start, night,
-finish); the planning tool's free-text notes are not carried. **It refuses a
-stop that has no IANA zone** (`"tz"` on the stop, or `-zones`): there is no
-ride-wide zone to fall back on. `-name` overrides the ride name, `-out` the
-destination.
-
-A test (`guard_test.go`) fails if any file git knows about is a trip document
-outside `seed/atx-sjc-2026-09.geojson` and the synthetic fixtures in
-`testdata/`, or if `.gitignore` or `.dockerignore` loses its `data/` or
-planning-handoff line.
-
-## Made it to
-
-An arrival is not only a time. `POST /driver/checkpoint/<id>/arrive` takes an
-optional location — `post_id`, meaning "adopt that post's published pin"
-(the lodging photo *is* the fix), or an explicit `lat`+`lng` — and when one is
-given the checkpoint stops being a plan:
-
-- `arrived_at` is stamped, `lat`/`lng` are overwritten, and `precision`
-  becomes `exact`. The seed put the checkpoint at a town centroid; arriving is
-  the moment the site learns the actual motel.
-- **unless the checkpoint is `fuzzed`**, which keeps its precision and is
-  snapped before the write. The raw fix at a private place is never written
-  down — an arrival must not become the one path that writes it.
-- `clear=1` takes the stamp back and **leaves the location**. A mis-tap is a
-  wrong time, not a wrong place. It also clears a skip (`skipped_at` and
-  `skip_reason`), so Undo works on a missed stop. This is the one thing the
-  page's Undo link does.
-- `at=<RFC3339>` stamps a time other than now. The button never sends it — a
-  tap means *now*, which is the whole point of a one-tap stamp.
-
-`at` exists for one job, and it is worth knowing why before you need it.
-**`arrived_at` is what takes a checkpoint away from the seed** (see
-*seed-owned until actualized*), so a checkpoint stamped before a seed
-correction keeps its old name for good: the only repair is to clear the stamp,
-let a deploy refresh it, and stamp it again. Without `at`, that third step
-would overwrite the real arrival with the clock of the repair — losing the one
-fact the stamp existed to hold. It came up on 2026-09-07, when checkpoints 4
-and 5 were found still carrying names from before two separate corrections.
-
-Four things are refused rather than stamped, each because it would go wrong
-quietly: a time with no offset (it would silently mean UTC), an unparsable
-one, the zero time (that is how the store spells a *cleared* stamp, so it would
-un-stamp while looking like a stamp), and a time in the future — `defaultTZ`
-follows the latest arrival, so a mistyped year would own the post form's zone
-for the rest of the ride. A back-dated stamp says so in the log, with the time
-it wrote.
-
-Then the lines follow. In `loadRide`, so `/`, `/legs/…` and `/route.geojson`
-cannot disagree: a leg whose terminal checkpoint has been stamped **ends** at
-that checkpoint's published point, and the next leg **starts** there, because
-the two share the boundary checkpoint. Only the endpoints move — the shape in
-between is still the plan, since moving a pin is a fact and re-routing the day
-is a guess.
-
-And `/route.geojson` gains one `kind="track"` LineString per leg: the arrived
-origin, that leg's pinned posts in `occurred_at` order, the arrived terminus.
-It is built only for a leg that has some of that, and only when it comes to two
-points or more — one fix is a pin, not a track. Checkpoints carry `id` (the
-arrive route is keyed by it, and `order` is not it) and `made_it: true` once
-stamped. On the map a leg with a track goes dashed and dim under it: both lines
-are true, and the difference between them is the interesting part.
-
-## The HEIC rule
-
-**JPEG only.** There is no pure-Go HEIC decoder and this ships on `scratch`
-with nothing to shell out to. On an iPhone set **Settings → Camera →
-Formats → Most Compatible** before the trip, or share a photo as JPEG. A
-non-JPEG upload is refused with exactly that message. Originals are stored
-content-addressed under `media/YYYY/MM/<sha256-prefix>.jpg`; thumbnails are
-800 px wide with the EXIF orientation applied. The photo's time comes from
-EXIF `DateTimeOriginal`, read in the zone chosen on the form. The stored
-original carries **no EXIF location** — see *Served originals carry no GPS*
-below.
-
-**Size limits, and why.** Uploads are capped at 25 MB and 60 megapixels —
-every phone shipping today fits (an iPhone Pro's 48 MP full-resolution
-export is 8064×6048, 13–15 MB); a medium-format frame or a stitched
-panorama does not, and the form says so: *photo is N MP (W×H); the limit is
-60 MP. The phone's HEIF→JPEG export at Most Compatible is fine, or share a
-smaller copy.* The limits exist because a photo post is the one request
-that can take the machine down: on 2026-09-02 a full-size JPEG held in
-memory and decoded on the 256 MB VM was OOM-killed at anon-rss 158 MB, four
-posts were lost, and the phone saw only a reset connection. The path is
-bounded now — the upload streams to `$DATA_DIR/media/.upload-*` (multipart
-spills to `$DATA_DIR/tmp` past 1 MB; both are swept on boot), the header is
-checked against the megapixel cap before the one decode, the thumbnail is a
-box average plus one bilinear pass (no float working buffer), and the Go
-GC runs under a soft limit of 75 % of the machine's RAM. Measured in Docker
-at `--memory=256m`: 12 MP peaks the process at 40 MB, 48 MP 4:2:0 at 91 MB,
-48 MP 4:4:4 at 163 MB, none killed; the VM is 1024 MB on Fly. Each photo
-logs one line (`photo <sha>: W×H MP MB, orientation, thumb`), and each post
-logs its pin decision (`post N: pin browser ±12 m → snapped to checkpoint 1
-(Hudson Bend (home))`, `pin exif → fuzzed to checkpoint 1 (Hudson Bend
-(home))`, `pin exif (exact, fuzz off) at checkpoint 1 (…)`, `pin checkpoint 3
-(…) (fallback)`, `pin none (hidden)`) — names, never coordinates — so a driveway GPS test is
-provable from `flyctl logs` even though the public map hides a home fix.
-
-## Served originals carry no GPS
-
-`/media/` is public, immutable and cached forever, so the JPEG bytes are the
-one privacy decision that cannot be taken back: a pin can be fuzzed, re-pinned
-or hidden after the fact, but a file that has been crawled with a GPS IFD in it
-is published for good. So **every original this app stores goes through a JPEG
-segment filter first** (`exif_strip.go`) — on upload, and once per volume over
-everything already there.
-
-**What survives**: `Orientation` (0x0112), because browsers rotate the original
-by it and the original is never rotated on the server, and `DateTimeOriginal`
-(0x9003), because the photo's time is read from it. Nothing else. The APP1 is
-**rebuilt** from those two values rather than having the GPS pointer deleted —
-deleting an entry means rewriting every absolute TIFF offset after it, and
-merely zeroing the pointer would leave the latitude sitting in the file as
-unreferenced bytes, which is exactly what must not be published. A rebuild
-cannot leak by omission: GPS, MakerNote (which carries a camera serial number),
-lens, software, the EXIF thumbnail and an XMP APP1 (which carries its own copy
-of the coordinates) all go, whether or not the code knows the tag exists. The
-rebuild is deterministic, which makes the filter idempotent — running it twice
-is a no-op.
-
-**What is not touched**: the pixels. This is segment surgery on the JPEG
-stream, not a re-encode — SOF/DQT/DHT/SOS and the entropy-coded scan are
-copied through byte for byte, and other application segments (APP0 JFIF, APP2
-ICC) pass through unchanged. There is no quality loss and no decode, which
-matters on a 512 MB machine. **The photo row's own `lat`/`lng` is deliberately
-left alone**: the database keeps the exact point so a post can still be
-re-pinned from it; only the served bytes lose it.
-
-The upload's SHA — which names the file — is taken from the bytes as
-uploaded, before the strip, so re-sharing the same photo is still deduplicated
-to the same path.
-
-**The one-shot sweep.** Originals stored before this existed are rewritten in
-place at boot: temp file beside the original, fsync, rename over. It is keyed
-in the `meta` table as `media_gps_stripped_v1` and logs one line —
-`media_gps_stripped_v1: 21 original(s) — 19 rewritten without EXIF location, 2
-already clean, 0 missing, 0 error(s)`. A file that is already clean is not
-written at all, so it keeps its bytes and its mtime. The key is recorded only
-on a clean pass, so a boot that hit an error retries on the next one, and the
-sweep is not fatal — it never blocks a boot. Thumbnails are not swept: they
-are re-encoded with `image/jpeg`, whose encoder writes a JFIF APP0 and nothing
-else, so they have never carried an EXIF block.
-
-**`robots.txt`** answers at `/robots.txt` and is **open even while the site is
-private**, so a crawler that arrives early reads the exclusions instead of a
-302 to the login form:
-
-```
-User-agent: *
-Disallow: /driver/
-Disallow: /media/
-Allow: /
-```
-
-`/media/` is excluded because an original is a photo, not a document: it
-should not turn up in an image search, and a file that has been indexed cannot
-be un-indexed on the day someone changes their mind.
-
-## Where a pin comes from
-
-A photo taken **through the form** on an iPhone arrives with no GPS and no
-`DateTimeOriginal`: Safari strips every EXIF tag but orientation from a web
-camera capture (measured 2026-09-01 — IFD0 held orientation, resolution and
-the Exif pointer, nothing else; no GPS IFD at all). A photo shared from the
-library usually keeps its GPS. So a post's pin is resolved **at post time**
-from the first of these that exists, and stored on the post as
-`lat`/`lng`/`pin_source`:
-
-1. **`exif`** — the photo's own GPS IFD. The form reads it **in the browser**
-   before you post — a hand-rolled parser in `static/js/post.js` over the
-   first 256 KB of the chosen file (APP1 → TIFF → IFD0 → GPS IFD; no library,
-   no CDN) — and shows *photo GPS: 34.2100, -118.5000* or *no GPS, normal for a camera shot*.
-   Those parsed numbers are posted as `photo_lat`/`photo_lng` **for display
-   only**; the server re-reads the EXIF out of the uploaded file and uses its
-   own value.
-2. **`browser`** — the phone's location. The form asks
-   `navigator.geolocation` once on load (https; Safari prompts once per
-   site), rounds to 4 decimals and posts it as hidden fields with the
-   reported accuracy (`accuracy_m`). The status line says
-   *location: on (±N m)* or *location: off — denied*.
-3. **`checkpoint`** — the checkpoint chosen on the form. A fuzzed
-   checkpoint gives a fuzzed pin. The map popup says *near <checkpoint>*.
-4. **`none`** — nothing chosen, nothing found: timeline only, no pin.
-
-The form shows those four as a **radio group**, pre-selected in exactly that
-order, so a post where nothing is touched behaves as it always did. Picking
-one instead (`pin_source=exif|browser|checkpoint|none`) overrides the ladder;
-if the chosen source turns out to have no coordinates the server falls back
-down the ladder and the log line says so. **No pin** and the older
-`hide_location` field mean the same thing and both are accepted.
-
-**An old photo with no GPS** (its own EXIF time more than 20 minutes before
-now, no GPS of its own, not a Start) is not where the phone is, so the ladder
-above does not run for it. It is pinned as **`trail`**: the published pin of an
-earlier post of the ride (a photo's GPS, the phone or the simulated car; never
-a hidden post, a checkpoint pin or another trail pin) nearest in time to the
-photo's time, within 15 minutes; with none, the post has no pin. It keeps its
-own time, never checks in or moves the car, carries the flags `old_photo` (and
-`trail_pin`), and the notice and the signed-in pin line say how long ago it was
-taken and where it was pinned or that it was left off the map. A trail point at
-a private place is always fuzzed, whatever the toggle says, and keeps no exact
-point for Unfuzz. No phone fix is stored anywhere (telemetry goes to the bus
-with no coordinate), so earlier posts are the whole trail, on Fly and on the
-KATE alike. A radio the driver touched (the form's `pin_auto` is empty) is
-honoured for the pin alone; the page's own pre-selection (`pin_auto=1`) is not
-a choice. No `pin_auto` at all (an older page, curl) reads a sent `pin_source`
-as a choice. `features/old_photo_without_place.feature` states it.
-
-**Fuzz location** is the privacy control, and it is on every post:
-
-- **Ticked** — the published point is snapped to the 0.01° grid and the
-  accuracy is dropped. If it falls in a `precision: "fuzzed"` checkpoint's
-  cell the post is stored as that checkpoint's snapped point and the popup
-  says *near <checkpoint>*; anywhere else — a friend's driveway, somewhere
-  with no checkpoint at all — it is a nameless cell.
-- **Unticked** — the exact point and its accuracy are stored.
-- Its **default is per post**: ticked when the point falls inside or within
-  1 km of a fuzzed checkpoint, clear everywhere else. `PIN_PRECISION=exact`
-  flips that one default; it means nothing anywhere else. Kris ruled the
-  shape on 2026-09-02: *"protect personal locations, be precise with public
-  locations"*.
-
-The form says which case it is in before you post — *publishes as: near
-<checkpoint> — a 1 km cell, not the point (this is a private place)* or
-*publishes as: 34.2100, -118.5000 — the exact point, not a private place* —
-and the line updates live when the toggle flips. `posts.pin_fuzzed` records
-the outcome so a fuzzed (or an exact) post is findable later.
-
-**Fuzz This** (ruled 2026-11-08) is that toggle made one tap, during and after
-an upload: a **Fuzz This** button on every post card with a pin (and beside the
-notice after a check-in post), **Unfuzz** once it is fuzzed. Being signed in is
-the trust; there is no device token. Fuzzing keeps the exact point in private
-columns (`posts.exact_*`, read by no post select and rendered nowhere) so
-Unfuzz restores it; the published pin and every page, file and log show only
-the fuzzy one. A post's pin is told to Claude at its stored precision, so
-exactly, unless the post is fuzzed or lies near a private stop; the car's live
-position stays at three decimals, and a photo is still never sent.
-
-The same rule ran once at boot over posts pinned before it existed
-(`migrate: post N … snapped to checkpoint …`, meta key
-`pins_fuzzed_near_private_v1`); the photo row's own EXIF is never touched
-and never rendered.
-
-Posts made before this rule existed were pinned once, at boot, by the same
-ladder — EXIF, else the chosen checkpoint, else the first checkpoint of the
-post's leg — and the boot log says which (`migrate: post N pinned …`). That
-backfill is keyed in the `meta` table and never runs twice.
-
-### After the fact
-
-A **signed-in** viewer sees one extra line under every post card saying what
-the photo carried and what the site published — *pin: photo GPS 34.2100,
--118.5000 → published fuzzed, near <checkpoint>*, or *pin: phone ±11 m →
-published exact 34.2100, -118.5000*. It is gated on `.Authed` in
-`templates/base.html` and an anonymous render never contains a raw
-coordinate. Beside it is a small **re-pin** control (`POST
-/driver/post/<id>/pin`): choose the source again from what that post still has
-— its photo's GPS, its checkpoint, or no pin — with the same fuzz toggle. A
-browser fix is not re-derivable after the fact, so it is not offered; leaving
-the source alone keeps it.
-
-Beside it is **Edit** (`/driver/post/<id>/edit`), for the metadata a post can
-still be wrong about once it is up: its **kind**, its **leg**, its
-**checkpoint**, the **zone** and **time** it claims, and its words. Filed the
-lunch stop under the wrong leg, or posted a Meal as a Note — that is this
-screen, not a delete and re-post.
-
-Three rules make it safe to use mid-drive:
-
-- **A checkpoint is the more specific fact.** Choosing one moves the post to
-  that checkpoint's leg and adopts its zone, exactly as the post form does, so
-  the two selects can never end up contradicting each other.
-- **The pin is not edited here.** It has its own control, right above, and a
-  metadata edit must not quietly undo a deliberate re-pin. The one exception is
-  a pin that came *from* a checkpoint: that follows the checkpoint you choose,
-  or the post would name one place and pin another. A photo's own GPS, a phone
-  fix, and the fuzz posture on either are left exactly as they are.
-- **The zone re-stamps the wall clock, it does not shift the instant.** Moving
-  a post from Central to Mountain means "that happened at 3 PM Mountain", not
-  "that happened an hour earlier" — `<input type="datetime-local">` carries no
-  zone of its own, so the time is re-read in whichever zone the select names.
-
-The photo is shown for recognition but is not editable: media is
-content-addressed and the store stays append-only, so replacing a photo is a
-delete and a re-post.
-
-### ETA policy
-
-The driver screen makes no arrival promise until the car is moving. The phone says so with `moving=1` on `/driver/hud.json` (its speed above 2 m/s, or more than 200 m covered in the last two minutes; a server-held simulated drive is moving while its speed is above 0), and the ETA is worked out only then and only from a fix on the leg, never from a guess at today's leg. It is written "about 4:35 PM EST", rounded to the nearest five minutes. A fix further than 50 km from every leg is shown as "Off route, N mi from the plan" (the distance is worked out on the server), with no ETA and no miles done. Every ETA the screen shows is kept in the `eta_predictions` table, once per five minutes per stop, and scored when that stop is marked arrived: `/driver/eta.json` (signed in) lists the predictions with their error in minutes and the share within ten minutes, and each scoring publishes an `eta_hit` MELT record (stop name and minutes, no position). Spec: `features/eta_policy.feature`.
-
-### Testing the driver screen without driving
-
-A simulated drive is **one position per signed-in driver, held on the server**, so every page and every device signed in as that driver sees the same car at the same instant. Nothing ticks in a tab and nothing is kept in browser storage: the position is computed at request time from the corridor, the seed, the start instant and the compression (`sim.go`, a port of the pure helpers in `static/js/sim.js`), and is only ever consumed server-side or handed to the HUD and Chester the way a phone fix is.
-
-`PLAYER_SHELL=0` (a Fly secret) turns the player frame off and serves the plain pages, so music stops on each page change: the road fall-back, no deploy needed.
-
-It exists only where `SIM_ALLOWED=1` (set it on a KATE, never on Fly); otherwise the start route is a 404. Three routes, all signed-in:
-
-- `POST /driver/sim/start` (form: `corridor` = `kgn-yyz`, `seed` blank for random, `x` compression default 60, `mph` cap, `rung` mile cap) then 303 to `/driver`. The "Simulated drive" block on `/driver` posts it; `/driver?sim=1|10|100|all&corridor=kgn-yyz&seed=N&x=` does too, once, and strips itself from the URL.
-- `POST /driver/sim/stop` forgets it, everywhere.
-- `GET /driver/sim.json` is `{running, corridor, seed, miles_done, mph, started_at}` or `{running:false}`, never the position.
-
-While it runs, every page carries a red sticky banner, drawn by the server, `SIMULATED GPS — Kingston→Toronto corridor, seed N, 12.3 mi at 63 mph x60`, with Stop. The HUD asks the server without a position and `hud.js` does not call `navigator.geolocation` at all (an iPhone never prompts); Chester's question falls back to the simulated position, coarsened by `publishPosition` like a phone's. A browser position, when one is sent, still wins. The drive starts 0-5 mi along the corridor, re-draws its speed each simulated minute in 55-75 mph (`mph` caps it), and jitters each fix up to 30 m sideways. The same seed is the same drive. `hud_served` MELT records say `sim: true` and carry no coordinates. The old `from=`/`to=` straight-line mode is retired.
-
-The behaviour is stated in `features/sim_position.feature` and run by godog from `go test` (`features_test.go`, `sim_steps_test.go`).
-
-## Shipping it
-
-Two GitHub Actions workflows, and the split between them is the point.
-
-**`CI`** (`.github/workflows/ci.yml`) runs once per merge to trunk, as the
-record: `gofmt`, the JS syntax check and JS tests, `go vet`, `go build`,
-`go test` (the behaviour scenarios plain, every other test under `-race`), and a build of the production Docker image — because prod ships
-the *image*, so an image that does not build is a broken deploy however green
-the Go job is. The checks live in one shared definition,
-`.github/actions/gates`. CI touches no secret and cannot reach the live ride.
-
-**`Deploy`** (`.github/workflows/deploy.yml`) is `workflow_dispatch` **only**.
-There is deliberately no push trigger: this site is live under someone's thumb
-from a car, and auto-releasing every commit would put an unreviewed build in
-front of the ride with no explicit go.
-
-Releasing is lean: the suite is not run again on GitHub when CI already proved
-the commit. Deploy asks GitHub whether `CI` has a completed, successful run on
-trunk for exactly the commit being deployed. If it does, the gates are skipped
-and the log names the CI run being trusted. If it does not (CI still running,
-red or cancelled, a different commit, or the lookup failed) every gate runs in
-the deploy, as before. The lean path is only ever taken on that positive proof.
-
-**The release run sheet:**
-
-1. Merge the PR.
-2. Wait for the `CI` run on trunk to go green.
-3. Dispatch `Deploy` with `apply`. Run `plan` first only if you want to see the
-   image build without releasing.
-
-```bash
-# PLAN — the gates (or the CI record), and the image built on Fly's remote
-# builder, WITHOUT releasing it. The default, so a slip of the finger does not
-# reach the ride.
-gh workflow run Deploy -R clodemode/RoadTrip --ref trunk -f mode=plan
-
-# APPLY — the gates (or the CI record), the release, then an INDEPENDENT probe
-# that the instance serves. A deploy's own exit code is not a state report.
-gh workflow run Deploy -R clodemode/RoadTrip --ref trunk -f mode=apply
-```
-
-The probe hits `/healthz` on the `.fly.dev` host, which is the one path exempt
-from both the canonical-host 301 and the `SITE_VISIBILITY=private` gate — so it
-answers even while the site is closed.
-
-The image keeps the platform path standard: the binary is `/app/roadtrip`
-(`WORKDIR /app`) and everything persistent is under `/data`.
-[`APP_PROFILE.yaml`](APP_PROFILE.yaml) at the repo root declares those paths
-and the Fly app, and is where the CLODE harness reads them from.
-
-**One-time setup:** a deploy token in the repo secret `FLY_API_TOKEN`.
-
-```bash
-fly tokens create deploy -a roadtrip-clodemode
-# → Settings → Secrets and variables → Actions → New repository secret
-```
-
-### The data carriage
-
-Code and data reach the volume by different roads, and only one of them is a
-deploy. `fly deploy` replaces the image; it never touches `/data`. So the
-private overlay — the addresses and notes that must not enter the repository —
-needs a carriage of its own, and `.github/workflows/data.yml` is it.
-
-**It travels in one direction and carries one file.** Prod is the source of
-record for everything the ride produces: posts, photos, arrival stamps, all
-authored from a phone on the road. Pushing any of that upward would destroy
-the only copy. The overlay is the sole exception — operator-authored config
-rather than a record, with its canonical copy in a repository secret, and a
-freshly provisioned volume comes up without it. That is what makes it the one
-thing that can safely ride up, and the one thing that has to.
-
-```bash
-# CENSUS — prove the credential, then READ the instance and report what is on
-# the volume: post counts, posts sharing a photo, photos taken seconds apart,
-# and which checkpoints have been arrived at. Writes nothing, anywhere.
-gh workflow run Data -R clodemode/RoadTrip --ref trunk -f mode=census
-
-# PLAN — the same credential proof, plus the secret parses and its keys are
-# checkpoint ords. Writes nothing. The default.
-gh workflow run Data -R clodemode/RoadTrip --ref trunk -f mode=plan
-
-# APPLY — the same checks, the write, then a read-back comparing the
-# checkpoint count the instance reports against what was sent.
-gh workflow run Data -R clodemode/RoadTrip --ref trunk -f mode=apply
-```
-
-**The token gate runs first, and on its own.** It needs nothing but
-`PUSH_TOKEN`, so a run still answers *does the credential work against the live
-instance* when `PRIVATE_JSON` has never been set — which is the state a fresh
-repository is in, and exactly when you want to know. An unset overlay secret is
-a **warning** on `plan` (the useful half already ran) and an **error** on
-`apply`, where there is genuinely nothing to push.
-
-`census` is the read direction, and it is here for the same reason the write is:
-so neither needs a laptop with the token on it. It answers what
-`/route.geojson` cannot — that one is open data and drops an unpinned post,
-and the image is `scratch`, so the app is the only census there is. What
-reaches the run log is **ids and counts**: no titles, no photo paths, not a
-single coordinate. The documents it pulls stay on the runner and die with the
-job.
-
-Two repository secrets: **`PUSH_TOKEN`** (the same value as the Fly secret of
-that name) and **`PRIVATE_JSON`** (the whole overlay document, keys are
-checkpoint ords). The carriage carries the token in one header and posts to
-`/driver/private` behind the same `requireAuth` as every other admin route — the
-same gate a person goes through, entered by machine, so there is no second auth
-path to get wrong. Every mode proves the credential first with a
-`GET /driver/posts.json`, which writes nothing. It does not check the repository
-out: it talks to a running instance and has no use for the code.
-
-The workflow logs **counts, never content**. The addresses are the whole point
-of the overlay and never reach a run log.
-
-### Editing lodging from the road
-
-`/driver/lodging` is the same overlay as a form — every checkpoint's address and
-notes for **the ride the site is showing**, editable from the phone. It
-rewrites that ride's block and no other: an ord means nothing without its
-ride, so one ride's entries are never shown against, or overwritten by,
-another's (`privateData.forRide` is the only way to read one). It is the everyday path; the carriage is for
-restoring a volume and for keeping a canonical copy off it. Clearing both
-fields for a checkpoint removes its entry, which is how a stale address goes
-away.
-
-Both writers go through `savePrivate`, which writes a temp file alongside the
-overlay and renames it. The overlay is re-read on *every* admin request, so a
-half-written file would break the pages that exist to show it; a rename within
-the directory is the one write a concurrent reader cannot catch mid-way.
-
-The carriage follows the same rule. The shape it has always sent,
-`{"checkpoints":{…}}`, replaces the first ride's block and leaves every other
-ride's alone; `POST /driver/private?ride=<slug>` replaces that ride's block;
-only a document that carries `"rides"` replaces the whole overlay.
-
-⚠️ The two copies can drift. A `/driver/lodging` edit does not update
-`PRIVATE_JSON`, and an `apply` replaces the first ride's block wholesale rather
-than merging. After editing on the road, paste the result back into the secret.
-
-### Working on it from Claude Code on the web
-
-`.claude/hooks/session-start.sh` warms the Go module and build caches when a
-web session starts, so `go build` / `go vet` / `go test` are ready immediately.
-There is nothing else to install — the SQLite driver is pure Go and the tests
-seed a throwaway database from the geojson the binary already embeds, so no
-service and no network are needed at test time. The hook no-ops outside the web
-sandbox (`$CLAUDE_CODE_REMOTE`), so a local checkout is untouched.
-
-## Why it is built this way
-
-A Go static binary on `scratch` with SQLite on a volume — a few MB, 256 MB
-of RAM, no runtime dependencies, cold boot under a second. It is the
-EagleLakeRocks pattern, chosen for the same reason: the app has to work from
-a car on a hotspot, with nobody to patch anything. The Django pipeline it
-replaces needed Docker, an MCP and an rsync on a Mac to publish; here the
-phone is the client.
-
-The Leaflet frontend is plain, dependency-free JavaScript.
+| `ADMIN_PASSWORD_HASH` | none | Creates the first user (`kris`, an admin) on first start. Print a hash with `roadtrip -hash '<password>'`. No users means a read-only site. |
+| `SESSION_KEY` | random at each start | Signs the sign-in cookie. Set it, or everyone is signed out at every restart. |
+| `PUSH_TOKEN` | none (off) | A password for scripts, sent as `Authorization: Bearer <token>`. Opens what a signed-in user can open, except user management. |
+| `SITE_URL` | none | Your public address, e.g. `https://trip.example.com`. When set, every other host name redirects to it and pages carry link-preview tags. |
+| `SITE_VISIBILITY` | `public` | `private` puts the whole site behind sign-in, for the days before you announce it. |
+| `COOKIE_SECURE` | `1` | Set `0` only for a plain-HTTP run on your own machine. |
+| `PORT` | `8080` | The port the server listens on. |
+| `DATA_DIR` | `/data` | Where the database, photos, users and trip files live. |
+| `RIDE_SLUG` | `atx-sjc-2026-09` | The trip shown when you have not chosen one. Choosing one (`?activate=1` on a push, or `POST /driver/ride/active`) overrides it. |
+| `PIN_PRECISION` | `snap` | `snap`: a post at a private place starts with "Fuzz location" ticked. `exact`: it starts unticked. |
+| `GOMEMLIMIT` | 75 % of the machine's memory | Go's memory ceiling; rarely worth setting. |
+| `ANTHROPIC_API_KEY` | none (off) | Turns on Chester, the trip helper. |
+| `CHESTER_DAILY_USD` | `5` | The most Chester may spend in a day, in US dollars (up to `100`). |
+| `CHESTER_MODEL_QUICK`, `CHESTER_MODEL_PLAN` | `claude-opus-5-5` | The Claude model for short questions and for evening planning. |
+| `CHESTER_EFFORT_QUICK`, `CHESTER_EFFORT_PLAN` | `low`, `medium` | How hard each mode thinks: `low` to `max`. |
+| `CHESTER_MODEL_BACKUP` | `claude-sonnet-5-5` | The model tried once when the first is unavailable; `off` disables it. |
+| `CHESTER_FALLBACK` | `default` | `off` stops a declined question being re-run on the model the API recommends. |
+| `ANTHROPIC_BASE_URL` | none | Sends Chester's questions elsewhere. For a local test stub only. |
+| `TOMTOM_API_KEY` | none (off) | Turns on traffic on the driver screen and destination search. |
+| `ROADTRACKS_TOKEN` | none (off) | Turns on music. Needs a compatible library; see [Optional features](#optional-features). |
+| `ROADTRACKS_BASE` | `https://music.opeongo.net` | The music library's address. Read only when the token is set. |
+| `ROADTRACKS_LINK_BASE` | none | Replaces the library's address in links sent to the phone. |
+| `PUBLIC_LISTEN` | on | `0` stops visitors playing the tracks that were played on the drive. |
+| `MELT_FILE` | none (off) | A file that keeps the app's own event and error log, one JSON line each. |
+| `MELT_REDIS_ADDR`, `MELT_VENUE` | none, `kate` | Used by the maintainers' tooling. Leave them unset. |
+| `SIM_ALLOWED` | off | `1` allows a simulated drive for testing the driver screen. Never on a live site. |
+| `PLAYER_SHELL` | on | `0` turns off the frame that keeps music playing between pages. |
+
+## Privacy
+
+- **Private places are fuzzed.** A stop marked `"precision": "fuzzed"` is
+  published as the centre of a 0.01° square (about one kilometre), and no
+  route line is drawn within a kilometre of it. A post made at or near one
+  is fuzzed the same way unless you say otherwise, and any post can be
+  fuzzed or unfuzzed later with one tap.
+- **Photos lose their metadata.** Before a photo is stored, everything in it
+  but the picture, its orientation and the time it was taken is removed:
+  GPS position, camera serial number, embedded thumbnail. The stored file
+  is what visitors download, so this is the one protection that cannot be
+  applied afterwards.
+- **Addresses stay off the public pages.** Street addresses and notes for
+  your stops live in `private.json` in the data directory, edited at
+  `/driver/lodging`, and are shown only to signed-in users. They are never
+  in the trip file.
+- **`SITE_VISIBILITY=private`** closes the whole site to anyone not signed
+  in. **`PUBLIC_LISTEN=0`** stops visitors hearing the music.
+- **No sign-up.** Only an admin can create a user.
+- **Search engines** are asked, in `robots.txt`, to stay out of the photo
+  files and the signed-in pages.
+
+How each of these works, and what is deliberately kept:
+[docs/PRIVACY.md](docs/PRIVACY.md).
+
+## Optional features
+
+With no outside account at all you get the whole core: the map, the
+planner, posting, photos, check-ins, the privacy rules, the driver screen
+and weather alerts. Three things need a key of your own:
+
+| Feature | Needs | Without it |
+|---|---|---|
+| **Chester**, the trip helper: ask about fuel, food, lodging, weather or a podcast for the road, in one tap or your own words | A [Claude API](https://www.anthropic.com/api) key in `ANTHROPIC_API_KEY`. Every question costs money; a daily limit (default $5) is enforced before each one. Signed-in users only. | The Chester pages say it is not set up. |
+| **Traffic and destination search** on the driver screen | A [TomTom developer](https://developer.tomtom.com/) key in `TOMTOM_API_KEY` | The traffic line says "unknown"; planned trips are unaffected. |
+| **Music**: album search and playback on the driver screen, and the public list of what played | A music library that speaks the same API as the maintainers' private music server. **There is no public one**, so this is off for self-hosters today. | No music controls appear. |
+
+Weather alerts (US National Weather Service, Environment Canada) and
+podcast search (Apple) need no key. Map tiles come from OpenStreetMap's
+public tile servers; mind their
+[usage policy](https://operations.osmfoundation.org/policies/tiles/) if
+your trip draws a crowd.
+
+More on Chester, including what it is told and what each question costs:
+[docs/CHESTER.md](docs/CHESTER.md).
+
+<!-- LISTEN-INN-AND-ORDERING: two changes are landing separately and are
+     deliberately not described here yet: the music list as a floating card
+     with its own addresses (/listeninn, /listeninn/song/{id}), and
+     oldest-first ordering with "latest" tiles on the ride page. Add their
+     one-line descriptions to "What you get" when they merge. -->
+
+## Known limits for self-hosters
+
+RoadTrip was built for one family's trips and is being opened up. These
+still assume the maintainers' setup:
+
+- The first user is always named `kris`. Sign in as that user, create your
+  own admin at `/driver/users`, then disable `kris` there.
+- The ride page prints "Trip-keeper: Kris", and the footer and badge say
+  "Built with CLODE" and link to the maintainers' GitHub organisation.
+- The maintainers' first trip (a route between two cities, with its private
+  ends fuzzed) is built into the program and shows until you activate your
+  own.
+- Photos must be JPEG. On an iPhone, set Settings → Camera → Formats → Most
+  Compatible before you leave.
+- Weather alerts cover the United States and Canada only.
+- Music needs the maintainers' private library (see above).
+- The GitHub Actions workflows in `.github/workflows/` deploy to the
+  maintainers' Fly app. Change the app name and addresses in them before
+  using them in a fork, or delete them and run `fly deploy` yourself.
+
+## More
+
+- [docs/DESIGN.md](docs/DESIGN.md): the pages and the rules behind them
+  (time zones, arrivals, a finished trip, the ETA policy).
+- [docs/TRIPS.md](docs/TRIPS.md): the trip file, route options, converting
+  a planned route.
+- [docs/PRIVACY.md](docs/PRIVACY.md): pins, fuzzing, photo handling.
+- [docs/OPERATIONS.md](docs/OPERATIONS.md): every setting, users, the push
+  token, release workflows, testing the driver screen.
+- [docs/CHESTER.md](docs/CHESTER.md): the trip helper.
+- [docs/ROUTES.md](docs/ROUTES.md): every address the server answers.
+
+To work on the code: `go test -count=1 ./...` runs the whole suite with no
+network and no services (the music scenarios also need `node` on the path).
+[CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md) are notes for the
+maintainers' own tooling.
 
 ## Licence
 
-MIT.
-
-## People and sign-in
-
-Each person signs in with a username and password. Users live in `$DATA_DIR/users.json` (bcrypt hashes, role `admin` or `editor`, created, disabled); the session cookie is signed and carries the username, and a disabled user's cookie stops working at once. There is **no self sign-up**: only an admin creates a user, at `/driver/users` (add with a password or generate one, shown once; reset; disable). Editors can post, edit, check off and plan; only admins manage users. `PUSH_TOKEN` still opens every `/driver` route except `/driver/users`.
-
-Reset a password from the machine (the old one cannot be recovered):
-
-```bash
-fly ssh console -a roadtrip-clodemode -C "/app/roadtrip -set-password kris"   # type the new password, one line, press Enter
-```
-
-The image carries a static busybox `sh`, so a plain `fly ssh console -a roadtrip-clodemode` opens a shell too; `-C` runs the one command without one. A password is six or more characters and length is the only rule. The running server re-reads `users.json` whenever the file changes, so the new password works at once and nothing is restarted.
+MIT. Provided by Austin Voice Data LLC.

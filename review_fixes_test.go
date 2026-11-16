@@ -359,7 +359,7 @@ func lineSeed(offKm float64) *seedData {
 
 func TestLineEndThreshold(t *testing.T) {
 	if maxLineEndKm != 50 {
-		t.Fatalf("the threshold is %d km; this test and README.md state 50", maxLineEndKm)
+		t.Fatalf("the threshold is %d km; this test and docs/TRIPS.md state 50", maxLineEndKm)
 	}
 	for _, c := range []struct {
 		off  float64

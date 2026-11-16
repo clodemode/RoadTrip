@@ -357,14 +357,14 @@ func TestChesterRefusesAQuestionThatCouldPassTheLimit(t *testing.T) {
 	if got := dear.Plan.worstUSD(); !near(got, 3*(32000*25/1e6+0.05)) {
 		t.Errorf("a plan question on a $25 model could cost $%v", got)
 	}
-	// The README states the rule and both figures.
-	readme, err := os.ReadFile("README.md")
+	// The Chester page of the design record states the rule and both figures.
+	readme, err := os.ReadFile("docs/CHESTER.md")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"$0.54", "$2.07", "could cost"} {
 		if !bytes.Contains(readme, []byte(want)) {
-			t.Errorf("README does not state the limit rule: %q is missing", want)
+			t.Errorf("docs/CHESTER.md does not state the limit rule: %q is missing", want)
 		}
 	}
 }

@@ -1,7 +1,7 @@
 # roadtrip — the live ride surface (atx-sjc-2026-09 first).
 #
 # A Go static binary + SQLite + photos on a persistent volume. Sized
-# deliberately small; see README for why the stack is not Django.
+# deliberately small; see docs/DESIGN.md for why it is built this way.
 app = "roadtrip-clodemode"
 primary_region = "dfw"   # Dallas — the ride departs from Austin
 
@@ -20,7 +20,7 @@ primary_region = "dfw"   # Dallas — the ride departs from Austin
   SITE_URL = "https://roadtrip.opeongo.net"
   # TEMPORARY, ruled by Kris 2026-09-02 ("we will open it later"): the whole
   # site sits behind the one admin password. /healthz, the login page and the
-  # two static files it renders with stay open — see README. Re-opening is
+  # two static files it renders with stay open — see docs/OPERATIONS.md. Re-opening is
   # this line set back to "public" and a redeploy.
   SITE_VISIBILITY = "public"   # opened 2026-09-08 by Kris after the precision review + the EXIF GPS strip (v26)
   # Which way the post form's "Fuzz location" toggle starts AT A PRIVATE
