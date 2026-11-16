@@ -7,7 +7,12 @@ RUN go mod download
 COPY . .
 # CGO off: modernc.org/sqlite is pure Go, so the binary is fully static.
 # tzdata is embedded via `import _ "time/tzdata"` — scratch has no zoneinfo.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /roadtrip .
+# GIT_SHA is the commit being built (the deploy workflow passes it); it is
+# linked in as main.buildCommit and /healthz reports it, so a probe can tell
+# WHICH build answers. Declared here, after the module download, so a new
+# commit does not throw away the cached dependency layer.
+ARG GIT_SHA=""
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.buildCommit=${GIT_SHA}" -o /roadtrip .
 # Fly's hallpass (the `fly ssh` / `fly ssh sftp` server) verifies the cert and
 # then resolves the login user through /etc/passwd. scratch has none, so every
 # session dies with "unable to authenticate" even though the log says

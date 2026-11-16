@@ -1,0 +1,70 @@
+# .certify/scopes.map — which TEST SCOPES a changed path must run at PUSH.
+#
+# One line per rule: a path pattern, then the scopes, comma-separated. The
+# FIRST matching line wins, so the narrow rules stand above the wide ones. The
+# pattern is a shell `case` glob matched against the path from the repo root:
+# `*` crosses directories, so `static/*` is everything under static/.
+#
+# A path that matches NO line REFUSES the push (scripts/ci/scopes.sh exits 3
+# and names it). Nothing is waved through and nothing is guessed: a new kind
+# of file gets a line here in the commit that adds it.
+#
+# THE SCOPES (run by scripts/ci/gate.sh, each one alone or together):
+#   docs      nothing runs. Prose no test reads.
+#   static    gofmt, go vet, go build, node --check. The guard set: cheap,
+#             whole-tree, and added to every push that is not docs-only.
+#   js        node --test static/js/*_test.mjs
+#   unit      every Go test but TestFeatures, under the race detector
+#   features  TestFeatures: the Gherkin scenarios, in parallel shards, no -race
+#   rigs      the bash rigs under scripts/ci/tests/ (the gate's own tests)
+#   image     docker build of the production image, never pushed
+#   whole     static, js, unit, features, rigs. RELEASE runs this plus image.
+#
+# THE SEAM, said honestly: every Go file is one package (package main at the
+# repo root), so a product .go change reaches every Go test and the smallest
+# sound selection for it is unit + features. The lean lanes are the ones a
+# real boundary cuts: prose, the browser scripts' own tests, a scenario or its
+# step bindings, the gate's own scripts, the image recipe. A finer cut needs
+# packages, not a cleverer map.
+#
+# A *_steps_test.go change runs features and not unit: go vet (static) still
+# compiles every test, and the whole suite at RELEASE covers the rare plain
+# test that calls a step helper.
+
+# prose
+*.md                        docs
+docs/*                      docs
+LICENSE                     docs
+.env.example                docs
+
+# the gate itself, and the workflows that call it
+scripts/*                   static,rigs
+.certify/*                  static,rigs
+.github/*                   static,rigs
+.claude/*                   docs
+
+# the image recipe and the Fly config
+Dockerfile                  image
+.dockerignore               image,unit
+fly.toml                    image
+APP_PROFILE.yaml            docs
+.gitignore                  unit
+
+# the module graph: everything
+go.mod                      whole
+go.sum                      whole
+
+# browser scripts: their own tests are a real seam
+static/js/*_test.mjs        js
+static/js/*_harness.mjs     js,features
+static/*                    js,unit,features
+templates/*                 unit,features
+
+# scenarios and their bindings
+features/*                  features
+*_steps_test.go             features
+
+# fixtures, the embedded history, and every other Go file
+testdata/*                  unit,features
+seed/*                      unit,features
+*.go                        unit,features

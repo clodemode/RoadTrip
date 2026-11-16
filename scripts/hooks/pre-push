@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+# roadtrip pre-push — the PUSH gate. It judges the tip a push carries, on this
+# machine, in Docker, before anything reaches GitHub; a merge never waits on a
+# GitHub run to learn whether the branch is green.
+#
+# WHAT RUNS is decided by what the branch adds to trunk: the changed paths go
+# through scripts/ci/scopes.sh (.certify/scopes.map), and scripts/ci/gate.sh
+# runs exactly those TEST SCOPES in the gate image. The whole suite is the
+# release's business (scripts/ci/seal.sh), not a push's.
+#
+# EVERY DERIVATION FAILS CLOSED: an unmapped path, a range that cannot be
+# computed, a tip that is not what the checkout holds, a scope that measured
+# nothing: each REFUSES the push and says why. `git push --no-verify` is the
+# stated bypass, on purpose.
+#
+# THE LINES ABOUT/scripts/ci/push.sh READS (anchored at a line start):
+#   pre-push: INHERITED-TREE ...    this exact tree already went green here
+#   pre-push: DOCS-GREEN ...        prose only; nothing ran
+#   pre-push: REFUSING THE PUSH ... red, or could not be measured
+#   pre-push: GREEN ...             the scopes ran and passed
+#   FAILED <test id>                one per failing test, from gate.sh
+#   [push-gate] board: <url> ...    the PushGate row, from push_gate_record.sh
+#
+# THE RECORDS, both fail-open (a dead board never blocks a push):
+#   <git common dir>/certify/push-gate.log    one line per push, file of record
+#   <git common dir>/certify/green-trees.log  the tree ids that went green, in
+#       the shared format of ABOUT/scripts/ci/green_trees.py: an identical tree
+#       under an identical gate inherits its green for 24 hours.
+# and the PushGate board row in ABOUT_INTENT (START and END).
+#
+# INSTALLED by ABOUT/scripts/install-hooks.sh (phase 3) as a symlink from the
+# MAIN checkout's .git/hooks/pre-push, which every .wt/ worktree shares. So the
+# first thing this file does is hand over to the PUSHING checkout's own copy:
+# a branch is judged by the gate it carries, not by whatever trunk's copy was
+# when the symlink was made. A branch cut before the gate existed has no copy
+# and no scope map; it is let through UNGATED, loudly, with a board row.
+#
+# Bash 3.2 compatible on purpose (macOS /bin/bash): no mapfile, no
+# associative arrays, no `${var,,}`.
+
+REMOTE_NAME="${1:-origin}"
+ZERO='0000000000000000000000000000000000000000'
+say() { printf '%s\n' "$*" >&2; }
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { say "pre-push: REFUSING THE PUSH — not inside a git working tree"; exit 1; }
+SELF="$0"
+case "$SELF" in /*) ;; *) SELF="$PWD/$SELF" ;; esac
+MINE="$REPO_ROOT/scripts/hooks/pre-push"
+if [ -z "${ROADTRIP_HOOK_HANDED:-}" ] && [ -f "$MINE" ] && ! cmp -s "$MINE" "$SELF"; then
+  ROADTRIP_HOOK_HANDED=1 exec bash "$MINE" "$@"
+fi
+unset ROADTRIP_HOOK_HANDED
+[ -f "$MINE" ] && SELF="$MINE"
+
+set -u
+COMMON="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+[ -n "$COMMON" ] || COMMON="$REPO_ROOT/.git"
+CERTIFY_DIR="$COMMON/certify"
+PUSH_GATE_LOG="$CERTIFY_DIR/push-gate.log"
+GREEN_TREES="$CERTIFY_DIR/green-trees.log"
+WHOLE_AT="$CERTIFY_DIR/whole-green-at"
+# The CLODE workspace holds this repo beside ABOUT; its toolkit is optional.
+TOOLKIT="$(dirname "$(dirname "$COMMON")")/ABOUT/scripts/ci"
+START_S=$(date +%s)
+mkdir -p "$CERTIFY_DIR" 2>/dev/null || true
+
+VERDICT='' STAGE='hook' SCOPES='-' TESTS='-' SUITE_S='-' RANGE='-' TREE='-' PATHS=0 NOTE='' BRANCH='' LOCK_S=''
+clean() { local v; v="$(printf '%s' "${1:-}" | tr '\t\r\n' '   ')"; printf '%s' "${v:--}"; }
+record() {  # record <start|end> <line>
+  [ -f "$TOOLKIT/push_gate_record.sh" ] || return 0
+  printf '%s\n' "$2" | bash "$TOOLKIT/push_gate_record.sh" "--$1" --repo roadtrip \
+    ${BRANCH:+--branch "$BRANCH"} ${PUSH_SH_LOG_DIR:+--log-dir "$PUSH_SH_LOG_DIR"} >&2 || true
+}
+run_fields() {
+  printf 'run_id=%s\tattempt=%s\tdry_run=%s' "$(clean "${PUSH_SH_RUN_ID:-}")" "$(clean "${PUSH_SH_ATTEMPT:-}")" "$(clean "${PUSH_SH_DRY:-}")"
+}
+on_exit() {
+  local rc=$? line head
+  [ -n "$VERDICT" ] || { if [ "$rc" -eq 0 ]; then VERDICT=ALLOWED; else VERDICT=REFUSED; fi; }
+  head="$(git -C "$(dirname "$SELF")" rev-parse --abbrev-ref HEAD 2>/dev/null)@$(git -C "$(dirname "$SELF")" rev-parse --short HEAD 2>/dev/null)"
+  line="$(printf 'ts=%s\tverdict=%s\tstage=%s\trc=%s\trange=%s\ttree=%s\tpaths=%s\trule=%s\tselected=-\toutcome=%s\tpassed=%s\tcollected=%s\tsuite_s=%s\twall_s=%s\tlock_wait_s=%s\tcheckout=%s\thook=%s\thook_head=%s\t%s\tnote=%s' \
+    "$(date +%Y-%m-%dT%H:%M:%S%z)" "$VERDICT" "$( [ "$rc" -eq 0 ] && echo - || echo "$STAGE")" "$rc" "$RANGE" "$TREE" "$PATHS" \
+    "$(clean "$SCOPES")" "$VERDICT" "$TESTS" "$TESTS" "$SUITE_S" "$(( $(date +%s) - START_S ))" "${LOCK_S:--}" \
+    "$(clean "$REPO_ROOT")" "$(clean "$SELF")" "$(clean "$head")" "$(run_fields)" "$(clean "$NOTE")")"
+  if mkdir -p "$CERTIFY_DIR" 2>/dev/null && printf '%s\n' "$line" >> "$PUSH_GATE_LOG" 2>/dev/null; then
+    [ "$RANGE" != '-' ] && record end "$line"
+  else
+    say "pre-push: could not append the push-gate log line"
+  fi
+}
+trap on_exit EXIT
+refuse() { STAGE="${2:-hook}"; VERDICT=REFUSED; NOTE="$1"; say ""; say "pre-push: REFUSING THE PUSH — $1"; say ""; say "  Bypass (states what you are skipping): git push --no-verify"; say ""; exit 1; }
+
+# --- what is being pushed -----------------------------------------------------
+TIP='' N=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -n "${local_sha:-}" ] || continue
+  [ "$local_sha" = "$ZERO" ] && continue          # a branch deletion carries no code
+  if [ -n "$TIP" ] && [ "$TIP" != "$local_sha" ]; then N=2; else N=1; fi
+  TIP="$local_sha"
+  BRANCH="${remote_ref#refs/heads/}"
+done
+[ "$N" -eq 0 ] && { VERDICT=ALLOWED; NOTE='nothing but deletions'; exit 0; }
+[ "$N" -gt 1 ] && refuse "this push carries two different tips; the gate judges one. Push one branch at a time."
+
+TRUNK="refs/remotes/$REMOTE_NAME/trunk"
+BASE="$(git merge-base "$TIP" "$TRUNK" 2>/dev/null)" \
+  || refuse "cannot find where $TIP leaves $REMOTE_NAME/trunk (git fetch $REMOTE_NAME trunk, then push again), so the range is unmeasured"
+RANGE="$BASE..$TIP"
+TREE="$(git rev-parse -q --verify "$TIP^{tree}" 2>/dev/null)" || refuse "cannot read the tree of $TIP"
+record start "$(printf 'ts=%s\trange=%s\tcheckout=%s\thook=%s\t%s' "$(date +%Y-%m-%dT%H:%M:%S%z)" "$RANGE" "$(clean "$REPO_ROOT")" "$(clean "$SELF")" "$(run_fields)")"
+
+CHANGED="$(git diff --name-only "$BASE" "$TIP" 2>/dev/null)" || refuse "git diff $RANGE failed, so the changed paths are unmeasured"
+PATHS="$(printf '%s\n' "$CHANGED" | grep -c .)"
+if [ "$PATHS" -eq 0 ]; then VERDICT=ALLOWED; NOTE='the tip adds nothing to trunk'; say "pre-push: the tip adds nothing to $REMOTE_NAME/trunk; nothing to judge"; exit 0; fi
+
+# --- a branch older than the gate ----------------------------------------------
+if ! git cat-file -e "$TIP:.certify/scopes.map" 2>/dev/null; then
+  VERDICT=ALLOWED; NOTE='UNGATED: the tip predates the gate (no .certify/scopes.map)'
+  say "pre-push: UNGATED — the pushed tip ${TIP:0:12} has no .certify/scopes.map: this branch was cut before the gate. Nothing was judged. Rebase on trunk to be gated."
+  exit 0
+fi
+
+# --- the gate judges the tip, and the checkout must BE the tip -----------------
+[ "$(git rev-parse HEAD 2>/dev/null)" = "$TIP" ] \
+  || refuse "the pushed tip ${TIP:0:12} is not this checkout's HEAD; the gate runs the files on disk, so push from the checkout that holds the tip"
+[ -z "$(git status --porcelain 2>/dev/null)" ] \
+  || refuse "the checkout has uncommitted or untracked files; the gate would judge them instead of the tip. Commit them or move them out, then push."
+
+# --- changed paths to scopes ----------------------------------------------------
+SCOPES="$(printf '%s\n' "$CHANGED" | bash "$REPO_ROOT/scripts/ci/scopes.sh" 2> "$CERTIFY_DIR/.scopes.err")"; src=$?
+if [ "$src" -ne 0 ]; then
+  cat "$CERTIFY_DIR/.scopes.err" >&2
+  SCOPES='-'
+  refuse "the path-to-scope map could not place every changed path (scripts/ci/scopes.sh exit $src); an unmapped path is never waved through" scopes
+fi
+say "pre-push: $PATHS changed path(s) against $REMOTE_NAME/trunk select scopes: $SCOPES"
+
+# --- the gate-input key and the green-tree sidecar ------------------------------
+sha() { shasum -a 256 "$@" 2>/dev/null | shasum -a 256 | cut -c1-64; }
+KEY=''
+if [ -f "$TOOLKIT/green_trees.py" ] && command -v python3 >/dev/null 2>&1; then
+  KEY="$(printf 'hook=%s\ttoolkit=%s\tconfig=%s\timage=%s' "$(sha "$SELF")" \
+    "$(sha "$REPO_ROOT/scripts/ci/gate.sh" "$REPO_ROOT/scripts/ci/scopes.sh")" "$(sha "$REPO_ROOT/.certify/scopes.map")" \
+    "$(sha "$REPO_ROOT/scripts/ci/gate.Dockerfile" "$REPO_ROOT/go.mod")")"
+fi
+WHOLE=0; [ "$SCOPES" = 'static,js,unit,features,rigs' ] || [ "$SCOPES" = 'static,js,unit,features,rigs,image' ] && WHOLE=1
+if [ -n "$KEY" ]; then
+  hit="$(python3 -I "$TOOLKIT/green_trees.py" find --log "$GREEN_TREES" --tree "$TREE" --key "$KEY" --base "$BASE" --whole-green-at "$WHOLE_AT" 2>/dev/null)"
+  if [ -n "$hit" ]; then
+    at="$(printf '%s' "$hit" | tr '\t' '\n' | sed -n 's/^ts=//p')"
+    VERDICT=INHERITED-TREE; NOTE="tree went green at $at"
+    say "pre-push: INHERITED-TREE — the pushed tip ${TIP:0:12} has tree ${TREE:0:12}, which went green here at ${at:-an earlier push} under this same gate; nothing runs."
+    exit 0
+  fi
+  # A SCOPED green of this exact tree, for this exact range base, under this
+  # exact key, inside 24 hours. The scopes are a pure function of the changed
+  # paths and the map, and the map is in the key, so the same tree, base and
+  # key would select the same scopes and run the same bytes. This is what makes
+  # `push.sh --check` then one push cost one gate, not two. green_trees.py's own
+  # `find` wants a fresh whole-run mark for a scoped line; that is FinTrack's
+  # rule for a heuristic selection and stays true there.
+  hit="$(awk -F '\t' -v tree="tree=$TREE" -v base="base=$BASE" -v key="$KEY" -v now="$(date +%s)" '
+    /^#/ { next }
+    { ok = 0; e = 0; line = "\t" $0 "\t"
+      for (i = 1; i <= NF; i++) { if ($i == tree) ok++; if ($i == base) ok++; if ($i == "verdict=GREEN-LEAN") ok++; if ($i ~ /^epoch=/) e = substr($i, 7) + 0 }
+      if (ok == 3 && index(line, "\t" key "\t") && e > 0 && now - e >= 0 && now - e < 86400) at = $2 }
+    END { if (at != "") print at }' "$GREEN_TREES" 2>/dev/null)"
+  if [ -n "$hit" ]; then
+    VERDICT=INHERITED-TREE; NOTE="scoped tree went green at ${hit#ts=} for this base"
+    say "pre-push: INHERITED-TREE — the pushed tip ${TIP:0:12} has tree ${TREE:0:12}, which went green here at ${hit#ts=} for this same range base, scopes and gate; nothing runs."
+    exit 0
+  fi
+fi
+remember() {  # remember <verdict>
+  [ -n "$KEY" ] || return 0
+  python3 -I "$TOOLKIT/green_trees.py" record --log "$GREEN_TREES" --tree "$TREE" --verdict "$1" --commit "$TIP" \
+    --key "$KEY" --base "$BASE" --rule "$SCOPES" --label "roadtrip pre-push's" >/dev/null 2>&1 \
+    || say "pre-push: could not record the green tree (the next push of it runs the gate again)"
+}
+
+if [ "$SCOPES" = docs ]; then
+  VERDICT=DOCS-GREEN; NOTE='prose only'
+  remember DOCS-GREEN
+  say "pre-push: DOCS-GREEN — every changed path is prose no test reads; nothing runs."
+  exit 0
+fi
+
+# --- run the scopes, one heavy suite on this host at a time ---------------------
+GATE_LOG="${PUSH_SH_LOG_DIR:-$CERTIFY_DIR/gate-logs/$(date -u +%Y%m%dT%H%M%SZ)-$$}/gate"
+mkdir -p "$GATE_LOG" 2>/dev/null || refuse "cannot make the gate log dir $GATE_LOG"
+STAGE=gate
+OUT="$GATE_LOG/gate.out"
+if [ -f "$TOOLKIT/host_lock.sh" ] && [ -z "${CERTIFY_HOST_LOCK_HELD_BY:-}" ]; then
+  bash "$TOOLKIT/host_lock.sh" -- bash "$REPO_ROOT/scripts/ci/gate.sh" --docker --scopes "$SCOPES" --log-dir "$GATE_LOG" 2>&1 | tee "$OUT" >&2
+  grc="${PIPESTATUS[0]}"
+else
+  bash "$REPO_ROOT/scripts/ci/gate.sh" --docker --scopes "$SCOPES" --log-dir "$GATE_LOG" 2>&1 | tee "$OUT" >&2
+  grc="${PIPESTATUS[0]}"
+fi
+last="$(grep -E '^gate: VERDICT ' "$OUT" | tail -n 1)"
+# A wait is a delay with a name: the seconds this push queued behind another
+# suite on the host go on its board row.
+LOCK_S="$(sed -n 's/^host_lock: took the host-wide suite lock after \([0-9][0-9]*\)s.*/\1/p' "$OUT" | tail -n 1)"
+[ -n "$LOCK_S" ] && say "pre-push: waited ${LOCK_S}s for the host-wide suite lock before the gate ran"
+TESTS="$(printf '%s' "$last" | sed -n 's/.* tests=\([0-9][0-9]*\) .*/\1/p')"; [ -n "$TESTS" ] || TESTS='-'
+SUITE_S="$(printf '%s' "$last" | sed -n 's/.* wall=\([0-9][0-9]*\)s .*/\1/p')"; [ -n "$SUITE_S" ] || SUITE_S='-'
+
+case "$grc" in
+  0) case "$last" in
+       'gate: VERDICT GREEN '*) ;;
+       *) refuse "the gate exited 0 and printed no GREEN verdict line; a verdict nobody printed is not a pass (read $GATE_LOG)" gate ;;
+     esac
+     if [ "$WHOLE" -eq 1 ]; then VERDICT=GREEN; remember GREEN; else VERDICT=GREEN-LEAN; remember GREEN-LEAN; fi
+     NOTE="$last"
+     say "pre-push: GREEN — scopes=$SCOPES tests=$TESTS gate=${SUITE_S}s for tip ${TIP:0:12}"
+     exit 0 ;;
+  1) refuse "the gate is RED for scopes $SCOPES; the FAILED lines above name what failed (full output: $GATE_LOG)" gate ;;
+  75) refuse "the host-wide suite lock could not be had, so nothing ran (another suite is running on this Mac)" gate ;;
+  *) refuse "a scope could not be measured (gate exit $grc, scopes $SCOPES); nothing measured is not a pass (read $GATE_LOG)" gate ;;
+esac

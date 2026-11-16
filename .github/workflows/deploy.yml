@@ -10,26 +10,37 @@
 #   fly tokens create deploy -a roadtrip-clodemode
 # then Settings → Secrets and variables → Actions → New repository secret.
 #
-# LEAN: the gates (.github/actions/gates) are skipped ONLY when CI proved this
-# exact commit: a completed, successful run of ci.yml on trunk for github.sha.
-# Anything else (CI still running, red, cancelled, a different commit, or the
-# lookup itself failing) runs every gate here, exactly as before. The lean path
-# is taken on positive proof alone. So merge, wait for CI on trunk to go green,
-# then dispatch.
+# THE SHAPE (2026-11-16): PROVE, MINT ONCE, SEAL, RELEASE THE SEALED DIGEST.
 #
-#   mode=plan   the gates (or the CI record), and the image built on Fly's
-#               remote builder, WITHOUT releasing it. The default, so a slip of
-#               the finger does not reach the ride.
-#   mode=apply  the gates (or the CI record), then the release, then an
-#               INDEPENDENT probe that the instance actually serves — a
-#               deploy's own verdict is not a state report.
+#   prove   The suite is not run here when something already proved THIS EXACT
+#           COMMIT. In order: an earlier run of this workflow that sealed it
+#           (its `seal` artifact, which also names the image); the commit
+#           status `roadtrip/seal`, posted by scripts/ci/seal.sh --post after a
+#           whole run on a local host; a successful ci.yml run on trunk.
+#           Anything else (none found, a red one, a different commit, the
+#           lookup itself failing) runs every gate here. The lean path is
+#           taken on positive proof alone.
+#   mint    The image is built ONCE per commit, on Fly's builder, pushed to the
+#           registry as sha-<commit>, and from then on named by its DIGEST. A
+#           run that found an earlier seal of the commit mints nothing.
+#   seal    seal.json: the commit, the digest, and what proved the commit.
+#           Uploaded as the run's `seal` artifact and printed in the summary.
+#   release mode=apply releases THAT digest (flyctl deploy --image ...@sha256),
+#           never a rebuild: the bytes that were minted are the bytes that
+#           serve. Then two independent readings: Fly's own record of what the
+#           machine runs, and the instance's /healthz naming its commit.
+#
+#   mode=plan   prove, mint, seal. Nothing is released. The default, so a slip
+#               of the finger does not reach the ride.
+#   mode=apply  the same, then the release. After a plan of the same commit it
+#               inherits that plan's seal and goes straight to the release.
 name: Deploy
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "plan = build only (no release). apply = build and release."
+        description: "plan = prove, mint and seal (no release). apply = that, then release the sealed image."
         type: choice
         required: true
         default: plan
@@ -37,8 +48,11 @@ on:
 
 permissions:
   contents: read
-  # Only to ask whether CI has a green run for this commit.
+  # To ask whether CI or an earlier Deploy run proved this commit, and to read
+  # that run's seal artifact.
   actions: read
+  # To read the roadtrip/seal commit status.
+  statuses: read
 
 concurrency:
   # Never two releases at the same machine at once.
@@ -59,79 +73,181 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Fail closed: `proven` is true only when gh returned a successful ci.yml
-      # run on trunk whose head is exactly this commit. An in-progress run is
-      # not status=success, so it counts as no record. Any error, empty answer
-      # or surprise leaves proven=false and the gates run.
-      - name: look for a CI record of this commit
-        id: ci
+      # Fail closed: `proven` is true only on a positive answer about exactly
+      # this commit. Every lookup that errors, comes back empty or surprises
+      # leaves it false, and the gates run.
+      - name: prove — look for a seal or a record of this commit
+        id: prove
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          proven=false
-          if runs=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --branch trunk \
-                --commit "$GITHUB_SHA" --status success --limit 5 \
-                --json databaseId,url,conclusion,headSha); then
-            hit=$(printf '%s' "$runs" | jq -r --arg sha "$GITHUB_SHA" \
-              '[.[] | select(.headSha == $sha and .conclusion == "success")][0] | select(. != null) | "\(.databaseId) \(.url)"') || hit=""
-            if [ -n "$hit" ]; then
-              proven=true
-              echo "::notice title=lean::gates skipped; trusting CI run ${hit%% *} for $GITHUB_SHA: ${hit#* }"
+          set -o pipefail
+          proven=false; proof=''; digest=''
+          repo="$GITHUB_REPOSITORY"; sha="$GITHUB_SHA"
+
+          # 1. An earlier run of this workflow that sealed this commit.
+          if ids=$(gh run list -R "$repo" --workflow deploy.yml --commit "$sha" --status success \
+                --limit 10 --json databaseId,headSha 2>/dev/null \
+                | jq -r --arg sha "$sha" '.[] | select(.headSha == $sha) | .databaseId'); then
+            for id in $ids; do
+              rm -rf "$RUNNER_TEMP/seal-in"
+              if gh run download "$id" -R "$repo" -n seal -D "$RUNNER_TEMP/seal-in" 2>/dev/null \
+                 && [ -f "$RUNNER_TEMP/seal-in/seal.json" ]; then
+                c=$(jq -r '.commit // ""' "$RUNNER_TEMP/seal-in/seal.json" 2>/dev/null || true)
+                d=$(jq -r '.digest // ""' "$RUNNER_TEMP/seal-in/seal.json" 2>/dev/null || true)
+                if [ "$c" = "$sha" ] && printf '%s' "$d" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+                  proven=true; digest="$d"; proof="Deploy run $id sealed this commit as $d"
+                  break
+                fi
+              fi
+            done
+          fi
+
+          # 2. A whole run on a local host, posted on the commit by seal.sh --post.
+          if [ "$proven" != true ]; then
+            if state=$(gh api "repos/$repo/commits/$sha/statuses" \
+                  --jq '[.[] | select(.context == "roadtrip/seal")][0].state // ""' 2>/dev/null); then
+              if [ "$state" = success ]; then proven=true; proof="commit status roadtrip/seal is success (a local whole run)"; fi
             fi
           fi
+
+          # 3. The CI record: a successful ci.yml run on trunk for this commit.
           if [ "$proven" != true ]; then
-            echo "::notice title=gates::no successful CI run on trunk for $GITHUB_SHA; running every gate here"
+            if hit=$(gh run list -R "$repo" --workflow ci.yml --branch trunk --commit "$sha" --status success \
+                  --limit 5 --json databaseId,conclusion,headSha 2>/dev/null \
+                  | jq -r --arg sha "$sha" '[.[] | select(.headSha == $sha and .conclusion == "success")][0].databaseId // ""'); then
+              if [ -n "$hit" ]; then proven=true; proof="CI run $hit on trunk is green for this commit"; fi
+            fi
           fi
-          echo "proven=$proven" >> "$GITHUB_OUTPUT"
+
+          if [ "$proven" = true ]; then
+            echo "::notice title=proven::gates skipped for $sha: $proof"
+          else
+            proof="every gate ran in this Deploy run"
+            echo "::notice title=gates::nothing proves $sha yet; running every gate here"
+          fi
+          { echo "proven=$proven"; echo "proof=$proof"; echo "digest=$digest"; } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-go@v5
-        if: steps.ci.outputs.proven != 'true'
+        if: steps.prove.outputs.proven != 'true'
         with:
           go-version-file: go.mod
           cache: true
 
       - uses: ./.github/actions/gates
-        if: steps.ci.outputs.proven != 'true'
-
-      - name: name the commit being shipped
-        run: |
-          echo "::notice title=shipping::${{ github.sha }} (${{ github.ref_name }}) → $FLY_APP, mode=${{ inputs.mode }}"
+        if: steps.prove.outputs.proven != 'true'
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       # --remote-only: the image is built on Fly's builder, so it does not
-      # depend on this runner's local docker state and is reproducible off any
-      # one machine.
-      - name: plan — build without releasing
-        if: inputs.mode == 'plan'
-        run: flyctl deploy --build-only --remote-only -a "$FLY_APP"
+      # depend on this runner's docker state. --push with a label named for the
+      # commit puts it in the registry without releasing it. The digest is read
+      # twice: from the builder's own account of the push, and back from the
+      # registry. No digest, or two that differ, and the run stops: nothing can
+      # be sealed that cannot be named.
+      - name: mint — build the image once and name it by digest
+        id: mint
+        if: steps.prove.outputs.digest == ''
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          ref="registry.fly.io/$FLY_APP:sha-$GITHUB_SHA"
+          flyctl deploy --build-only --push --remote-only -a "$FLY_APP" \
+            --image-label "sha-$GITHUB_SHA" --build-arg "GIT_SHA=$GITHUB_SHA" 2>&1 | tee "$RUNNER_TEMP/mint.log"
+          [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "::error title=mint::the build or the push failed; nothing was minted"; exit 1; }
+          built=$(grep -oE "pushing manifest for ${ref}@sha256:[0-9a-f]{64}" "$RUNNER_TEMP/mint.log" | tail -n 1 | grep -oE 'sha256:[0-9a-f]{64}' || true)
+          flyctl auth docker >/dev/null
+          held=''
+          # The registry can lag the push by a few seconds; this is the one wait
+          # here, bounded, and it ends on the registry's own answer.
+          for pause in 0 2 4 8 16; do
+            sleep "$pause"
+            held=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' 2>/dev/null | jq -r '.digest // ""' || true)
+            [ -n "$held" ] && break
+          done
+          echo "builder printed: ${built:-nothing}; registry holds: ${held:-nothing}"
+          if ! printf '%s' "$held" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "::error title=mint::the registry does not show $ref, so the image cannot be named. No digest, no release."; exit 1
+          fi
+          if [ -n "$built" ] && [ "$built" != "$held" ]; then
+            echo "::error title=mint::the builder pushed $built and the registry holds $held for $ref. No release."; exit 1
+          fi
+          echo "digest=$held" >> "$GITHUB_OUTPUT"
 
-      - name: apply — build and release
+      - name: seal — the commit, the digest and what proved it
+        id: seal
+        env:
+          INHERITED: ${{ steps.prove.outputs.digest }}
+          MINTED: ${{ steps.mint.outputs.digest }}
+          PROOF: ${{ steps.prove.outputs.proof }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          digest="$INHERITED"; minted=inherited
+          if [ -z "$digest" ]; then digest="$MINTED"; minted=this-run; fi
+          printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "::error title=seal::no digest to seal"; exit 1; }
+          image="registry.fly.io/$FLY_APP@$digest"
+          jq -n --arg commit "$GITHUB_SHA" --arg digest "$digest" --arg image "$image" \
+                --arg proof "$PROOF" --arg minted "$minted" \
+                --arg run "$GITHUB_RUN_ID" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                '{commit: $commit, digest: $digest, image: $image, proof: $proof, minted: $minted, run: $run, sealed_at: $at}' \
+            > seal.json
+          cat seal.json
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Seal"
+            echo "- commit \`$GITHUB_SHA\`"
+            echo "- image \`$image\` ($minted)"
+            echo "- proof: $PROOF"
+            echo "- mode: $MODE"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=sealed::$GITHUB_SHA → $image ($MODE)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seal
+          path: seal.json
+          if-no-files-found: error
+
+      # The release names the image by digest: nothing is built here.
+      - name: apply — release the sealed image
         if: inputs.mode == 'apply'
-        run: flyctl deploy --remote-only -a "$FLY_APP" --wait-timeout 300
+        run: flyctl deploy --image "$IMAGE" -a "$FLY_APP" --wait-timeout 300
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          IMAGE: ${{ steps.seal.outputs.image }}
 
-      # An independent probe: ask the instance itself, rather than trusting the
-      # deploy's own exit code. The machine may be suspended, so allow for the
-      # resume before calling it a failure.
-      - name: apply — probe that it serves
+      # A deploy's own exit code is not a state report. First reading: Fly's
+      # record of the image every machine of the app now runs.
+      - name: apply — the machines run the sealed digest
+        if: inputs.mode == 'apply'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          WANT: ${{ steps.seal.outputs.digest }}
+        run: |
+          want="$WANT"
+          got=$(flyctl machine list -a "$FLY_APP" --json | jq -r '[.[].image_ref.digest] | unique | join(" ")' || true)
+          echo "machines run: ${got:-nothing}; sealed: $want"
+          if [ "$got" != "$want" ]; then
+            echo "::error title=digest::the machines run '${got:-nothing}', not the sealed $want"; exit 1
+          fi
+          echo "::notice title=digest::every machine runs the sealed $want"
+
+      # Second reading, independent of Fly's API: ask the instance itself which
+      # commit it was built from. The machine may be suspended, so curl retries
+      # while it resumes; the answer must name THIS commit, so the release
+      # before this one answering 200 does not pass.
+      - name: apply — probe that this commit serves
         if: inputs.mode == 'apply'
         run: |
-          for i in $(seq 1 10); do
-            code=$(curl -sS -o /tmp/probe.txt -w '%{http_code}' --max-time 20 "$PROBE_URL" || echo 000)
-            if [ "$code" = "200" ]; then
-              echo "::notice title=probe::$PROBE_URL → 200 $(cat /tmp/probe.txt)"
-              exit 0
-            fi
-            echo "attempt $i: HTTP $code — retrying"
-            sleep 6
-          done
-          echo "::error title=probe::$PROBE_URL never returned 200; the release may be bad"
-          cat /tmp/probe.txt || true
-          exit 1
+          body=$(curl -sS --fail --max-time 20 --retry 8 --retry-delay 3 --retry-all-errors "$PROBE_URL") || {
+            echo "::error title=probe::$PROBE_URL did not answer 200; the release may be bad"; exit 1; }
+          serving=$(printf '%s' "$body" | jq -r '.commit // ""' 2>/dev/null || true)
+          echo "$PROBE_URL → $body"
+          if [ "$serving" != "$GITHUB_SHA" ]; then
+            echo "::error title=probe::the instance serves commit '${serving:-none named}', not $GITHUB_SHA"; exit 1
+          fi
+          echo "::notice title=probe::$PROBE_URL serves $GITHUB_SHA"
 
       - name: status
         if: always()

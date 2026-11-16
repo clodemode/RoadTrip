@@ -37,8 +37,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # gofmt, js syntax, js tests, vet, build, test: one definition, shared
-      # with deploy.yml's fallback gates.
+      # The whole suite by scope (scripts/ci/gate.sh --scopes whole): the same
+      # one definition the pre-push hook and the local seal run, shared with
+      # deploy.yml's fallback gates.
       - uses: ./.github/actions/gates
 
   image:
