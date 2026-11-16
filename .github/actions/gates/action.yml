@@ -11,6 +11,25 @@ description: >-
 runs:
   using: composite
   steps:
+    # THE GO CACHES, kept warm. setup-go's own cache is keyed on the toolchain
+    # and go.sum alone, and a cache is never overwritten, so it froze at
+    # whatever commit first saved it: on 2026-11-16 a run that HIT it still
+    # spent 70 s of a 121 s gate compiling the two test binaries, and a run
+    # that missed it spent 159 s in vet, build and the test binaries. Here the key ends in the commit, so
+    # every run saves what it built, and the restore falls back to the newest
+    # cache of the same go.mod and go.sum: the dependencies and most of the
+    # program arrive compiled, and only what the commit changed is rebuilt.
+    # The callers set `cache: false` on setup-go so there is one cache, not two.
+    - name: go module and build caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}-
+
     # Ruled by Kris 2026-11-12: the scenarios run WITHOUT the race detector
     # (under it they took 9 to 16 minutes); it stays on every plain test, where
     # the shared state is. Since 2026-11-16 the scenarios also run as one

@@ -35,7 +35,9 @@ jobs:
           # The go directive in go.mod is the single source of truth for the
           # toolchain, so CI cannot drift from what the Dockerfile builds with.
           go-version-file: go.mod
-          cache: true
+          # The gates action keeps the Go caches itself, keyed by commit; this
+          # one is keyed on go.sum alone and froze at its first save.
+          cache: false
 
       # The whole suite by scope (scripts/ci/gate.sh --scopes whole): the same
       # one definition the pre-push hook and the local seal run, shared with
