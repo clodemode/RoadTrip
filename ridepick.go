@@ -21,7 +21,9 @@ import (
 //     switch that CHANGES the trip the site shows: POST /driver/ride/active.
 //
 // "Past", "current" and "next" are read against the trip the site shows, by
-// start date: earlier is past, later (or the same day) is next. A next trip is
+// start date: earlier is past, later (or the same day) is next. The trip the
+// site shows is itself current only until it is finished; a finished one is
+// past, and then nothing is current. A next trip is
 // where someone will be and when, which a visitor is never told, so a visitor
 // who asks for one by slug is shown the current trip as if nothing was asked.
 //
@@ -62,6 +64,10 @@ func (a *App) allRideChoices() []rideChoice {
 			cur = &rides[i]
 		}
 	}
+	// The trip the site shows is current only while it is unfinished: once
+	// it is driven it is past, and until another starts there is no current
+	// trip (Kris, 2026-11-16, of Kingston after it ended).
+	activeDone := a.rideIsFinished()
 	var out []rideChoice
 	for _, c := range rides {
 		isCur := c.Slug == active
@@ -75,6 +81,8 @@ func (a *App) allRideChoices() []rideChoice {
 		}
 		when := whenNext
 		switch {
+		case isCur && activeDone:
+			when = whenPast
 		case isCur:
 			when = whenCurrent
 		case cur != nil && c.StartDate != "" && c.StartDate < cur.StartDate:

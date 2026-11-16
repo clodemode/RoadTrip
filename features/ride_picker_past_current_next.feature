@@ -36,3 +36,17 @@ Feature: The Ride page picks a past, current or next trip; visitors see current 
     Then the ride picker switch lists "Kingston Run", "Hill Loop" and "Waco Day"
     When a ride picker visitor opens "/driver"
     Then the ride picker page has no keeper switch
+
+  Scenario: A finished trip the site still shows is past, and there is no current trip
+    Kris, 2026-11-16, of Kingston after it was driven and mothballed: "there
+    is no current trip". The trip the site shows counts as current only
+    while it is unfinished.
+    Given the trip the ride picker site shows is finished
+    When the ride picker keeper opens "/driver?embed=1"
+    Then the ride picker switch groups are "Next, Past"
+    When the ride picker keeper opens "/"
+    Then the ride picker groups are "Next, Past"
+    When a ride picker visitor opens "/"
+    Then the ride picker groups are "Past"
+    And the ride picker offers "Hill Loop"
+    And the ride picker offers "Kingston Run"
