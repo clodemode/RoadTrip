@@ -62,6 +62,7 @@ func TestFeatures(t *testing.T) {
 				initTrailPointScenarios(t, sc)
 				initPhotoMarkerScenarios(t, sc)
 				initListenCountScenarios(t, sc)
+				initTimeFlowScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

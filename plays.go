@@ -217,7 +217,7 @@ func (a *App) recordPlay(user string, sp startedPlay, now time.Time) error {
 			}
 		}
 	}
-	if posts, err := a.store.Posts(rv.Ride.Slug, 0); err == nil {
+	if posts, err := a.store.PostsNewestFirst(rv.Ride.Slug, 0); err == nil {
 		for _, ps := range posts {
 			if ps.Lat == nil || ps.Lng == nil || ps.HideLocation {
 				continue
