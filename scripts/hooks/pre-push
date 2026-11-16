@@ -64,7 +64,7 @@ TOOLKIT="$(dirname "$(dirname "$COMMON")")/ABOUT/scripts/ci"
 START_S=$(date +%s)
 mkdir -p "$CERTIFY_DIR" 2>/dev/null || true
 
-VERDICT='' STAGE='hook' SCOPES='-' TESTS='-' SUITE_S='-' RANGE='-' TREE='-' PATHS=0 NOTE='' BRANCH=''
+VERDICT='' STAGE='hook' SCOPES='-' TESTS='-' SUITE_S='-' RANGE='-' TREE='-' PATHS=0 NOTE='' BRANCH='' LOCK_S=''
 clean() { local v; v="$(printf '%s' "${1:-}" | tr '\t\r\n' '   ')"; printf '%s' "${v:--}"; }
 record() {  # record <start|end> <line>
   [ -f "$TOOLKIT/push_gate_record.sh" ] || return 0
@@ -78,9 +78,9 @@ on_exit() {
   local rc=$? line head
   [ -n "$VERDICT" ] || { if [ "$rc" -eq 0 ]; then VERDICT=ALLOWED; else VERDICT=REFUSED; fi; }
   head="$(git -C "$(dirname "$SELF")" rev-parse --abbrev-ref HEAD 2>/dev/null)@$(git -C "$(dirname "$SELF")" rev-parse --short HEAD 2>/dev/null)"
-  line="$(printf 'ts=%s\tverdict=%s\tstage=%s\trc=%s\trange=%s\ttree=%s\tpaths=%s\trule=%s\tselected=-\toutcome=%s\tpassed=%s\tcollected=%s\tsuite_s=%s\twall_s=%s\tcheckout=%s\thook=%s\thook_head=%s\t%s\tnote=%s' \
+  line="$(printf 'ts=%s\tverdict=%s\tstage=%s\trc=%s\trange=%s\ttree=%s\tpaths=%s\trule=%s\tselected=-\toutcome=%s\tpassed=%s\tcollected=%s\tsuite_s=%s\twall_s=%s\tlock_wait_s=%s\tcheckout=%s\thook=%s\thook_head=%s\t%s\tnote=%s' \
     "$(date +%Y-%m-%dT%H:%M:%S%z)" "$VERDICT" "$( [ "$rc" -eq 0 ] && echo - || echo "$STAGE")" "$rc" "$RANGE" "$TREE" "$PATHS" \
-    "$(clean "$SCOPES")" "$VERDICT" "$TESTS" "$TESTS" "$SUITE_S" "$(( $(date +%s) - START_S ))" \
+    "$(clean "$SCOPES")" "$VERDICT" "$TESTS" "$TESTS" "$SUITE_S" "$(( $(date +%s) - START_S ))" "${LOCK_S:--}" \
     "$(clean "$REPO_ROOT")" "$(clean "$SELF")" "$(clean "$head")" "$(run_fields)" "$(clean "$NOTE")")"
   if mkdir -p "$CERTIFY_DIR" 2>/dev/null && printf '%s\n' "$line" >> "$PUSH_GATE_LOG" 2>/dev/null; then
     [ "$RANGE" != '-' ] && record end "$line"
@@ -153,6 +153,24 @@ if [ -n "$KEY" ]; then
     say "pre-push: INHERITED-TREE — the pushed tip ${TIP:0:12} has tree ${TREE:0:12}, which went green here at ${at:-an earlier push} under this same gate; nothing runs."
     exit 0
   fi
+  # A SCOPED green of this exact tree, for this exact range base, under this
+  # exact key, inside 24 hours. The scopes are a pure function of the changed
+  # paths and the map, and the map is in the key, so the same tree, base and
+  # key would select the same scopes and run the same bytes. This is what makes
+  # `push.sh --check` then one push cost one gate, not two. green_trees.py's own
+  # `find` wants a fresh whole-run mark for a scoped line; that is FinTrack's
+  # rule for a heuristic selection and stays true there.
+  hit="$(awk -F '\t' -v tree="tree=$TREE" -v base="base=$BASE" -v key="$KEY" -v now="$(date +%s)" '
+    /^#/ { next }
+    { ok = 0; e = 0; line = "\t" $0 "\t"
+      for (i = 1; i <= NF; i++) { if ($i == tree) ok++; if ($i == base) ok++; if ($i == "verdict=GREEN-LEAN") ok++; if ($i ~ /^epoch=/) e = substr($i, 7) + 0 }
+      if (ok == 3 && index(line, "\t" key "\t") && e > 0 && now - e >= 0 && now - e < 86400) at = $2 }
+    END { if (at != "") print at }' "$GREEN_TREES" 2>/dev/null)"
+  if [ -n "$hit" ]; then
+    VERDICT=INHERITED-TREE; NOTE="scoped tree went green at ${hit#ts=} for this base"
+    say "pre-push: INHERITED-TREE — the pushed tip ${TIP:0:12} has tree ${TREE:0:12}, which went green here at ${hit#ts=} for this same range base, scopes and gate; nothing runs."
+    exit 0
+  fi
 fi
 remember() {  # remember <verdict>
   [ -n "$KEY" ] || return 0
@@ -181,6 +199,10 @@ else
   grc="${PIPESTATUS[0]}"
 fi
 last="$(grep -E '^gate: VERDICT ' "$OUT" | tail -n 1)"
+# A wait is a delay with a name: the seconds this push queued behind another
+# suite on the host go on its board row.
+LOCK_S="$(sed -n 's/^host_lock: took the host-wide suite lock after \([0-9][0-9]*\)s.*/\1/p' "$OUT" | tail -n 1)"
+[ -n "$LOCK_S" ] && say "pre-push: waited ${LOCK_S}s for the host-wide suite lock before the gate ran"
 TESTS="$(printf '%s' "$last" | sed -n 's/.* tests=\([0-9][0-9]*\) .*/\1/p')"; [ -n "$TESTS" ] || TESTS='-'
 SUITE_S="$(printf '%s' "$last" | sed -n 's/.* wall=\([0-9][0-9]*\)s .*/\1/p')"; [ -n "$SUITE_S" ] || SUITE_S='-'
 
