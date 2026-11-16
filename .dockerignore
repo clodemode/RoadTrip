@@ -5,6 +5,7 @@ data/
 Dockerfile
 fly.toml
 README.md
+docs/
 /roadtrip
 .claude/
 coWork_input/

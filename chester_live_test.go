@@ -250,7 +250,7 @@ func refPrice(models ...string) [4]float64 {
 }
 
 // recompute works a row's totals out again from its usage_json, reading the
-// stored list as plain JSON and applying the rules as the README states them.
+// stored list as plain JSON and applying the rules as docs/CHESTER.md states them.
 func recompute(t *testing.T, usageJSON []byte) refTotals {
 	t.Helper()
 	var reqs []struct {

@@ -16,7 +16,7 @@
 
 A live surface for one road trip. **Go static binary + SQLite**, deployed to **Fly** as `roadtrip-clodemode`, live at **https://roadtrip.opeongo.net**. Provided by Austin Voice Data LLC.
 
-[README.md](README.md) is the authority — it is a long-form design record, not a summary, and every configuration table below is stated there in full. [AGENTS.md](AGENTS.md) carries the agent contract. This file is only the short list of things that bite.
+[README.md](README.md) is the front door for someone running their own instance. The long-form design record, which is the authority, lives under [docs/](docs/): [DESIGN](docs/DESIGN.md), [OPERATIONS](docs/OPERATIONS.md) (every configuration table), [TRIPS](docs/TRIPS.md), [PRIVACY](docs/PRIVACY.md), [CHESTER](docs/CHESTER.md) and [ROUTES](docs/ROUTES.md). [AGENTS.md](AGENTS.md) carries the agent contract. This file is only the short list of things that bite.
 
 ---
 
@@ -52,6 +52,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 | `testdata/` | synthetic fixtures (invented places), each marked `"synthetic": true` |
 | `APP_PROFILE.yaml` | the venue paths: binary `/app/roadtrip`, data `/data`. The CLODE harness reads it |
 | `templates/`, `static/` | server-rendered pages and assets |
+| `docs/` | the design record (`DESIGN`, `OPERATIONS`, `TRIPS`, `PRIVACY`, `CHESTER`, `ROUTES`) and `docs/img/`, the README screenshots, taken from the synthetic fixture trip. `chester_review_test.go` reads `docs/CHESTER.md` for the daily-limit figures |
 | `data/` | local volume stand-in — **gitignored**, holds `roadtrip.sqlite3`, `media/`, `private.json`, `trips/` |
 | `LORE/` | a NESTED clone of the private `clodemode/roadtrip-lore` (gitignored here); YAML LORE, canonical; `lore_yaml_load` materializes it into DB_INTENT. Commit there with `git -C LORE ...` or `lairs_git_commit(repo_name='roadtrip', files='LORE/...')` |
 | `.github/workflows/` | `ci.yml` (push/PR), `deploy.yml` (dispatch only), `data.yml` (by hand, writes `private.json` only) |
@@ -65,7 +66,7 @@ docker run -p 8080:8080 --env-file .env -v "$PWD/data:/data" roadtrip   # .env f
 
 First boot seeds from `seed/*.geojson`; after that the volume is the source of truth and a redeploy never clobbers rows edited through the UI. With no users file and no `ADMIN_PASSWORD_HASH` (which only seeds user `kris` once) the site is read-only; users live in `$DATA_DIR/users.json` (`users.go`) and are managed at `/driver/users`. Generate one with `docker run --rm roadtrip -hash 'your-password'`. Passwords are 6+ characters, length the only rule. Reset one with `fly ssh console -a roadtrip-clodemode -C "/app/roadtrip -set-password kris"` (or open a shell with plain `fly ssh console -a roadtrip-clodemode`: the image carries a static busybox `sh`); the running server re-reads `users.json` when it changes, so no restart.
 
-The full environment table (`SITE_URL`, `SITE_VISIBILITY`, `PIN_PRECISION`, `RIDE_SLUG`, `PUSH_TOKEN`, `DATA_DIR`, `GOMEMLIMIT`, …) is in [README.md](README.md#configuration) — read it there rather than restating it.
+The full environment table (`SITE_URL`, `SITE_VISIBILITY`, `PIN_PRECISION`, `RIDE_SLUG`, `PUSH_TOKEN`, `DATA_DIR`, `GOMEMLIMIT`, …) is in [docs/OPERATIONS.md](docs/OPERATIONS.md#configuration) — read it there rather than restating it. The README carries a one-line-per-variable copy for self-hosters: a new or changed variable is updated in both, and in `.env.example`.
 
 ## Verifying a change
 
