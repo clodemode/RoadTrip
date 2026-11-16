@@ -245,6 +245,12 @@ scope_go() {   # scope_go <unit:0|1> <features:0|1>
     if [ "$frc" -eq 1 ]; then
       sed -n -E 's/^ *--- FAIL: (TestFeatures\/[^ ]+).*/FAILED \1/p' "$LOG_DIR"/features.*.log | awk '!s[$0]++' | head -n 50
       grep -hE 'panic:|^FAIL|test timed out' "$LOG_DIR"/features.*.log | head -n 10
+      # The reason, not only the name: the end of each shard that failed.
+      i=1
+      while [ "$i" -le "$shards" ]; do
+        [ "$(cat "$LOG_DIR/features.$i.rc" 2>/dev/null)" = 0 ] || { echo "--- shard $i/$shards, last lines:"; sed "s/$ESC\[[0-9;]*m//g" "$LOG_DIR/features.$i.log" | grep -v '^    --- PASS' | tail -n 60; }
+        i=$((i + 1))
+      done
     fi
     report features "$frc" "$(( $(date +%s) - ft0 ))" "$scen" "$scen scenarios and $steps steps passed in $shards shards; both test binaries compiled in ${built}s"
   fi
@@ -262,6 +268,11 @@ scope_go() {   # scope_go <unit:0|1> <features:0|1>
     if [ "$urc" -ne 0 ]; then
       sed -n -E 's/^--- FAIL: ([^ ]+).*/FAILED \1/p' "$LOG_DIR"/unit.[0-9]*.log | head -n 50
       grep -hE 'WARNING: DATA RACE|panic:|test timed out' "$LOG_DIR"/unit.[0-9]*.log | head -n 5
+      i=1
+      while [ "$i" -le "${ushards:-0}" ]; do
+        [ "$(cat "$LOG_DIR/unit.$i.rc" 2>/dev/null)" = 0 ] || { echo "--- unit shard $i/$ushards, what failed:"; grep -v -E '^(=== RUN|--- PASS|=== PAUSE|=== CONT|PASS$)' "$LOG_DIR/unit.$i.log" | tail -n 80; }
+        i=$((i + 1))
+      done
     elif [ "$ran" -ne "$listed" ]; then
       urc=3
       echo "gate: the unit binary lists $listed tests and $ran ran: a test in no shard is a test nobody ran (read $LOG_DIR/unit.list)"

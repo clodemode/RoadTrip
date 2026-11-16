@@ -93,8 +93,8 @@ jobs:
               rm -rf "$RUNNER_TEMP/seal-in"
               if gh run download "$id" -R "$repo" -n seal -D "$RUNNER_TEMP/seal-in" 2>/dev/null \
                  && [ -f "$RUNNER_TEMP/seal-in/seal.json" ]; then
-                c=$(jq -r '.commit // ""' "$RUNNER_TEMP/seal-in/seal.json")
-                d=$(jq -r '.digest // ""' "$RUNNER_TEMP/seal-in/seal.json")
+                c=$(jq -r '.commit // ""' "$RUNNER_TEMP/seal-in/seal.json" 2>/dev/null || true)
+                d=$(jq -r '.digest // ""' "$RUNNER_TEMP/seal-in/seal.json" 2>/dev/null || true)
                 if [ "$c" = "$sha" ] && printf '%s' "$d" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
                   proven=true; digest="$d"; proof="Deploy run $id sealed this commit as $d"
                   break
@@ -226,7 +226,7 @@ jobs:
           WANT: ${{ steps.seal.outputs.digest }}
         run: |
           want="$WANT"
-          got=$(flyctl machine list -a "$FLY_APP" --json | jq -r '[.[].image_ref.digest] | unique | join(" ")')
+          got=$(flyctl machine list -a "$FLY_APP" --json | jq -r '[.[].image_ref.digest] | unique | join(" ")' || true)
           echo "machines run: ${got:-nothing}; sealed: $want"
           if [ "$got" != "$want" ]; then
             echo "::error title=digest::the machines run '${got:-nothing}', not the sealed $want"; exit 1
@@ -242,7 +242,7 @@ jobs:
         run: |
           body=$(curl -sS --fail --max-time 20 --retry 8 --retry-delay 3 --retry-all-errors "$PROBE_URL") || {
             echo "::error title=probe::$PROBE_URL did not answer 200; the release may be bad"; exit 1; }
-          serving=$(printf '%s' "$body" | jq -r '.commit // ""')
+          serving=$(printf '%s' "$body" | jq -r '.commit // ""' 2>/dev/null || true)
           echo "$PROBE_URL → $body"
           if [ "$serving" != "$GITHUB_SHA" ]; then
             echo "::error title=probe::the instance serves commit '${serving:-none named}', not $GITHUB_SHA"; exit 1
