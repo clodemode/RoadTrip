@@ -652,3 +652,30 @@ body:has(.listen-dock) { padding-bottom: calc(6rem + env(safe-area-inset-bottom)
 .photo-view-fit { display: block; margin: 0 auto; max-width: 100%; max-height: 78vh; max-height: 78dvh; width: auto; height: auto; object-fit: contain; border-radius: var(--ds-radius); }
 .photo-view-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .6rem 0; }
 .photo-view-links a { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* --- the latest at a glance (latest.go) ----------------------------------------
+   Up to three small tiles in one row, first on the Ride page, so the latest
+   point, song and photo are on the first screen of a phone. Equal columns for
+   however many tiles there are; each tile is one link, at least 44px tall. */
+.latest { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: .4rem; margin: .5rem 0; }
+.latest-tile { display: flex; flex-direction: column; justify-content: center; gap: .1rem; min-width: 0; min-height: 44px;
+  padding: .4rem .5rem; border: 1px solid var(--ds-hairline); border-radius: var(--ds-radius); background: #fff;
+  color: inherit; text-decoration: none; line-height: 1.2; }
+.latest-tile:hover { border-color: var(--bs-primary); }
+.latest-k { font-size: .68rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--bs-secondary-color); }
+.latest-v { font-size: .9rem; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.latest-t { font-size: .72rem; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+/* The photo tile on a phone is the label over the picture, with no room for a
+   time; from 576px the picture sits beside the label and the time. */
+.latest-photo img { order: 2; width: 100%; height: 44px; object-fit: cover; border-radius: 6px; }
+.latest-photo .latest-t { display: none; }
+@media (min-width: 576px) {
+  .latest-tile { padding: .5rem .75rem; } .latest-v { font-size: 1rem; } .latest-t { font-size: .8rem; }
+  .latest-photo { display: grid; grid-template-columns: 48px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: .6rem; align-content: center; }
+  .latest-photo img { order: 0; grid-row: 1 / span 2; width: 48px; height: 48px; }
+  .latest-photo .latest-t { display: -webkit-box; }
+}
+/* A tile's link lands on its row or card with a little room above it. */
+.cp, .post { scroll-margin-top: 3rem; }
+.photo-step { justify-content: space-between; }

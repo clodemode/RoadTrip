@@ -1047,6 +1047,7 @@ func (a *App) ridePage(w http.ResponseWriter, r *http.Request, ask *listenAsk) {
 	}
 	np := a.nowPlayingFor(rv.Ride.Slug, time.Now()) // nil: no plays, no card
 	data["NowPlaying"] = np
+	data["Latest"] = a.latestFor(rv, posts, time.Now()) // nil: nothing yet, no strip
 	data["ListenLine"] = a.listenLine(rv.Ride.Slug)
 	if !a.listenCard(w, r, data, np, rv.Ride.Name, ask) {
 		return
@@ -3464,9 +3465,26 @@ func (a *App) photoView(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// Previous is the older photo and Next the newer one, over the whole ride
+	// in the order the photos page lists them. Zero means there is none.
+	var prev, next int64
+	if posts, err := a.store.Posts(rv.Ride.Slug, 0); err == nil {
+		var last int64
+		for _, p := range posts {
+			if p.Photo == nil {
+				continue
+			}
+			if p.ID == post.ID {
+				prev = last
+			} else if last == post.ID {
+				next = p.ID
+			}
+			last = p.ID
+		}
+	}
 	a.render(w, r, "photo.html", map[string]any{
 		"Title": "Photo", "Ride": rv.Ride, "PageLeg": post.LegSlug,
-		"P": post, "Photo": post.Photo})
+		"P": post, "Photo": post.Photo, "PrevID": prev, "NextID": next})
 }
 
 func legInRide(legs []Leg, id int64) bool {

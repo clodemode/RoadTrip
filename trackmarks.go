@@ -33,8 +33,9 @@ VALUES(?,?,?,?,?,?,?,?,?)`, user, kind, albumID, album, artist, idx, title, pos,
 	return err
 }
 
+// TrackMarks is a user's saved music, oldest first, like every other list.
 func (s *Store) TrackMarks(user string) ([]TrackMark, error) {
-	rows, err := s.db.Query(`SELECT id, kind, album, artist, title, position_s FROM track_marks WHERE user = ? ORDER BY id DESC`, user)
+	rows, err := s.db.Query(`SELECT id, kind, album, artist, title, position_s FROM track_marks WHERE user = ? ORDER BY id`, user)
 	if err != nil {
 		return nil, err
 	}

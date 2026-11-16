@@ -779,7 +779,7 @@ func (a *App) chesterContext(now time.Time, lat, lng *float64) (*chesterContext,
 			cx.Pos.Snapped, cx.Pos.Label = true, "near "+pc.Name
 		}
 		posNote = fmt.Sprintf("%s, %s, sent from the phone just now.", num3(pub.Lat), num3(pub.Lng))
-	} else if posts, err := a.store.Posts(rv.Ride.Slug, 0); err == nil {
+	} else if posts, err := a.store.PostsNewestFirst(rv.Ride.Slug, 0); err == nil {
 		for _, p := range posts {
 			if p.Lat == nil || p.Lng == nil || p.HideLocation {
 				continue

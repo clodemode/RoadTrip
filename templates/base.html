@@ -82,7 +82,7 @@
 </html>
 {{end}}
 
-{{define "stop_row"}}<li class="cp{{if .IsStart}} start{{end}}{{if .Next}} next{{end}}{{if .ArrivedAt}} arrived{{end}}{{if .SkippedAt}} skipped{{end}}" style="--leg:{{legColor .LegOrd}}">
+{{define "stop_row"}}<li class="cp{{if .IsStart}} start{{end}}{{if .Next}} next{{end}}{{if .ArrivedAt}} arrived{{end}}{{if .SkippedAt}} skipped{{end}}" id="cp-{{.ID}}" style="--leg:{{legColor .LegOrd}}">
       <span class="cp-n">{{.Mark}}</span>
       <span class="cp-main">
         <span class="cp-name">{{.Name}}</span>
