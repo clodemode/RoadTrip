@@ -81,12 +81,21 @@ func (f *framed) Flush() {
 }
 func (f *framed) Unwrap() http.ResponseWriter { return f.ResponseWriter }
 
-// frameGuard says only this site may frame any answer, and keeps a redirect
-// made for the frame inside it.
+// frameGuard puts the headers every answer carries, and keeps a redirect made
+// for the frame inside it. Only this site may frame an answer: the player
+// shell frames the site's own pages, so the policy is same-origin and never
+// "deny". The browser is told to stay on https for a year (it ignores that on
+// plain http, so a local run is unaffected), not to guess a content type, and
+// to send another site the origin alone. There is no script-src yet: six
+// templates carry inline scripts, and a policy that drops them stops the
+// driver page.
 func frameGuard(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		if embedded(r) {
 			w = &framed{ResponseWriter: w, host: r.Host}
 		}

@@ -29,8 +29,9 @@ import (
 // page carries, so "contains the exact point" is the absence of those decimal
 // strings.
 type fuzzWorld struct {
-	p *postWorld
-	s *scWorld
+	exactAtPrivate bool // the form carries exact_at_private=yes
+	p              *postWorld
+	s              *scWorld
 
 	postID             int64   // the post under test
 	exactLat, exactLng float64 // where it was pinned exactly, or the photo's own GPS
@@ -121,6 +122,9 @@ func (w *fuzzWorld) postPhoto(fuzz bool) error {
 	_ = mw.WriteField("leg_id", strconv.FormatInt(p.cps[0].LegID, 10))
 	_ = mw.WriteField("kind", "photo")
 	_ = mw.WriteField("fuzz_choice", "1")
+	if w.exactAtPrivate {
+		_ = mw.WriteField("exact_at_private", "yes") // the second yes a private place asks for
+	}
 	if fuzz {
 		_ = mw.WriteField("fuzz_location", "1")
 	}
@@ -471,6 +475,7 @@ func (w *fuzzWorld) bPrivate() error {
 func (w *fuzzWorld) pinnedAtBUnfuzzed() error {
 	w.exactLat, w.exactLng = bRawLat, bRawLng
 	w.p.photo = jpegGPSAt("2026:11:07 12:00:00", w.exactLat, w.exactLng)
+	w.exactAtPrivate = true
 	if err := w.postPhoto(false); err != nil {
 		return err
 	}

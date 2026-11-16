@@ -61,16 +61,22 @@ func TestDriverIsRefusedOnARideTheyAreNotAssignedTo(t *testing.T) {
 	}
 }
 
-// Naming the other ride does not get round it: ?ride= and the form's ride.
+// Naming a ride in the address changes nothing: the ride is the one the site
+// shows. Bob is on the other ride, and naming it must not let him onto this one
+// (it used to: the named ride was checked and the shown ride was written).
 func TestDriverCannotReachAnotherRideByNamingIt(t *testing.T) {
 	app, ann, bob, _ := ridesApp(t)
 	other := app.rideSlug
-	if w := doAs(t, app, ann, "GET", "/driver/posts.json?ride="+other, nil); w.Code != http.StatusForbidden {
-		t.Errorf("ann reading ride %s by name: %d, want 403", other, w.Code)
+	if w := doAs(t, app, ann, "GET", "/driver/posts.json?ride="+other, nil); w.Code != http.StatusOK {
+		t.Errorf("ann on the shown ride, naming %s: %d, want 200 (the name is ignored)", other, w.Code)
 	}
-	// Bob is on the other ride: naming it is allowed (never 403).
-	if w := doAs(t, app, bob, "GET", "/driver/posts.json?ride="+other, nil); w.Code == http.StatusForbidden {
-		t.Errorf("bob reading his own ride by name was refused")
+	for _, p := range []string{"/driver/posts.json?ride=" + other, "/driver/post?ride=" + other, "/route.geojson?ride=" + other} {
+		if w := doAs(t, app, bob, "GET", p, nil); w.Code != http.StatusForbidden {
+			t.Errorf("bob naming his own ride on GET %s: %d, want 403", p, w.Code)
+		}
+	}
+	if w := doAs(t, app, bob, "POST", "/driver/post?ride="+other, url.Values{"x": {"1"}}); w.Code != http.StatusForbidden {
+		t.Errorf("bob POST /driver/post?ride=%s: %d, want 403", other, w.Code)
 	}
 }
 

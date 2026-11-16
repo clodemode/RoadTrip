@@ -328,6 +328,10 @@ func (a *App) photoRemove(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if _, err := a.ridePost(id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
 	now := a.photoNow()
 	a.sweepPhotoHolds(now)
 	a.photoBack(w, r, a.removePhoto(id, now))
@@ -337,6 +341,10 @@ func (a *App) photoRemove(w http.ResponseWriter, r *http.Request) {
 func (a *App) photoUndo(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := a.ridePost(id); err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -355,6 +363,9 @@ func (a *App) photosRemove(w http.ResponseWriter, r *http.Request) {
 	n := 0
 	var last error
 	for _, id := range a.postIDs(r) {
+		if _, err := a.ridePost(id); err != nil {
+			continue // a post of another ride is not on this page
+		}
 		if err := a.removePhoto(id, now); err != nil {
 			last = err
 			continue
@@ -374,6 +385,9 @@ func (a *App) photosUndo(w http.ResponseWriter, r *http.Request) {
 	holds, _ := a.store.HeldAll()
 	n := 0
 	for _, h := range holds {
+		if _, err := a.ridePost(h.PostID); err != nil {
+			continue
+		}
 		if a.undoPhoto(h.PostID, now) == nil {
 			n++
 		}

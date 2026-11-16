@@ -63,6 +63,7 @@ func TestFeatures(t *testing.T) {
 				initPhotoMarkerScenarios(t, sc)
 				initListenCountScenarios(t, sc)
 				initStackedSetupScenarios(t, sc)
+				initAuditSecurityScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

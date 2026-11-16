@@ -135,7 +135,8 @@
       <span class="muted small">make this location inexact</span></form>
     {{else if .CanUnfuzz}}<form method="post" action="/driver/post/{{.ID}}/unfuzz" class="post-fuzz">
       <button class="btn btn-sm btn-outline-secondary">Unfuzz</button>
-      <span class="muted small">this location is fuzzy</span></form>{{end}}
+      <span class="muted small">this location is fuzzy</span>
+      <label class="form-check small m-0"><input class="form-check-input" type="checkbox" name="exact_at_private" value="yes"> exact even at a private place</label></form>{{end}}
     {{if .Photo}}<form method="post" action="/driver/post/{{.ID}}/photo/remove" class="post-photo-remove">
       <button class="btn btn-sm btn-outline-danger">Remove photo</button>
       <span class="muted small">keeps the post as a marker</span></form>
@@ -153,6 +154,7 @@
           <option value="none">no pin</option>
         </select></label>
       <label class="form-check touch"><input class="form-check-input" type="checkbox" name="fuzz_location" value="1"{{if .PinFuzzed}} checked{{end}}> Fuzz</label>
+      <label class="form-check small m-0"><input class="form-check-input" type="checkbox" name="exact_at_private" value="yes"> exact even at a private place</label>
       <button class="btn btn-sm btn-outline-primary">Apply</button>
     </form>
     {{end}}
