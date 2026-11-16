@@ -16,6 +16,11 @@
   var el = document.getElementById('map');
   if (!el || typeof L === 'undefined') return;
   var data = window.RIDE || { legs: [], checkpoints: [], sights: [], posts: [] };
+  // A page drawn from a past or next trip (?ride=) keeps its leg links on it.
+  var rideQ = (function () {
+    var m = /[?&]ride=([a-z0-9-]+)/.exec((typeof location !== 'undefined' && location.search) || '');
+    return m ? '?ride=' + m[1] : '';
+  })();
 
   var map = L.map('map', {
     // Scrolling the page with the pointer over the map must not zoom it.
@@ -53,7 +58,7 @@
     var line = L.polyline(pts, style).addTo(legLayer);
     line.bindPopup('<div class="popup"><h3>Leg ' + leg.ord + '</h3><p>' + esc(leg.name) +
       '</p><p class="muted">' + esc(leg.date) + (driven[leg.ord] ? ' &middot; planned' : '') +
-      '</p><p><a href="/legs/' + esc(leg.slug) + '">Open leg &rarr;</a></p></div>');
+      '</p><p><a href="/legs/' + esc(leg.slug) + rideQ + '">Open leg &rarr;</a></p></div>');
     all = all.concat(pts);
   });
 
@@ -130,7 +135,7 @@
        not a place the ride was stamped at. That first stretch is drawn lighter
        and dashed, so the line never claims more than is known. */
     var solid = pts, popup = '<div class="popup"><h3>Leg ' + t.leg + ' &middot; driven</h3><p>' + esc(t.name) +
-      '</p><p class="muted">the actual track</p><p><a href="/legs/' + esc(t.slug) +
+      '</p><p class="muted">the actual track</p><p><a href="/legs/' + esc(t.slug) + rideQ +
       '">Open leg &rarr;</a></p></div>';
     if (t.planned_start) {
       L.polyline([pts[0], pts[1]], { color: t.color, weight: 5, opacity: 0.6, dashArray: '2,9' })

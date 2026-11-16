@@ -39,7 +39,7 @@
     </li>
     {{range .Legs}}
     <li class="leg-chip{{if and $.Day.Today (eq $.Day.Today.ID .ID)}} today{{end}}" style="--leg:{{legColor .Ord}}">
-      <a href="/legs/{{.Slug}}">
+      <a href="/legs/{{.Slug}}{{$.RideQ}}">
         {{if $.Multi}}<span class="leg-n">d{{.Ord}}</span>{{end}}
         <span class="leg-name">{{.Name}}</span>
         <span class="leg-sub figure">{{day .Date}} &middot; {{num .EstMiles}} mi</span>

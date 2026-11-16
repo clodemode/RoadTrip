@@ -46,6 +46,17 @@ on an embedded seed.
 moves every page, the post form and `/route.geojson` together. The ride that
 stops being shown is not touched: it stays in the database whole.
 
+**Looking at another trip** never moves the active ride. The Ride page (and a
+leg page) carries a **Trip** picker, a plain `GET ?ride=<slug>`, grouped
+Current, Next and Past by start date against the active ride. A visitor is
+offered the current trip and the past ones; a next trip is where someone will
+be and when, so it is offered only to a signed-in user who may ride it, and a
+visitor who asks for one by slug is shown the current trip as if nothing was
+asked. A page drawn from another trip says so, links back to the current one,
+and carries none of the ride's tools. The trip-keeper's switch that *does*
+move the active ride is on the Plan and Driver pages. Both lists are the trips
+on the volume plus the active ride (`ridepick.go`).
+
 ## Options
 
 A trip document is the seed shape plus three optional top-level keys:
