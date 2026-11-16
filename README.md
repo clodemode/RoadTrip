@@ -63,10 +63,10 @@ curl -s -H 'Authorization: Bearer local-dev-token' -H 'Content-Type: application
 ```
 
 Open <http://localhost:8080>. To post, sign in at
-<http://localhost:8080/driver/login> with username `kris` and the password
-`change-me-please`. The first user is always named `kris` (see
-[Known limits](#known-limits-for-self-hosters)); once signed in you can add
-a user under your own name at `/driver/users`.
+<http://localhost:8080/driver/login> with username `admin` and the password
+`change-me-please`. The first user is named by `ADMIN_USERNAME` (`admin` when
+unset); once signed in you can add a user under your own name at
+`/driver/users`.
 
 What those settings did:
 
@@ -315,8 +315,6 @@ More on Chester, including what it is told and what each question costs:
 RoadTrip was built for one family's trips and is being opened up. These
 still assume the maintainers' setup:
 
-- The first user is always named `kris`. Sign in as that user, create your
-  own admin at `/driver/users`, then disable `kris` there.
 - The ride page prints "Trip-keeper: Kris", and the footer and badge say
   "Built with CLODE" and link to the maintainers' GitHub organisation.
 - The maintainers' first trip (a route between two cities, with its private
