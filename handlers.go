@@ -481,7 +481,14 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	// Driver: signed in AND on the ride the site shows. The ride's tools (post,
 	// lodging, GeoJSON, plan controls) are drawn only for these.
 	data["Driver"] = authed && a.auth.mayRide(r, a.activeSlug(), a.activeSlug())
-	if data["Driver"] == true && (name == "index.html" || name == "plan.html") {
+	if data["LookingAt"] != nil {
+		// A past or next trip is read, never driven: none of the ride's tools.
+		data["Driver"] = false
+	}
+	// The switch that changes the trip the site shows: the trip-keeper's, on
+	// the pages a trip is chosen from (ridepick.go). The Ride page carries the
+	// look-at picker instead, for everyone.
+	if a.auth.IsAdmin(r) && (name == "plan.html" || name == "driver.html") {
 		data["TripSwitch"] = a.tripSwitch()
 	}
 	if authed {
@@ -559,8 +566,12 @@ type rideView struct {
 // loadRide reads the ACTIVE ride (activeSlug), which is why every page, the
 // post form and the open data all move together when the trip-keeper switches
 // rides, and why none of them can show a ride the others do not.
-func (a *App) loadRide() (*rideView, error) {
-	ride, err := a.store.Ride(a.activeSlug())
+func (a *App) loadRide() (*rideView, error) { return a.loadRideSlug(a.activeSlug()) }
+
+// loadRideSlug is loadRide for a named ride: the Ride and leg pages draw a
+// past or next trip the viewer may look at (ridepick.go).
+func (a *App) loadRideSlug(slug string) (*rideView, error) {
+	ride, err := a.store.Ride(slug)
 	if err != nil {
 		return nil, err
 	}
@@ -1009,7 +1020,11 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) { a.ridePage(w, r, n
 // ridePage is the Ride page. ask is nil for "/", and what a Listen Inn address
 // asks for otherwise (listeninn.go).
 func (a *App) ridePage(w http.ResponseWriter, r *http.Request, ask *listenAsk) {
-	rv, err := a.loadRide()
+	viewed := a.activeSlug()
+	if ask == nil {
+		viewed = a.viewedSlug(r)
+	}
+	rv, err := a.loadRideSlug(viewed)
 	if err != nil {
 		http.Error(w, "ride "+a.activeSlug()+" is not seeded", http.StatusNotFound)
 		return
@@ -1035,6 +1050,13 @@ func (a *App) ridePage(w http.ResponseWriter, r *http.Request, ask *listenAsk) {
 		"NextID": nextOpenID(rv.Legs), "DriveStarted": driveStarted(rv.Legs),
 		"NavLegID": navLegID, "NavAddr": a.navAddresses(r),
 		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, a.withTrail(rv.Ride.Slug, posts)), plannedStarts(rv.Legs, a.withTrail(rv.Ride.Slug, posts))), bars)}
+	a.lookingAt(r, data, viewed)
+	if data["LookingAt"] != nil {
+		// Another trip than the one the site shows: a record to read, with no
+		// tools, no day's end and nothing playing. The page is drawn below.
+		a.render(w, r, "index.html", data)
+		return
+	}
 	// The day's end and Add a stop: the trip-keeper's, and nobody else's. A
 	// visitor's page carries no navigator link and no place search.
 	// A finished ride has no day's end to navigate to: the page is a record.
@@ -1056,7 +1078,8 @@ func (a *App) ridePage(w http.ResponseWriter, r *http.Request, ask *listenAsk) {
 }
 
 func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
-	rv, err := a.loadRide()
+	viewed := a.viewedSlug(r)
+	rv, err := a.loadRideSlug(viewed)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -1089,7 +1112,7 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 	if dl := defaultLeg(rv.Legs, di); dl != nil {
 		navLegID = dl.ID
 	}
-	a.render(w, r, "leg.html", map[string]any{
+	data := map[string]any{
 		"Title": leg.Name, "Ride": rv.Ride, "Leg": leg, "Prev": prev, "Next": next,
 		"Posts": posts, "Day": di, "Total": len(rv.Legs), "Multi": len(rv.Legs) > 1,
 		"NextID":   nextOpenID(rv.Legs),
@@ -1097,7 +1120,9 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 		// The tracks are computed over the whole ride so this leg's own track
 		// still begins where the day before it ended.
 		"Map":     withHours(buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, a.withTrail(rv.Ride.Slug, posts)), plannedStarts(rv.Legs, a.withTrail(rv.Ride.Slug, posts))), bars),
-		"PageLeg": leg.Slug})
+		"PageLeg": leg.Slug}
+	a.lookingAt(r, data, viewed)
+	a.render(w, r, "leg.html", data)
 }
 
 // stopRow is what the stop_row template is called with: the checkpoint plus

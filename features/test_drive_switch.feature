@@ -1,6 +1,6 @@
 Feature: The trip-keeper swaps between trips, and Plan shows day summaries, not an hours timeline
   The site shows one trip. A signed-in trip-keeper can swap it for a test drive
-  and back from any page. Plan summarises each day; there is no row of hour
+  and back from the Plan and Driver pages, and look at it from the Ride page. Plan summarises each day; there is no row of hour
   dots on any page.
 
   Background:
@@ -27,7 +27,7 @@ Feature: The trip-keeper swaps between trips, and Plan shows day summaries, not 
     When the trip-keeper reads "/plan?embed=1"
     Then the page offers a switch to "Test Drive"
     When the trip-keeper reads "/driver?embed=1"
-    Then the page has no trip switch
+    Then the page offers a switch to "Test Drive"
     When the trip-keeper switches to "Test Drive" from "/plan"
     Then the answer returns to "/plan"
     And the site shows "Test Drive"

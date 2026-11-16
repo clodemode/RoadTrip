@@ -625,9 +625,13 @@ body:has(.listen-dock) { padding-bottom: calc(6rem + env(safe-area-inset-bottom)
 .pagehead { max-width: 1000px; margin: 0 auto; padding: .5rem 16px 0; }
 .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0 .4rem; font-size: .9rem; color: #4b5563; }
 .crumbs a { display: inline-flex; align-items: center; min-height: 44px; }
-.trip-switch { display: flex; flex-wrap: wrap; gap: .4rem; margin: .25rem 0 .5rem; }
-.trip-switch .btn { min-height: 44px; }
-.trip-switch .btn:disabled { opacity: 1; }
+/* The trip pickers (ridepick.go): the keeper's switch and everyone's look-at picker. */
+.trip-switch, .ride-pick { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .25rem 0 .5rem; }
+.trip-switch label, .ride-pick label { font-size: .9rem; color: #4b5563; }
+.trip-switch .form-select, .ride-pick .form-select { width: auto; max-width: 100%; min-height: 44px; }
+.trip-switch .btn, .ride-pick .btn { min-height: 44px; }
+.looking-at { margin: .25rem 0 .5rem; padding: .5rem .75rem; border-left: 4px solid #2563eb; background: #eff6ff; color: #1e3a8a; border-radius: .25rem; }
+.looking-at a { font-weight: 600; }
 .crumbs .sep { color: #9ca3af; }
 .crumbs [aria-current="page"] { font-weight: 600; color: #111827; }
 .pagehead h1 { margin: 0 0 .25rem; }

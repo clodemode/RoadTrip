@@ -61,8 +61,20 @@
     {{range $i, $c := .Crumbs}}{{if $i}}<span class="sep" aria-hidden="true">›</span>{{end}}{{if $c.Href}}<a href="{{$c.Href}}">{{$c.Label}}</a>{{else}}<span aria-current="page">{{$c.Label}}</span>{{end}}{{end}}
   </nav>
   {{with .TripSwitch}}<form class="trip-switch" method="post" action="/driver/ride/active" target="_top" aria-label="Switch trip">
-    {{range .}}<button type="submit" name="slug" value="{{.Slug}}" class="btn btn-sm {{if .Active}}btn-primary{{else}}btn-outline-secondary{{end}}"{{if .Active}} aria-current="true" disabled{{end}}>{{.Name}}</button>
-    {{end}}</form>{{end}}
+    <label for="trip-switch-slug">Trip the site shows</label>
+    <select id="trip-switch-slug" name="slug" class="form-select form-select-sm">
+      {{range .}}<optgroup label="{{.Label}}">{{range .Choices}}<option value="{{.Slug}}"{{if .Selected}} selected{{end}}>{{.Name}}{{if .StartDate}} &middot; {{.StartDate}}{{end}}</option>{{end}}</optgroup>
+      {{end}}</select>
+    <button type="submit" class="btn btn-sm btn-primary">Show this trip</button>
+  </form>{{end}}
+  {{with .RidePick}}<form class="ride-pick" method="get" aria-label="Choose a trip to look at">
+    <label for="ride-pick-slug">Trip</label>
+    <select id="ride-pick-slug" name="ride" class="form-select form-select-sm">
+      {{range .}}<optgroup label="{{.Label}}">{{range .Choices}}<option value="{{.Slug}}"{{if .Selected}} selected{{end}}>{{.Name}}{{if .StartDate}} &middot; {{.StartDate}}{{end}}</option>{{end}}</optgroup>
+      {{end}}</select>
+    <button type="submit" class="btn btn-sm btn-outline-secondary">Look</button>
+  </form>{{end}}
+  {{with .LookingAt}}<p class="looking-at" role="status">You are looking at {{if eq .When "past"}}a past trip{{else}}the next trip{{end}}, <strong>{{.Name}}</strong>. <a href="/">Back to the current trip</a></p>{{end}}
   <h1>{{.PageTitle}}</h1>
 </div>
 
