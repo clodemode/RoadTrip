@@ -218,15 +218,14 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/post/{id}/edit", a.requireRide(a.postEditSave))
 	mux.Handle("GET /driver/lodging", a.requireRide(a.lodgingForm))
 	mux.Handle("POST /driver/lodging", a.requireRide(a.lodgingSave))
-	// The data carriage's landing point. Same admin session as every other
-	// /driver route — the carriage signs in the way a person does, so there is
-	// no second credential and no second auth path to get wrong.
-	mux.Handle("POST /driver/private", a.requireAuth(a.privatePush))
+	// The data carriage's landing point: an admin's session or the push token
+	// (requireKeeper). A driver is not the trip-keeper and gets a 403.
+	mux.Handle("POST /driver/private", a.requireKeeper(a.privatePush))
 	// The trip carriage and its switches: a trip document onto the volume,
 	// which ride the site shows, and the saved selection. Same gate as above.
-	mux.Handle("POST /driver/trip", a.requireAuth(a.tripPush))
-	mux.Handle("POST /driver/ride/active", a.requireAuth(a.rideActivate))
-	mux.Handle("GET /driver/rides.json", a.requireAuth(a.ridesJSON))
+	mux.Handle("POST /driver/trip", a.requireKeeper(a.tripPush))
+	mux.Handle("POST /driver/ride/active", a.requireKeeper(a.rideActivate))
+	mux.Handle("GET /driver/rides.json", a.requireKeeper(a.ridesJSON))
 	mux.Handle("POST /driver/plan", a.requireRide(a.planSave))
 	mux.Handle("POST /driver/routing", a.requireRide(a.routingAdd))
 	// Chester, the en-route helper, and its log. Signed in only, every one:
@@ -336,16 +335,15 @@ func logRequests(h http.Handler) http.Handler {
 }
 
 // requireRide is requireAuth plus a ride check: a driver is on the ride the
-// request is for or gets a 403. The ride is ?ride= when named, else the ride the
-// site shows. An admin and the push token are on every ride. A write that names
-// its ride in the form is checked again where the form is read.
+// site shows or gets a 403. Every handler behind it reads and writes that ride
+// and no other, so nothing in the address names a ride: a ?ride= here was once
+// checked instead of the shown ride and let a driver of one ride write to
+// another (audit, 2026-11-16). An admin and the push token are on every ride.
+// A handler that takes a post by its number asks ridePost for it.
 func (a *App) requireRide(next http.HandlerFunc) http.Handler {
 	return a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		slug := a.activeSlug()
-		if v := strings.TrimSpace(r.URL.Query().Get("ride")); v != "" {
-			slug = v
-		}
-		if !a.auth.mayRide(r, slug, a.activeSlug()) {
+		if !a.auth.mayRide(r, slug, slug) {
 			a.refuseRide(w, r)
 			return
 		}
@@ -356,6 +354,40 @@ func (a *App) requireRide(next http.HandlerFunc) http.Handler {
 func (a *App) refuseRide(w http.ResponseWriter, r *http.Request) {
 	log.Printf("refused: %s %s, %s is not assigned to that ride", r.Method, r.URL.Path, a.userOf(r))
 	http.Error(w, "not your ride: an admin has not assigned you to it", http.StatusForbidden)
+}
+
+// requireKeeper guards the trip-keeper's carriage routes: a trip document, the
+// ride the site shows, the private overlay and the list of every ride. An
+// admin or the push token passes; a driver gets a 403. It is not requireAdmin
+// because the push token is how the carriage arrives (the Data workflow posts
+// /driver/private with it), and requireAdmin refuses a machine.
+func (a *App) requireKeeper(next http.HandlerFunc) http.Handler {
+	return a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if !a.auth.pushAuthed(r) && !a.auth.IsAdmin(r) {
+			log.Printf("refused: %s %s, %s is not an admin", r.Method, r.URL.Path, a.userOf(r))
+			http.Error(w, "admins only", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	})
+}
+
+// ridePost is Store.Post for a handler behind requireRide: the post, only if
+// it is on a leg of the ride the site shows. A post of any other ride is the
+// same answer as no such post, so its number tells a driver nothing.
+func (a *App) ridePost(id int64) (*Post, error) {
+	p, err := a.store.Post(id)
+	if err != nil {
+		return nil, err
+	}
+	legs, err := a.store.Legs(a.activeSlug())
+	if err != nil {
+		return nil, err
+	}
+	if !legInRide(legs, p.LegID) {
+		return nil, fmt.Errorf("post %d is not on the ride the site shows", id)
+	}
+	return p, nil
 }
 
 // requireAdmin is requireAuth plus a role check: a signed-in editor, and the
@@ -2476,6 +2508,11 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// A checkpoint of another ride is no checkpoint here (see ridePost).
+	if legs, err := a.store.Legs(a.activeSlug()); err != nil || !legInRide(legs, cp.LegID) {
+		http.NotFound(w, r)
+		return
+	}
 	_ = r.ParseForm()
 
 	clearing := r.PostFormValue("clear") != ""
@@ -2523,7 +2560,7 @@ func (a *App) checkpointArrive(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "post_id is not a post id", http.StatusBadRequest)
 			return
 		}
-		p, err := a.store.Post(n)
+		p, err := a.ridePost(n)
 		if err != nil {
 			http.Error(w, "no post "+pid, http.StatusNotFound)
 			return
@@ -2695,7 +2732,7 @@ func (a *App) postDelete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	p, err := a.store.Post(id)
+	p, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -2719,7 +2756,7 @@ func (a *App) postRepin(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	post, err := a.store.Post(id)
+	post, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -2813,7 +2850,7 @@ func (a *App) postFuzz(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	post, err := a.store.Post(id)
+	post, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -2847,7 +2884,7 @@ func (a *App) postUnfuzz(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, err := a.store.Post(id); err != nil {
+	if _, err := a.ridePost(id); err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -3106,7 +3143,7 @@ func (a *App) postEditForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	post, err := a.store.Post(id)
+	post, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -3149,7 +3186,7 @@ func (a *App) postEditSave(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	post, err := a.store.Post(id)
+	post, err := a.ridePost(id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
