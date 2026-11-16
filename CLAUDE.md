@@ -70,7 +70,11 @@ The full environment table (`SITE_URL`, `SITE_VISIBILITY`, `PIN_PRECISION`, `RID
 
 ## Verifying a change
 
-Deterministic first, browser second:
+Deterministic first, browser second. **Run what the change can reach, not everything.** A docs-only change (README, `docs/`, comments) runs the formatter and the tests that read those files or scan the tree, by name, in about two seconds, and the push gate is the gate:
+```bash
+go test -count=1 -run 'TestRepo|TestChester.*(Limit|Cap)|TestLineEndThreshold' .
+```
+The whole suite below is for a change to behaviour, and for a release. Several threads running it on one host at once push it past `go test`'s 10-minute limit.
 
 1. `go test -count=1 ./...` (about 70 s; CI adds `-race` on everything but the scenarios, which take 9 to 16 minutes under it) — the fixtures seed a throwaway SQLite from the embedded geojson. No service, no container, no network. With no Go toolchain on the host, run it in Docker:
    ```bash
