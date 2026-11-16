@@ -132,7 +132,9 @@ jobs:
         if: steps.prove.outputs.proven != 'true'
         with:
           go-version-file: go.mod
-          cache: true
+          # The gates action keeps the Go caches itself, keyed by commit; this
+          # one is keyed on go.sum alone and froze at its first save.
+          cache: false
 
       - uses: ./.github/actions/gates
         if: steps.prove.outputs.proven != 'true'
