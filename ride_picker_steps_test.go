@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cucumber/godog"
 )
@@ -128,6 +129,41 @@ func initRidePickerScenarios(t *testing.T, sc *godog.ScenarioContext) {
 			if !strings.Contains(form, g) {
 				return fmt.Errorf("the switch has no %s group", g)
 			}
+		}
+		return nil
+	})
+	sc.Step(`^the trip the ride picker site shows is finished$`, func() error {
+		cps := rideCheckpoints(mustLegs(t, app, app.activeSlug()))
+		at := time.Now()
+		for _, c := range []Checkpoint{cps[0], cps[len(cps)-1]} {
+			if err := app.store.SetArrived(c.ID, at, nil); err != nil {
+				return err
+			}
+		}
+		if !app.rideIsFinished() {
+			return fmt.Errorf("the trip the site shows is not finished")
+		}
+		return nil
+	})
+	groups := func(class string) string {
+		i := strings.Index(page, `class="`+class+`"`)
+		if i < 0 {
+			return ""
+		}
+		form := page[i : i+strings.Index(page[i:], "</form>")]
+		var got []string
+		for _, part := range strings.Split(form, `<optgroup label="`)[1:] {
+			got = append(got, part[:strings.Index(part, `"`)])
+		}
+		return strings.Join(got, ", ")
+	}
+	sc.Step(`^the ride picker (switch )?groups are "([^"]*)"$`, func(sw, want string) error {
+		class := "ride-pick"
+		if sw != "" {
+			class = "trip-switch"
+		}
+		if got := groups(class); got != want {
+			return fmt.Errorf("the %s groups are %q, want %q", class, got, want)
 		}
 		return nil
 	})

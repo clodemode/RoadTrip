@@ -74,7 +74,7 @@
       {{end}}</select>
     <button type="submit" class="btn btn-sm btn-outline-secondary">Look</button>
   </form>{{end}}
-  {{with .LookingAt}}<p class="looking-at" role="status">You are looking at {{if eq .When "past"}}a past trip{{else}}the next trip{{end}}, <strong>{{.Name}}</strong>. <a href="/">Back to the current trip</a></p>{{end}}
+  {{with .LookingAt}}<p class="looking-at" role="status">You are looking at {{if eq .When "past"}}a past trip{{else}}the next trip{{end}}, <strong>{{.Name}}</strong>. <a href="/">Back to the home page</a></p>{{end}}
   <h1>{{.PageTitle}}</h1>
 </div>
 
