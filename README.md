@@ -82,7 +82,7 @@ What those settings did:
 Stop and remove it with `docker rm -f roadtrip`. Add
 `docker volume rm roadtrip-data` to delete the data too.
 
-**Without Docker**, with Go 1.25 or newer:
+**Without Docker**, with Go 1.26.11 or newer:
 
 ```bash
 mkdir -p data

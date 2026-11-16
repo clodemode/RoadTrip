@@ -76,10 +76,10 @@ Deterministic first, browser second:
    ```bash
    GITDIR="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
    docker run --rm -v "$PWD":"$PWD" -v "$GITDIR":"$GITDIR" \
-     -v roadtrip-gomod:/go/pkg/mod -w "$PWD" golang:1.25 \
+     -v roadtrip-gomod:/go/pkg/mod -w "$PWD" golang:1.26 \
      sh -c 'apt-get update -qq >/dev/null && apt-get install -y -qq nodejs >/dev/null; test -z "$(gofmt -l .)" && go vet ./... && go build ./... && go test -count=1 ./...'
    ```
-   Two things in that command are load-bearing. `golang:1.25` has no `node`, and the Drive Tracks scenarios run it, so the command installs `nodejs` first (a red Drive Tracks run without it is the image, not the code). And the checkout is mounted at its **own path**, not `/src`, with its git directory beside it: in a `.wt/` worktree the `.git` file points at the main checkout's `.git/worktrees/...`, which must exist at that same path or `TestRepoHoldsNoTripDocument` cannot list files. `GITDIR` is the main `.git` from a worktree and the checkout's own `.git` in an ordinary one, so one command serves both. To run one scenario, replace the last `go test` with `go test -count=1 -run 'TestFeatures/<scenario_name_with_underscores>' .`.
+   Two things in that command are load-bearing. `golang:1.26` has no `node`, and the Drive Tracks scenarios run it, so the command installs `nodejs` first (a red Drive Tracks run without it is the image, not the code). And the checkout is mounted at its **own path**, not `/src`, with its git directory beside it: in a `.wt/` worktree the `.git` file points at the main checkout's `.git/worktrees/...`, which must exist at that same path or `TestRepoHoldsNoTripDocument` cannot list files. `GITDIR` is the main `.git` from a worktree and the checkout's own `.git` in an ordinary one, so one command serves both. To run one scenario, replace the last `go test` with `go test -count=1 -run 'TestFeatures/<scenario_name_with_underscores>' .`.
 2. Against a live instance, `GET /driver/posts.json` is the census — **every** post with its photo identity, signed-in only. `/route.geojson` (signed-in only) drops unpinned posts, so it cannot stand in for it. `GET /driver/rides.json` lists every ride with its row counts and which one is active; `GET /plan.json` is the active plan's days and totals. `GET /driver/chester/log.json` is every question Chester was asked, with its cost and its verdict.
 3. `/healthz` answers on any host, even while `SITE_VISIBILITY=private` closes the rest of the site.
 
