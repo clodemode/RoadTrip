@@ -30,7 +30,7 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 3. **Nothing private goes in the repo or the seed.** `$DATA_DIR/private.json` on the volume holds addresses and notes, keyed by ride and then by checkpoint ord (the top-level block is the first ride's), rendered only to the signed-in trip-keeper. Read one ride's entries with `privateData.forRide`, never the map directly. `git check-ignore` it before you commit anything near it.
 4. **Never render a coordinate that did not come out of the store.** Fuzzed checkpoints are snapped to 0.01° on the way out; a direct read bypasses the only place that protection exists.
 5. **Timezones are per-event, never per-ride.** Store UTC plus the IANA zone. A ride-wide zone misprints every stamp after the first state line.
-6. **`Deploy` is `workflow_dispatch` only, and `plan` is the default.** Never add a push trigger — the site is live under someone's thumb from a car.
+6. **`Deploy` is `workflow_dispatch` only, and `plan` is the default.** Never add a push trigger — the site is live under someone's thumb from a car. It never rebuilds at release: the image is minted once per commit and `apply` releases that digest.
 7. **The repo is PUBLIC** (`clodemode/RoadTrip`, CamelCaps = public under `naming-clodemode-repo-case-signals-visibility`). Do not treat it as publishable without an explicit ruling.
 8. **A new trip is never added to `seed/`.** It is a file on the volume, `$DATA_DIR/trips/<slug>.geojson`, pushed with `POST /driver/trip` and shown once `POST /driver/ride/active` names it. Fixtures are synthetic and live in `testdata/`; `guard_test.go` fails on a trip document anywhere else, and on a missing `data/` or planning-handoff line in `.gitignore` / `.dockerignore`.
 9. **`RIDE_SLUG` is only the fallback.** The ride the site shows is `App.activeSlug()`, read from the `meta` table per request. Never read `a.rideSlug` to decide what to render.
@@ -54,7 +54,8 @@ A live surface for one road trip. **Go static binary + SQLite**, deployed to **F
 | `templates/`, `static/` | server-rendered pages and assets |
 | `data/` | local volume stand-in — **gitignored**, holds `roadtrip.sqlite3`, `media/`, `private.json`, `trips/` |
 | `LORE/` | a NESTED clone of the private `clodemode/roadtrip-lore` (gitignored here); YAML LORE, canonical; `lore_yaml_load` materializes it into DB_INTENT. Commit there with `git -C LORE ...` or `lairs_git_commit(repo_name='roadtrip', files='LORE/...')` |
-| `.github/workflows/` | `ci.yml` (push/PR), `deploy.yml` (dispatch only), `data.yml` (by hand, writes `private.json` only) |
+| `.github/workflows/` | `ci.yml` (once per merge to trunk, the record), `deploy.yml` (dispatch only: prove, mint once, seal, release the digest), `data.yml` (by hand, writes `private.json` only) |
+| `scripts/ci/`, `scripts/hooks/`, `.certify/` | the gate: `gate.sh` (the one runner), `scopes.sh` + `.certify/scopes.map` (path to scopes), `seal.sh` (the release's whole run), `gate.Dockerfile`, the rig `tests/test_scopes.sh`, and the pre-push hook |
 
 ## Running locally
 
@@ -71,14 +72,18 @@ The full environment table (`SITE_URL`, `SITE_VISIBILITY`, `PIN_PRECISION`, `RID
 
 Deterministic first, browser second:
 
-1. `go test -count=1 ./...` (about 70 s; CI adds `-race` on everything but the scenarios, which take 9 to 16 minutes under it) — the fixtures seed a throwaway SQLite from the embedded geojson. No service, no container, no network. With no Go toolchain on the host, run it in Docker:
+1. The gate, by **test scope**. There is no Go toolchain on the host, so it runs in Docker, in an image built once (`scripts/ci/gate.Dockerfile`: Go plus node) with the module and build caches on named volumes:
    ```bash
-   GITDIR="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
-   docker run --rm -v "$PWD":"$PWD" -v "$GITDIR":"$GITDIR" \
-     -v roadtrip-gomod:/go/pkg/mod -w "$PWD" golang:1.25 \
-     sh -c 'apt-get update -qq >/dev/null && apt-get install -y -qq nodejs >/dev/null; test -z "$(gofmt -l .)" && go vet ./... && go build ./... && go test -count=1 ./...'
+   bash scripts/ci/gate.sh --docker --scopes whole            # everything a release owes but the image build
+   bash scripts/ci/gate.sh --docker --scopes static,features  # one scope, or a few
+   git diff --name-only origin/trunk... | bash scripts/ci/scopes.sh   # which scopes this branch owes
    ```
-   Two things in that command are load-bearing. `golang:1.25` has no `node`, and the Drive Tracks scenarios run it, so the command installs `nodejs` first (a red Drive Tracks run without it is the image, not the code). And the checkout is mounted at its **own path**, not `/src`, with its git directory beside it: in a `.wt/` worktree the `.git` file points at the main checkout's `.git/worktrees/...`, which must exist at that same path or `TestRepoHoldsNoTripDocument` cannot list files. `GITDIR` is the main `.git` from a worktree and the checkout's own `.git` in an ordinary one, so one command serves both. To run one scenario, replace the last `go test` with `go test -count=1 -run 'TestFeatures/<scenario_name_with_underscores>' .`.
+   The scopes are `static` (gofmt, go vet, go build, node --check), `js`, `unit` (every Go test but `TestFeatures`, under `-race`), `features` (the scenarios, no `-race`), `rigs` (the gate's own bash tests) and `image`. `.certify/scopes.map` maps a changed path to its scopes and documents them; **a path no line names refuses**, so a new kind of file gets a line there in the same commit. `gate.sh` is the only spelling of these checks: the pre-push hook, `scripts/ci/seal.sh` and the GitHub `gates` action all call it. A scope that counted nothing is `REFUSED`, never green.
+
+   Both Go scopes run as **several processes side by side** from one compiled test binary: the scenarios as `FEATURE_SHARD=i/n` slices of `features/*.feature` (`feature_shard_test.go`), the plain tests as slices of the binary's own test list. Processes, because every test sets `PUSH_TOKEN` in the environment and so cannot share one. Test Apps come from a **stacked setup** (`stacked_setup_test.go`): the schema, the migrations and the seed are built once per process and each App opens its own copy, and passwords hash at bcrypt's minimum cost under test only (`testmain_test.go`; `password_cost_guard_test.go` fails if a shipped file could lower it).
+
+   To run one scenario by hand: `docker run --rm -v "$PWD":"$PWD" -v "$(cd "$(git rev-parse --git-common-dir)" && pwd)":"$(cd "$(git rev-parse --git-common-dir)" && pwd)" -v roadtrip-gomod:/go/pkg/mod -v roadtrip-gocache:/root/.cache/go-build -w "$PWD" "$(docker images roadtrip-gate --format '{{.Repository}}:{{.Tag}}' | head -n 1)" go test -count=1 -run 'TestFeatures/<scenario_name_with_underscores>' .` The checkout is mounted at its **own path** with its git directory beside it: in a `.wt/` worktree the `.git` file points at the main checkout's `.git/worktrees/...`, which must exist at that same path or `TestRepoHoldsNoTripDocument` cannot list files.
+1a. **Pushing.** `bash ../ABOUT/scripts/ci/push.sh --check <checkout> <branch>` then one `push.sh <checkout> <branch>`. The pre-push hook (`scripts/hooks/pre-push`, installed by `ABOUT/scripts/install-hooks.sh`) runs the scopes the branch owes against trunk, refuses red or unmeasured, records the PushGate board row and the green tree; the real push of a checked tree inherits it and runs nothing. The hook judges the files on disk, so it refuses a dirty checkout. The whole suite is the release's business: `bash scripts/ci/seal.sh` on a trunk checkout (add `--post` to record it on the commit so `Deploy` trusts it without waiting for CI).
 2. Against a live instance, `GET /driver/posts.json` is the census — **every** post with its photo identity, signed-in only. `/route.geojson` (signed-in only) drops unpinned posts, so it cannot stand in for it. `GET /driver/rides.json` lists every ride with its row counts and which one is active; `GET /plan.json` is the active plan's days and totals. `GET /driver/chester/log.json` is every question Chester was asked, with its cost and its verdict.
 3. `/healthz` answers on any host, even while `SITE_VISIBILITY=private` closes the rest of the site.
 

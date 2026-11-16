@@ -62,11 +62,12 @@ func TestFeatures(t *testing.T) {
 				initTrailPointScenarios(t, sc)
 				initPhotoMarkerScenarios(t, sc)
 				initListenCountScenarios(t, sc)
+				initStackedSetupScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{
 			Format:   "pretty",
-			Paths:    []string{"features"},
+			Paths:    featurePaths(t),
 			TestingT: t,
 			Strict:   true,
 		},

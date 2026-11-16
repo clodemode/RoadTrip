@@ -166,10 +166,17 @@ func (a *Auth) IsAuthed(r *http.Request) bool {
 	return ok
 }
 
+// passwordCost is the bcrypt work factor of every password this binary hashes.
+// It is a variable for one reason: the test binary lowers it (testmain_test.go)
+// so several hundred sign-ins do not each pay a production hash. Nothing in a
+// shipped file may assign it or derive it from the environment, a flag or a
+// file; password_cost_guard_test.go parses the tree and fails on either.
+var passwordCost = bcrypt.DefaultCost
+
 // HashPassword is the helper behind `roadtrip -hash <password>`, so an
 // operator can mint ADMIN_PASSWORD_HASH without a separate tool.
 func HashPassword(pw string) (string, error) {
-	h, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+	h, err := bcrypt.GenerateFromPassword([]byte(pw), passwordCost)
 	if err != nil {
 		return "", fmt.Errorf("hash: %w", err)
 	}

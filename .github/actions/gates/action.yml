@@ -1,49 +1,20 @@
 name: gates
 description: >-
-  The checks a release has to pass: gofmt, js syntax, js tests, go vet, go build
-  and go test (scenarios plain, the rest under -race). ONE definition, used by ci.yml (the record, once per merge
-  to trunk) and by deploy.yml (only when no CI record proves the commit).
-  Expects the repo checked out and Go set up.
+  The checks a release has to pass, by TEST SCOPE: static (gofmt, node --check,
+  go vet, go build), js, unit (under -race), features (the scenarios, in
+  parallel shards, no -race) and rigs. ONE definition, scripts/ci/gate.sh, run
+  here exactly as the pre-push hook and the local seal run it. Used by ci.yml
+  (the record, once per merge to trunk) and by deploy.yml (only when nothing
+  proves the commit). Expects the repo checked out and Go set up; node ships on
+  the runner.
 
 runs:
   using: composite
   steps:
-    - name: gofmt
+    # Ruled by Kris 2026-11-12: the scenarios run WITHOUT the race detector
+    # (under it they took 9 to 16 minutes); it stays on every plain test, where
+    # the shared state is. Since 2026-11-16 the scenarios also run as one
+    # process per shard, side by side, from one compiled test binary.
+    - name: whole suite, by scope
       shell: bash
-      run: |
-        unformatted=$(gofmt -l .)
-        if [ -n "$unformatted" ]; then
-          echo "::error::gofmt needed on:"
-          echo "$unformatted"
-          gofmt -d .
-          exit 1
-        fi
-
-    # A browser drops the WHOLE script on one syntax error, and go test never
-    # parses JS: an unescaped apostrophe in hud.js killed every /driver control
-    # live on 2026-11-07. node ships on the runner.
-    - name: js syntax
-      shell: bash
-      run: for f in static/js/*.js; do node --check "$f" || exit 1; done
-
-    - name: js tests
-      shell: bash
-      run: node --test static/js/*_test.mjs
-
-    - name: go vet
-      shell: bash
-      run: go vet ./...
-
-    - name: go build
-      shell: bash
-      run: go build ./...
-
-    - name: go test
-      shell: bash
-      # Two runs, ruled by Kris 2026-11-12 ("avoid the 9-16 minute suite"). The
-      # behaviour scenarios (TestFeatures) run WITHOUT the race detector: under it
-      # they took 9 to 16 minutes, without it the whole suite takes about 70 s.
-      # The race detector stays on every plain test, where the shared state is.
-      run: |
-        go test -count=1 -timeout 10m -run '^TestFeatures$' ./...
-        go test -race -count=1 -timeout 10m -skip '^TestFeatures$' ./...
+      run: bash scripts/ci/gate.sh --scopes whole --log-dir "$RUNNER_TEMP/gate"

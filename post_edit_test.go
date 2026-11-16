@@ -2,10 +2,8 @@ package main
 
 import (
 	"html/template"
-	"io/fs"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,29 +22,11 @@ import (
 func testApp(t *testing.T) *App {
 	t.Helper()
 	dir := t.TempDir()
-	store, err := OpenStore(filepath.Join(dir, "test.sqlite3"))
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
+	// Layers 2 and 3 of the stacked setup (stacked_setup_test.go): the schema,
+	// the migrations and the seed are built once per process; this App opens
+	// its own copy.
+	store, slug := seededStore(t, filepath.Join(dir, "test.sqlite3"))
 	t.Cleanup(func() { store.Close() })
-
-	names, err := fs.Glob(seedFS, "seed/*.geojson")
-	if err != nil || len(names) == 0 {
-		t.Fatalf("no embedded seed: %v", err)
-	}
-	raw, err := seedFS.ReadFile(names[0])
-	if err != nil {
-		t.Fatalf("read seed: %v", err)
-	}
-	staged := filepath.Join(dir, "seed.geojson")
-	if err := os.WriteFile(staged, raw, 0o600); err != nil {
-		t.Fatalf("stage seed: %v", err)
-	}
-	base := strings.TrimSuffix(filepath.Base(names[0]), filepath.Ext(names[0]))
-	slug, _, err := store.Seed(staged, base)
-	if err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	app := &App{
 		store:        store,

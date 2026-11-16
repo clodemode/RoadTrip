@@ -30,7 +30,7 @@ Read, in order: [README.md](README.md) — it is the long-form design record and
 
 ## The hard constraints
 
-1. **Not Django, and not in the ABOUT compose.** No `manage.py`, no container in the fleet. `go build ./...`, `go vet ./...`, `go test -race ./...` at the repo root. The repo IS mounted at `/app/fleet/roadtrip` in `about-intent-1` — for its LORE home and commit corroboration only, never to run it.
+1. **Not Django, and not in the ABOUT compose.** No `manage.py`, no container in the fleet. The checks are `bash scripts/ci/gate.sh --docker --scopes whole` (see CLAUDE.md, Verifying a change). The repo IS mounted at `/app/fleet/roadtrip` in `about-intent-1` — for its LORE home and commit corroboration only, never to run it.
 2. **Private text never enters the repo or the seed.** Street addresses and host notes live in `$DATA_DIR/private.json` on the volume, keyed by ride and then by checkpoint ord, rendered on signed-in surfaces only; absent file = no private data (`pattern-go-microvm-private-overlay-json-on-data-volume-never-in-repo`). A later removal commit does not help — the string stays in history.
 3. **Fuzzed points are snapped on the way OUT of the store.** A checkpoint carrying `precision: "fuzzed"` is snapped to the 0.01° grid before any page, pin or GeoJSON sees it. Never bypass the store to render a raw coordinate.
 4. **Every time is UTC plus the IANA zone it happened in.** There is deliberately no ride-wide timezone — the trip crosses CDT → MDT → MST (no DST in Arizona) → PDT, and one zone misprints every stamp after the first border.
@@ -43,8 +43,10 @@ Read, in order: [README.md](README.md) — it is the long-form design record and
 
 ## Shipping
 
-- **`CI`** (`.github/workflows/ci.yml`) — every push and PR: `gofmt`, `go vet`, `go build`, `go test -race`, plus a build of the production image. No secrets, cannot reach the live ride.
-- **`Deploy`** (`.github/workflows/deploy.yml`) — **`workflow_dispatch` only**, deliberately no push trigger. `mode=plan` (default) runs every gate and builds without releasing; `mode=apply` releases and then independently probes `/healthz`. A deploy's own exit code is not a state report.
+- **The push gate** (`scripts/hooks/pre-push`) — on this machine, in Docker, before anything reaches GitHub. What the branch adds to trunk goes through `.certify/scopes.map`; `scripts/ci/gate.sh` runs those test scopes; red or unmeasured refuses. Push with `ABOUT/scripts/ci/push.sh --check`, then once for real. A merge never waits on a GitHub run.
+- **`CI`** (`.github/workflows/ci.yml`) — once per merge to trunk, as the record: the same `gate.sh --scopes whole`, plus a build of the production image. Nothing runs on a pull request. No secrets, cannot reach the live ride.
+- **The seal** (`scripts/ci/seal.sh`) — the release's whole run on a local host, from a trunk checkout. `--post` records it on the commit as the status `roadtrip/seal`.
+- **`Deploy`** (`.github/workflows/deploy.yml`) — **`workflow_dispatch` only**, deliberately no push trigger. It PROVES the commit (an earlier seal of it, the `roadtrip/seal` status, or the CI record; otherwise it runs every gate), MINTS the image once and names it by digest, SEALS commit and digest (`seal.json`, the run's artifact), and with `mode=apply` RELEASES that digest, never a rebuild. Then two independent readings: the machines run the sealed digest, and `/healthz` names the commit. `mode=plan` (default) stops after the seal; an `apply` of the same commit inherits it. A deploy's own exit code is not a state report.
 - **`Data`** (`.github/workflows/data.yml`) — by hand only, and it writes `private.json` and nothing else. Prod is the source of record for posts, photos and arrival stamps; pushing those upward would destroy the only copy.
 
 ```bash

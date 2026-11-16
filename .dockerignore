@@ -14,3 +14,8 @@ coWork_input/
 /.env
 # The nested private LORE clone is never build context.
 LORE/
+# The gate, its rigs and the workflows are not part of the binary: keeping them
+# out of the build context means editing them does not rebuild the image.
+scripts/
+.certify/
+.github/
