@@ -229,7 +229,8 @@ most people. The long version, with every edge, is in
 
 | Variable | Default | What it does |
 |---|---|---|
-| `ADMIN_PASSWORD_HASH` | none | Creates the first user (`kris`, an admin) on first start. Print a hash with `roadtrip -hash '<password>'`. No users means a read-only site. |
+| `ADMIN_PASSWORD_HASH` | none | Creates the first user, an admin, on first start. Print a hash with `roadtrip -hash '<password>'`. No users means a read-only site. |
+| `ADMIN_USERNAME` | `admin` | The name that first user gets. Read only when the first user is created. |
 | `SESSION_KEY` | random at each start | Signs the sign-in cookie. Set it, or everyone is signed out at every restart. |
 | `PUSH_TOKEN` | none (off) | A password for scripts, sent as `Authorization: Bearer <token>`. Opens what a signed-in user can open, except user management. |
 | `SITE_URL` | none | Your public address, e.g. `https://trip.example.com`. When set, every other host name redirects to it and pages carry link-preview tags. |

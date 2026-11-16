@@ -193,7 +193,7 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/roadtracks/mark", a.requireAuth(a.trackMarkAdd))
 	mux.Handle("POST /driver/roadtracks/mark/{id}/delete", a.requireAuth(a.trackMarkDelete))
 	mux.Handle("POST /driver/roadtracks/event", a.requireAuth(a.roadtracksEvent))
-	mux.Handle("GET /driver/melt.json", a.requireAuth(a.meltRead))
+	mux.Handle("GET /driver/melt.json", a.requireAdmin(a.meltRead))
 	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
 	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))
@@ -1359,14 +1359,46 @@ func (a *App) loginForm(w http.ResponseWriter, r *http.Request) {
 	a.render(w, r, "login.html", data)
 }
 
+// maxLoginBytes caps the sign-in form: a name, a password and a next address.
+const maxLoginBytes = 8 << 10
+
 func (a *App) loginSubmit(w http.ResponseWriter, r *http.Request) {
+	// The form is open to anyone, so it gets what requireAuth gives a
+	// signed-in write: a browser's POST from another origin is refused.
+	if !a.ownOrigin(r) {
+		http.Error(w, "this request came from another site", http.StatusForbidden)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginBytes)
 	if err := r.ParseForm(); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			http.Error(w, "that is too large to be a sign-in", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "bad form", 400)
 		return
 	}
 	username := strings.ToLower(strings.TrimSpace(r.PostFormValue("username")))
+	addr := clientAddr(r)
+	if no, wait := a.auth.brake.refused(addr, username); no {
+		// Refused before the password is looked at, right or wrong.
+		a.melt.Event("login_refused", map[string]any{"reason": "too_many"})
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		w.WriteHeader(http.StatusTooManyRequests)
+		a.render(w, r, "login.html", map[string]any{"Title": "Sign in",
+			"Error": "Too many wrong passwords. Wait a few minutes and try again.", "Next": r.PostFormValue("next")})
+		return
+	}
 	okLogin := a.auth.Check(username, r.PostFormValue("password"))
-	a.melt.Event("login", map[string]any{"user": username, "ok": okLogin})
+	if okLogin {
+		a.melt.Event("login", map[string]any{"user": username, "ok": true})
+	} else {
+		// What was typed in the name box is not written anywhere: people type
+		// passwords there. Its length is enough to tell a typo from a probe.
+		a.auth.brake.failed(addr, username)
+		a.melt.Event("login", map[string]any{"ok": false, "name_len": len(username)})
+	}
 	if !okLogin {
 		w.WriteHeader(http.StatusUnauthorized)
 		a.render(w, r, "login.html", map[string]any{"Title": "Sign in", "Error": "Incorrect username or password.",
@@ -1374,14 +1406,22 @@ func (a *App) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.auth.Issue(w, a.secure, username)
-	next := dropEmbed(r.PostFormValue("next"))
-	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
-		next = "/driver"
-	}
-	http.Redirect(w, r, next, http.StatusFound)
+	http.Redirect(w, r, safeNext(dropEmbed(safeNext(r.PostFormValue("next")))), http.StatusFound)
 }
 
+// logout ends the session everywhere, not only in this browser: the user's
+// epoch goes up, so a copy of the cookie on another device, or in someone
+// else's hands, stops working too.
 func (a *App) logout(w http.ResponseWriter, r *http.Request) {
+	if !a.ownOrigin(r) {
+		http.Error(w, "this request came from another site", http.StatusForbidden)
+		return
+	}
+	if u, ok := a.auth.sessionUser(r); ok {
+		if err := a.auth.users.endSessions(u.Name); err != nil {
+			log.Printf("WARN sign-out: could not end %s's other sessions: %v", u.Name, err)
+		}
+	}
 	a.auth.Clear(w)
 	http.Redirect(w, r, "/", http.StatusFound)
 }

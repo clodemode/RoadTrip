@@ -58,7 +58,7 @@ files it renders with.
 | `GET /driver/roadtracks/search`, `GET /driver/roadtracks/album/{id}` | album search and one album's tracks |
 | `POST /driver/roadtracks/state`, `…/mark`, `…/mark/{id}/delete`, `…/event` | what is playing, favourites, and player trouble |
 | `POST /driver/sim/start`, `POST /driver/sim/stop`, `GET /driver/sim.json` | the simulated drive; start is a 404 unless `SIM_ALLOWED=1` |
-| `GET /driver/melt.json` | the event log, when `MELT_FILE` is set |
+| `GET /driver/melt.json` | the event log, when `MELT_FILE` is set; admins only |
 | `GET /chester`, `POST /chester/ask` | the trip helper (see [Chester](CHESTER.md)) |
 | `GET /chester/preferences`, `POST /chester/preferences` | the traveller's standing preferences |
 | `GET /driver/chester/memory`, `POST /driver/chester/memory/clear` | what Chester remembers about the signed-in traveller's tastes, and clearing it |

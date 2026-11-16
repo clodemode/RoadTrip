@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -37,16 +38,37 @@ type Auth struct {
 	// seedHash is ADMIN_PASSWORD_HASH: only used once, to seed user "kris"
 	// when there is no users file yet.
 	seedHash string
+	// seedName is ADMIN_USERNAME, the name that first user gets ("admin").
+	seedName string
+	// brake slows a run of wrong passwords (signin_guard.go).
+	brake *loginBrake
 }
 
+// minSecretLen is the length under which boot warns about PUSH_TOKEN or
+// SESSION_KEY: each is the whole of what guards the site from a guess.
+const minSecretLen = 32
+
 func NewAuth() *Auth {
-	a := &Auth{users: newUserStore("")}
+	a := &Auth{users: newUserStore(""), brake: newLoginBrake()}
 	a.seedHash = os.Getenv("ADMIN_PASSWORD_HASH")
+	a.seedName = strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_USERNAME")))
+	if a.seedName == "" {
+		a.seedName = "admin"
+	} else if !validUsername(a.seedName) {
+		log.Printf("WARN ADMIN_USERNAME is not a username (2 to 32 of a-z, 0-9, dash, underscore): using admin")
+		a.seedName = "admin"
+	}
 	if t := os.Getenv("PUSH_TOKEN"); t != "" {
 		a.pushToken = []byte(t)
+		if len(t) < minSecretLen {
+			log.Printf("WARN PUSH_TOKEN is %d characters: use at least %d random ones", len(t), minSecretLen)
+		}
 	}
 	if k := os.Getenv("SESSION_KEY"); k != "" {
 		a.signingKey = []byte(k)
+		if len(k) < minSecretLen {
+			log.Printf("WARN SESSION_KEY is %d characters: use at least %d random ones", len(k), minSecretLen)
+		}
 	} else {
 		// No key set: generate one. Sessions then die on restart, which is the
 		// safe failure mode — it logs everyone out rather than signing with a
@@ -64,6 +86,7 @@ func (a *Auth) enabled() bool { return a.users.anyActive() }
 func (a *Auth) Check(username, password string) bool {
 	u, ok := a.users.get(username)
 	if !ok || u.Disabled {
+		burnCompare(password)
 		return false
 	}
 	return bcrypt.CompareHashAndPassword([]byte(u.Hash), []byte(password)) == nil
@@ -75,11 +98,16 @@ func (a *Auth) sign(payload string) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-// Issue sets the session cookie for username. The payload is "<exp>.<user>";
-// usernames never contain a dot (validUsername).
+// Issue sets the session cookie for username. The payload is
+// "<exp>.<user>.<epoch>"; usernames never contain a dot (validUsername). The
+// epoch is the user's own counter in the users file: signing out or a password
+// change raises it, and every session issued under the old number stops
+// working, on every device. A cookie from before the epoch existed has no
+// third field and is read as epoch 0.
 func (a *Auth) Issue(w http.ResponseWriter, secure bool, username string) {
 	exp := time.Now().Add(sessionTTL).Unix()
-	payload := strconv.FormatInt(exp, 10) + "." + username
+	u, _ := a.users.get(username)
+	payload := strconv.FormatInt(exp, 10) + "." + username + "." + strconv.Itoa(u.Epoch)
 	val := base64.RawURLEncoding.EncodeToString([]byte(payload + "." + a.sign(payload)))
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: val, Path: "/", HttpOnly: true,
@@ -101,20 +129,28 @@ func (a *Auth) sessionUser(r *http.Request) (User, bool) {
 	if err != nil {
 		return User{}, false
 	}
-	parts := strings.SplitN(string(raw), ".", 3)
-	if len(parts) != 3 {
+	parts := strings.Split(string(raw), ".")
+	if len(parts) != 3 && len(parts) != 4 {
 		return User{}, false
 	}
-	payload := parts[0] + "." + parts[1]
-	if subtle.ConstantTimeCompare([]byte(a.sign(payload)), []byte(parts[2])) != 1 {
+	payload := strings.Join(parts[:len(parts)-1], ".")
+	if subtle.ConstantTimeCompare([]byte(a.sign(payload)), []byte(parts[len(parts)-1])) != 1 {
 		return User{}, false
+	}
+	epoch := 0
+	if len(parts) == 4 {
+		n, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return User{}, false
+		}
+		epoch = n
 	}
 	exp, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil || time.Now().Unix() >= exp {
 		return User{}, false
 	}
 	u, ok := a.users.get(parts[1])
-	if !ok || u.Disabled {
+	if !ok || u.Disabled || u.Epoch != epoch {
 		return User{}, false
 	}
 	return u, true

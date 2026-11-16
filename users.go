@@ -45,6 +45,9 @@ type User struct {
 	// on whatever ride is active until an admin sets a list, and boot pins it
 	// (migrateLegacyRides). An empty, non-nil list is a driver on no ride.
 	Rides []string `json:"rides"`
+	// Epoch is the number a session must carry to be this user's (auth.go).
+	// Signing out and a password change raise it.
+	Epoch int `json:"epoch,omitempty"`
 }
 
 // mayRide reports whether u may see and write ride slug; active is the ride
@@ -288,6 +291,22 @@ func (s *userStore) setHash(name, hash string) error {
 		return errors.New("no such user")
 	}
 	u.Hash = hash
+	u.Epoch++ // a new password ends every session issued under the old one
+	s.users[name] = u
+	return s.saveLocked()
+}
+
+// endSessions raises a user's epoch: every session issued so far stops
+// working. A name with no user is not an error.
+func (s *userStore) endSessions(name string) error {
+	s.refresh()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[name]
+	if !ok {
+		return nil
+	}
+	u.Epoch++
 	s.users[name] = u
 	return s.saveLocked()
 }
@@ -317,8 +336,8 @@ func (s *userStore) setDisabled(name string, disabled bool) error {
 	return s.saveLocked()
 }
 
-// LoadUsers opens $DATA_DIR/users.json. With no file it seeds user kris (admin)
-// from ADMIN_PASSWORD_HASH, so the deploy that introduces users breaks nothing.
+// LoadUsers opens $DATA_DIR/users.json. With no file it seeds one admin from
+// ADMIN_PASSWORD_HASH, named by ADMIN_USERNAME ("admin" when unset).
 func (a *Auth) LoadUsers(dataDir string) error {
 	a.users.path = filepath.Join(dataDir, usersFile)
 	err := a.users.load()
@@ -331,7 +350,7 @@ func (a *Auth) LoadUsers(dataDir string) error {
 	if a.seedHash == "" {
 		return nil
 	}
-	return a.users.create("kris", a.seedHash, roleAdmin)
+	return a.users.create(a.seedName, a.seedHash, roleAdmin)
 }
 
 // generatePassword returns a strong random password, 20 characters from an
