@@ -39,6 +39,7 @@ func TestFeatures(t *testing.T) {
 				initRouteMeHereScenarios(t, sc)
 				initChesterRerouteScenarios(t, sc)
 				initChangeTripScenarios(t, sc)
+				initDeleteRideScenarios(t, sc)
 				initRoutingPointsScenarios(t, sc)
 				initNightForkScenarios(t, sc)
 				initPlanChoiceAfterDrivenDayScenarios(t, sc)

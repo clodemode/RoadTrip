@@ -228,6 +228,7 @@ func (a *App) routes() http.Handler {
 	// which ride the site shows, and the saved selection. Same gate as above.
 	mux.Handle("POST /driver/trip", a.requireKeeper(a.tripPush))
 	mux.Handle("POST /driver/ride/active", a.requireKeeper(a.rideActivate))
+	mux.Handle("POST /driver/ride/{slug}/delete", a.requireKeeper(a.rideDelete))
 	mux.Handle("GET /driver/rides.json", a.requireKeeper(a.ridesJSON))
 	mux.Handle("POST /driver/plan", a.requireRide(a.planSave))
 	mux.Handle("POST /driver/routing", a.requireRide(a.routingAdd))

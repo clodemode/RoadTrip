@@ -515,6 +515,58 @@ func (a *App) rideActivate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "active": slug, "source": "meta"})
 }
 
+// rideDelete removes a ride nothing has happened on: its rows, its trip file
+// on the volume and its block in the private overlay. It refuses the ride the
+// site is showing, a ride that ships with the site, and any ride with an
+// arrived checkpoint, a post or a photo. Keeper only.
+func (a *App) rideDelete(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if !validSlug(slug) {
+		http.Error(w, "slug is not a ride slug", http.StatusBadRequest)
+		return
+	}
+	if _, err := a.store.Ride(slug); err != nil {
+		http.Error(w, "no ride "+strconv.Quote(slug)+" in the database", http.StatusNotFound)
+		return
+	}
+	switch {
+	case a.activeSlug() == slug:
+		http.Error(w, "ride "+strconv.Quote(slug)+" is the ride the site is showing; make another ride active first", http.StatusConflict)
+		return
+	case embeddedRideSlugs()[slug]:
+		http.Error(w, "ride "+strconv.Quote(slug)+" ships with the site and cannot be deleted", http.StatusConflict)
+		return
+	}
+	if err := a.store.DeleteRide(slug); err != nil {
+		if errors.Is(err, errRideHasHistory) {
+			http.Error(w, "ride "+strconv.Quote(slug)+" has an arrived checkpoint or a post on it and cannot be deleted", http.StatusConflict)
+			return
+		}
+		log.Printf("ride delete: %s: %v", slug, err)
+		http.Error(w, "could not delete the ride", http.StatusInternalServerError)
+		return
+	}
+	// The rows are gone; now the volume. A trip file left behind would be
+	// loaded again at the next boot, so a failure here is said out loud.
+	if err := os.Remove(tripPath(a.dataDir, slug)); err != nil && !os.IsNotExist(err) {
+		log.Printf("ride delete: %s: the trip file could not be removed: %v", slug, err)
+		http.Error(w, "the ride was deleted but its trip file could not be removed from the volume", http.StatusInternalServerError)
+		return
+	}
+	if pd, err := loadPrivate(a.dataDir); err == nil {
+		if _, ok := pd.Rides[slug]; ok || (slug == a.rideSlug && len(pd.Checkpoints) > 0) {
+			pd.setRide(slug, a.rideSlug, nil)
+			if err := savePrivate(a.dataDir, pd); err != nil {
+				log.Printf("ride delete: %s: the private overlay could not be rewritten: %v", slug, err)
+				http.Error(w, "the ride was deleted but its private block could not be removed", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+	log.Printf("ride delete: %s", slug)
+	writeJSON(w, http.StatusOK, map[string]any{"status": "deleted", "ride": slug})
+}
+
 // ridesJSON is the census of rides: every ride in the database with its row
 // counts, and which one the site is showing. It is how "the earlier ride is
 // still there" is checked after the active ride moves.

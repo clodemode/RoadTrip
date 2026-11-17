@@ -2745,3 +2745,44 @@ func (s *Store) PlayerState(user string, now time.Time) (*resumeView, error) {
 	}
 	return &rv, nil
 }
+
+// DeleteRide removes a ride and everything it owns: legs (and so their
+// checkpoints, routing points, sights and planned lines), places, ETA
+// predictions, listen counts, plays, trail points and the ride's saved plan
+// selection and Chester preferences. It refuses, with errRideHasHistory, a
+// ride with an arrived checkpoint or a post (a photo is reachable only through
+// a post), checked in the same transaction as the delete. Chester's question
+// log is a cost record and is left as it is.
+var errRideHasHistory = errors.New("something has happened on this ride")
+
+func (s *Store) DeleteRide(slug string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var n int
+	if err := tx.QueryRow(`SELECT
+	    (SELECT COUNT(*) FROM checkpoints c JOIN legs l ON l.id=c.leg_id WHERE l.ride_slug=? AND c.arrived_at<>'')
+	  + (SELECT COUNT(*) FROM posts p JOIN legs l ON l.id=p.leg_id WHERE l.ride_slug=?)`, slug, slug).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return errRideHasHistory
+	}
+	for _, q := range []string{
+		`DELETE FROM trail_points WHERE ride_slug=?`,
+		`DELETE FROM plays WHERE ride_slug=?`,
+		`DELETE FROM listen_counts WHERE ride_slug=?`,
+		`DELETE FROM eta_predictions WHERE ride_slug=?`,
+		`DELETE FROM rides WHERE slug=?`, // legs, checkpoints, routing points, sights, places cascade
+	} {
+		if _, err := tx.Exec(q, slug); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`DELETE FROM meta WHERE key IN (?,?)`, metaSelectionKey(slug), metaPrefsKey(slug)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
