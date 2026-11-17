@@ -129,9 +129,36 @@ h2 { margin: 1.5rem 0 .5rem; }
 .pill-meal { background: #ffedd5; color: #7c2d12; }
 
 /* --- map ---------------------------------------------------------------------- */
-#map { height: 380px; border: 1px solid var(--ds-hairline); border-radius: var(--ds-radius); overflow: hidden;
+/* Taller on a phone: most of the screen under the masthead, never more than 560 px. */
+#map { height: min(62vh, 560px); border: 1px solid var(--ds-hairline); border-radius: var(--ds-radius); overflow: hidden;
   background: var(--ds-surface); box-shadow: var(--ds-shadow); }
 @media (min-width: 576px) { #map { height: 520px; } }
+/* Full screen is a class on the map, in place: no dialog, no browser full screen. It sits above the
+   Listen Inn card (1100) so the card never covers a control. Done and Escape put it back. */
+/* !important: Leaflet writes position: relative inline on its container. */
+#map.rt-map-full { position: fixed !important; inset: 0; z-index: 1200; height: 100vh; height: 100dvh; border: 0; border-radius: 0; box-shadow: none; }
+body.rt-map-lock { overflow: hidden; }
+/* Every map control is a 44 px target: zoom, layers, Fit and Full screen. #map beats Leaflet's own rules. */
+#map .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 1.4rem; }
+#map .leaflet-control-layers-toggle { width: 44px; height: 44px; background-size: 26px 26px; }
+#map .leaflet-control-layers label { display: flex; align-items: center; min-height: 44px; margin: 0; }
+#map .leaflet-control-layers-selector { width: 20px; height: 20px; margin: 0 .5rem 0 0; }
+#map .rt-map-btn { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: 0; padding: 0 .5rem;
+  border: 0; border-top: 1px solid var(--ds-hairline); border-radius: 0; background: var(--ds-surface); color: var(--ds-text);
+  font: 600 .95rem/1 var(--ds-font); cursor: pointer; }
+#map .rt-map-bar .rt-map-btn:first-child { border-top: 0; }
+#map .rt-map-btn:focus-visible { outline: 2px solid var(--ds-primary); outline-offset: -2px; }
+/* A finger that moves on the map is told once: two fingers move it. */
+.rt-map-hint { position: absolute; top: 50%; left: 50%; z-index: 900; transform: translate(-50%, -50%); max-width: calc(100% - 2rem);
+  padding: .6rem .9rem; border-radius: var(--ds-radius); background: var(--ds-text); color: #fff; font: 600 .95rem/1.3 var(--ds-font);
+  text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.rt-map-hint.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .rt-map-hint { transition: none; } }
+/* Photos and music notes that overlap gather into one round count. */
+.rt-gather span { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 40px; height: 40px;
+  border-radius: 50%; background: var(--ds-primary); color: #fff; border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .4), 0 1px 4px rgba(0, 0, 0, .5); font: 800 .95rem/1 var(--ds-font); font-variant-numeric: tabular-nums; }
+.day-pin-n.rt-name-off { visibility: hidden; }
 .cp-pin span { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
   border-radius: 50%; background: var(--rt-pin); color: #fff; border: 2px solid #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .4); font: 800 12px/1 var(--ds-font); }
@@ -151,7 +178,6 @@ h2 { margin: 1.5rem 0 .5rem; }
 .np-pin span { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
   border-radius: 50%; background: #fff; color: #1f2937; border: 2px solid #1f2937; font-size: 16px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
-#map[data-mode="plan"] .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 1.4rem; }
 
 /* --- the day's end: first navigation target, with Add a stop ---------------------- */
 .dayend { margin: 0 0 1rem; }

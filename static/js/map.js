@@ -22,17 +22,9 @@
     return m ? '?ride=' + m[1] : '';
   })();
 
-  var map = L.map('map', {
-    // Scrolling the page with the pointer over the map must not zoom it.
-    scrollWheelZoom: false,
-    maxZoom: 18
-  });
-  el._leafletMap = map;
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
-  }).addTo(map);
-  L.control.scale({ imperial: true, metric: true }).addTo(map);
+  // The options and the buttons every map shares come from map_common.js: one
+  // finger scrolls the page on a touch screen, two move the map.
+  var map = RTMap.create(el);
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -40,7 +32,8 @@
     });
   }
 
-  var all = [];   // every latlng we draw, for the initial fit
+  var all = [];   // every latlng the route and its stops draw, for the initial fit
+  var postPts = [];   // the pinned posts: they join the fit only when they belong to the view (see the fit)
 
   /* --- legs ------------------------------------------------------------- */
   /* A leg that has an actual track drawn over it gives up the solid line: the
@@ -49,9 +42,19 @@
   (data.tracks || []).forEach(function (t) { driven[t.leg] = true; });
 
   var legLayer = L.layerGroup().addTo(map);
+  var legRuns = [];
   (data.legs || []).forEach(function (leg) {
     var pts = (leg.line || []).map(function (c) { return [c[1], c[0]]; });
-    if (!pts.length) return;
+    if (pts.length) legRuns.push({ leg: leg, pts: pts });
+  });
+  /* A white casing under each line, drawn first for every leg so no casing ever
+     paints over a neighbour's line: the route stays readable on the busy tiles at
+     trip zoom. A leg whose actual track is drawn over it stays a dim dashed plan. */
+  legRuns.forEach(function (r) {
+    if (!driven[r.leg.ord]) L.polyline(r.pts, { color: '#fff', weight: 8, opacity: 0.9, interactive: false }).addTo(legLayer);
+  });
+  legRuns.forEach(function (r) {
+    var leg = r.leg, pts = r.pts;
     var style = driven[leg.ord]
       ? { color: leg.color, weight: 3, opacity: 0.35, dashArray: '6,8' }
       : { color: leg.color, weight: 4, opacity: 0.85 };
@@ -128,9 +131,16 @@
      builds one for a leg that has some of that, so an untravelled leg shows
      its plan alone. */
   var trackLayer = L.layerGroup().addTo(map);
+  var trackRuns = [];
   (data.tracks || []).forEach(function (t) {
     var pts = (t.line || []).map(function (c) { return [c[1], c[0]]; });
-    if (pts.length < 2) return;
+    if (pts.length >= 2) trackRuns.push({ t: t, pts: pts });
+  });
+  trackRuns.forEach(function (r) {
+    L.polyline(r.t.planned_start ? r.pts.slice(1) : r.pts, { color: '#fff', weight: 8, opacity: 0.9, interactive: false }).addTo(trackLayer);
+  });
+  trackRuns.forEach(function (r) {
+    var t = r.t, pts = r.pts;
     /* planned_start: the first vertex is where the leg was planned to begin,
        not a place the ride was stamped at. That first stretch is drawn lighter
        and dashed, so the line never claims more than is known. */
@@ -152,6 +162,7 @@
 
   /* --- checkpoints ------------------------------------------------------ */
   var cpLayer = L.layerGroup().addTo(map);
+  var dayPins = [];
   var colorBySlug = {};
   (data.legs || []).forEach(function (leg) { colorBySlug[leg.slug] = leg.color; });
   (data.checkpoints || []).forEach(function (c) {
@@ -172,6 +183,7 @@
         : L.divIcon({ className: 'cp-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
             iconSize: [26, 26], iconAnchor: [13, 13], html: '<span>' + esc(c.mark || c.ord) + '</span>' });
       m = L.marker([c.lat, c.lng], { icon: icon, keyboard: false, zIndexOffset: isDayEnd ? 600 : 500 }).addTo(cpLayer);
+      if (isDayEnd) dayPins.push({ m: m, name: c.name });
     }
     var bits = ['<div class="popup"><h3>' + esc(c.mark || c.ord) + '. ' + esc(c.name) + '</h3>'];
     if (c.label) bits.push('<p>' + esc(c.label) + '</p>');
@@ -194,8 +206,18 @@
   });
   if (el.dataset.mode === 'leg') sightLayer.addTo(map);
 
-  /* --- posts ------------------------------------------------------------ */
-  var postLayer = L.layerGroup().addTo(map);
+  /* --- posts and music notes: one gathering group -------------------------
+     Photo pins (34 px) and music notes (30 px) that would sit on top of each other
+     gather into one round count; a tap on the count zooms in place to spread them.
+     Checkpoints and day pins are never in this group. The radius is a little more
+     than a photo pin, so two pins that touch always gather. */
+  var gather = L.markerClusterGroup({
+    maxClusterRadius: 45, showCoverageOnHover: false, spiderfyOnMaxZoom: true, zoomToBoundsOnClick: true,
+    iconCreateFunction: function (c) {
+      return L.divIcon({ className: 'rt-gather', iconSize: [40, 40], html: '<span>' + c.getChildCount() + '</span>' });
+    }
+  }).addTo(map);
+  var postLayer = gather;
   (data.posts || []).forEach(function (p) {
     var html = p.thumb ? '<img src="' + esc(p.thumb) + '" alt="">' : '<span>&#9679;</span>';
     var m = L.marker([p.lat, p.lng], {
@@ -214,7 +236,7 @@
     }
     bits.push('<p><a href="/#post-' + p.id + '">On the timeline &rarr;</a></p></div>');
     m.bindPopup(bits.join(''), { minWidth: 200 });
-    all.push([p.lat, p.lng]);
+    postPts.push([p.lat, p.lng]);
   });
 
   /* --- music notes (nowplaying.js, text only) ----------------------------
@@ -222,19 +244,22 @@
      Inn itself is a card of its own, off the map (listeninn.js); it asks
      /tracks.json once a minute and tells this map what it read. */
   var NP = window.RTNowPlaying;
-  var playLayer = L.layerGroup().addTo(map);
+  var playLayer = gather;
+  var notes = [];
   var drawPlays = function (doc) {
-    playLayer.clearLayers();
+    gather.removeLayers(notes);
+    notes = [];
     ((doc && doc.tracks) || []).forEach(function (p) {
       if (typeof p.lat !== 'number' || typeof p.lng !== 'number' || !isFinite(p.lat) || !isFinite(p.lng)) return;
       /* A track often starts at a stop, so a note sits above the stop pins
          (500 and 600) and under a photo (1000); it is drawn as a pin whose tip
          is the spot, 30 px across, so it can be seen and tapped beside the
          stop's own circle. */
-      L.marker([p.lat, p.lng], {
+      var note = L.marker([p.lat, p.lng], {
         icon: L.divIcon({ className: 'np-pin', iconSize: [30, 30], iconAnchor: [15, 34], html: '<span>&#9834;</span>' }),
         keyboard: false, zIndexOffset: 700
-      }).addTo(playLayer).bindPopup('<div class="popup">' + NP.rowHtml(p, esc) + '</div>');
+      }).addTo(gather).bindPopup('<div class="popup">' + NP.rowHtml(p, esc) + '</div>');
+      notes.push(note);
     });
   };
   if (NP && window.RIDE_TRACKS) {
@@ -244,11 +269,22 @@
 
   L.control.layers(null, {
     'Route': legLayer, 'Driven': trackLayer, 'Checkpoints': cpLayer,
-    'Candidate stops': sightLayer, 'Posts': postLayer, 'Music': playLayer
+    'Candidate stops': sightLayer, 'Posts and music': gather
   }, { collapsed: true }).addTo(map);
 
   /* --- fit --------------------------------------------------------------- */
-  var bounds = all.length ? L.latLngBounds(all) : L.latLngBounds([[25, -125], [45, -95]]);
+  /* A leg's map opens on the leg: its line and its checkpoints. A post pinned
+     well off that stretch (a stray fix, a photo taken from a detour) stays on the
+     map but does not stretch the opening view out to it; the Ride keeps every post. */
+  var fitPts = all.slice();
+  if (el.dataset.mode === 'leg' && all.length) {
+    var S = 90, N = -90, W = 180, E = -180, M = 0.25;
+    all.forEach(function (q) { S = Math.min(S, q[0]); N = Math.max(N, q[0]); W = Math.min(W, q[1]); E = Math.max(E, q[1]); });
+    postPts.forEach(function (q) { if (q[0] >= S - M && q[0] <= N + M && q[1] >= W - M && q[1] <= E + M) fitPts.push(q); });
+  } else {
+    fitPts = all.concat(postPts);
+  }
+  var bounds = fitPts.length ? L.latLngBounds(fitPts) : L.latLngBounds([[25, -125], [45, -95]]);
 
   /* Leaflet measures the container once, at construction. If the layout has
      not settled the map can be a couple of pixels wide and fitBounds clamps
@@ -267,7 +303,32 @@
     fitting = true;
     try { map.fitBounds(bounds, { padding: [24, 24], animate: false }); } finally { fitting = false; }
   }
+  /* A night's town name is hidden when it would sit on another pin or name. */
+  function declutterNames() {
+    var badges = dayPins.map(function (d) {
+      var p = map.latLngToLayerPoint(d.m.getLatLng());
+      return { x0: p.x - 16, x1: p.x + 16, y0: p.y - 14, y1: p.y + 14, p: p, d: d };
+    });
+    var shown = [];
+    function hit(a, b) { return a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1; }
+    badges.forEach(function (b) {
+      var icon = b.d.m._icon, n = icon && icon.querySelector ? icon.querySelector('.day-pin-n') : null;
+      if (!n) return;
+      var half = (String(b.d.name).length * 6.5 + 8) / 2;
+      var box = { x0: b.p.x - half, x1: b.p.x + half, y0: b.p.y + 4, y1: b.p.y + 22 };
+      var clash = badges.some(function (o) { return o !== b && hit(box, o); }) || shown.some(function (o) { return hit(box, o); });
+      n.classList.toggle('rt-name-off', clash);
+      if (!clash) shown.push(box);
+    });
+  }
+  map.on('zoomend', declutterNames);
+
   refit();
+  declutterNames();
+  RTMap.controls(map, el, {
+    fitLabel: el.dataset.mode === 'leg' ? 'Fit leg' : 'Fit trip',
+    fit: function () { userMoved = false; refit(); declutterNames(); }
+  });
   if (window.ResizeObserver) {
     new ResizeObserver(refit).observe(el);
   } else {
