@@ -375,7 +375,9 @@ func initMapPhoneScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	})
 
 	// --- ruling 2: Music, Photos, Notes
-	toggle := func(label string) string { return map[string]string{"Music": "music", "Photos": "photos", "Notes": "notes"}[label] }
+	toggle := func(label string) string {
+		return map[string]string{"Music": "music", "Photos": "photos", "Notes": "notes"}[label]
+	}
 	buttonsOf := func() ([]map[string]any, error) {
 		o, err := w.run(nil)
 		if err != nil {
