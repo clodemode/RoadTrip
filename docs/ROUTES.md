@@ -51,6 +51,7 @@ files it renders with.
 | `POST /driver/private` | replace the private overlay by machine; an admin or the push token |
 | `POST /driver/trip` | push a trip document (see [Trips](TRIPS.md)); an admin or the push token |
 | `POST /driver/ride/active` | choose the ride the site shows; an admin or the push token |
+| `POST /driver/ride/{slug}/delete` | delete a ride nothing has happened on (rows, trip file, private block); 409 for the active ride, an embedded ride, or one with an arrival, post or photo; an admin or the push token |
 | `GET /driver/rides.json` | every ride, its row counts, and which one is showing; an admin or the push token |
 | `POST /driver/plan` | save a plan selection or start date |
 | `POST /driver/routing` | add a routing point for the navigation link |

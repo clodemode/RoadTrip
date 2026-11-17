@@ -142,6 +142,11 @@ H="Authorization: Bearer $PUSH_TOKEN"; S=https://your-site.example   # your own 
 # the private overlay, whole document, replaces what is on the volume
 curl -s -H "$H" -H 'Content-Type: application/json' --data-binary @private.json $S/driver/private
 
+# delete a ride nothing has happened on: its rows, its trip file and its private block.
+# 409 (with the reason) for the active ride, a ride that ships with the site, or one with an
+# arrived checkpoint, a post or a photo; 404 unknown slug; 400 not a slug. Answers {"status":"deleted","ride":"<slug>"}
+curl -s -H "$H" -X POST $S/driver/ride/<slug>/delete
+
 # the census, and a post deleted by id (303 = gone)
 curl -s -H "$H" $S/driver/posts.json > posts.json
 curl -s -o /dev/null -w '%{http_code}\n' -H "$H" -X POST $S/driver/post/<id>/delete
