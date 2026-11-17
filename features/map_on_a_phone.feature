@@ -28,7 +28,7 @@ Feature: The map on a phone
     Given the Ride map is opened with 3 photos and a music note within 200 metres of one stop
     Then the 3 photos and the music note gather into one count of 4
     And the count is a round badge with the number 4
-    And the stop's pins and the day pin are never gathered
+    And every photo and note is in the gathering group
     When the visitor taps the count
     Then the pins spread into more than one group
 
@@ -52,7 +52,7 @@ Feature: The map on a phone
     Then the map is back in the page
 
   Scenario: Every map control is a 44 pixel target
-    Then the zoom buttons and the layers button are at least 44 by 44 pixels
+    Then the zoom buttons and the Music, Photos and Notes buttons are at least 44 by 44 pixels
     And the Fit and Full screen and Done buttons are at least 44 by 44 pixels
     And the Plan map takes the same controls as the Ride map
     And full screen sits above the Listen Inn card
@@ -68,3 +68,59 @@ Feature: The map on a phone
     Then the leg's line and its two checkpoints are inside the opening view
     And the leg map offers a Fit leg button
     And the stray post does not widen the opening view
+
+  # Ruling 2 (Kris 2026-11-16): simple controls to show Music, Photos and Notes;
+  # the route stays; the day and waypoint markers go from the Ride and leg maps.
+
+  Scenario: The Ride map has Music, Photos and Notes buttons, all on
+    Given the Ride map is opened on a phone
+    Then the map has buttons labelled "Music", "Photos" and "Notes"
+    And each of them is pressed on
+    And the map has no layers control
+
+  Scenario: Turning Photos off hides the photo pins and their counts, and Notes and Music stay
+    Given the Ride map is opened with 3 photos, 2 notes and a music note within 200 metres of one stop
+    Then the pins gather into one count of 6
+    When the visitor turns Photos off
+    Then the pins gather into one count of 3
+    And no photo pin is on the map
+    And the Photos button is not pressed and the Notes and Music buttons are pressed
+    When the visitor turns Photos on
+    Then the pins gather into one count of 6
+
+  Scenario: Turning Music off removes the music notes and Notes off removes the notes
+    Given the Ride map is opened with 3 photos, 2 notes and a music note within 200 metres of one stop
+    When the visitor turns Music off
+    Then the pins gather into one count of 5
+    When the visitor turns Notes off
+    Then the pins gather into one count of 3
+    And no note pin and no music pin is on the map
+
+  Scenario: The route has no button and stays when Music, Photos and Notes are all off
+    Given the Ride map is opened with 3 photos, 2 notes and a music note within 200 metres of one stop
+    When the visitor turns Music, Photos and Notes off
+    Then no pin is on the map
+    And the planned leg lines are still drawn
+    And the driven track is still drawn
+    And the map has no button for the route
+
+  Scenario: The Ride map draws no day, start, checkpoint, sight or hours markers
+    Given the Ride map is opened on a phone
+    Then no day pin, start dot, checkpoint pin, candidate stop or hours stick is drawn
+    And the Ride map still fits the route
+
+  Scenario: The leg map draws none of them either and fits the route
+    Given the leg map of Winchester to Nashville with a post pinned far from the road
+    Then no day pin, start dot, checkpoint pin, candidate stop or hours stick is drawn
+    And the leg map still opens on the leg's line
+
+  Scenario: The Plan map keeps its stop pins and does not get the toggles
+    Then the Plan map still draws its stop pins
+    And the Plan map has no Music, Photos or Notes buttons
+
+  Scenario: No map control sits where the docked Listen Inn covers it
+    Given a phone 375 pixels wide and 812 tall
+    And the Ride map is opened on a phone
+    Then the Music, Photos and Notes and the Fit and Full screen buttons are in the top corners of the map
+    And the zoom buttons are in the top left corner of the map
+    And the Listen Inn card is fixed to the bottom of the window

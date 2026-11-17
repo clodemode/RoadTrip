@@ -8,6 +8,7 @@
  *               move and pinch the map (Leaflet's touch zoom pans with the pinch).
  *               A one-finger move shows a short hint over the map, then it fades.
  *               A mouse drags as it always did; the wheel never zooms.
+ *  toggles()    Music, Photos and Notes: three plain buttons that show or hide a kind of pin.
  *  controls()   Fit (the opening view again) and Full screen, with a Done button
  *               and the Escape key to leave it. Full screen is a class on the map,
  *               in place: no dialog, no browser full screen.
@@ -109,5 +110,34 @@
     bar.addTo(map);
   }
 
-  window.RTMap = { create: create, controls: controls };
+  /* kinds: [{key, label, set(on)}]. Plain in-place buttons, all on to begin with, each a 44 px
+     target in the top right corner (the docked Listen Inn card covers the bottom of the map, so no
+     control sits there). aria-pressed says which are on; set(on) shows or hides that kind. */
+  function toggles(map, kinds) {
+    var box = L.control({ position: 'topright' });
+    box.onAdd = function () {
+      var bar = document.createElement('div');
+      bar.className = 'leaflet-bar rt-map-bar rt-map-toggles';
+      kinds.forEach(function (k) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'rt-map-btn rt-map-toggle';
+        b.setAttribute('data-rt', k.key);
+        b.setAttribute('aria-label', k.label);
+        b.setAttribute('aria-pressed', 'true');
+        b.textContent = k.label;
+        b.addEventListener('click', function () {
+          var on = b.getAttribute('aria-pressed') !== 'true';
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+          k.set(on);
+        });
+        bar.appendChild(b);
+      });
+      if (L.DomEvent) { L.DomEvent.disableClickPropagation(bar); L.DomEvent.disableScrollPropagation(bar); }
+      return bar;
+    };
+    box.addTo(map);
+  }
+
+  window.RTMap = { create: create, controls: controls, toggles: toggles };
 })();

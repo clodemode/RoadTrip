@@ -140,13 +140,15 @@ h2 { margin: 1.5rem 0 .5rem; }
 body.rt-map-lock { overflow: hidden; }
 /* Every map control is a 44 px target: zoom, layers, Fit and Full screen. #map beats Leaflet's own rules. */
 #map .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 1.4rem; }
-#map .leaflet-control-layers-toggle { width: 44px; height: 44px; background-size: 26px 26px; }
-#map .leaflet-control-layers label { display: flex; align-items: center; min-height: 44px; margin: 0; }
-#map .leaflet-control-layers-selector { width: 20px; height: 20px; margin: 0 .5rem 0 0; }
 #map .rt-map-btn { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: 0; padding: 0 .5rem;
   border: 0; border-top: 1px solid var(--ds-hairline); border-radius: 0; background: var(--ds-surface); color: var(--ds-text);
   font: 600 .95rem/1 var(--ds-font); cursor: pointer; }
 #map .rt-map-bar .rt-map-btn:first-child { border-top: 0; }
+/* Music, Photos and Notes: plain words, light only. On is the brand colour, off is the surface. */
+#map .rt-map-toggles { display: flex; flex-direction: column; }
+#map .rt-map-toggle { min-width: 84px; min-height: 44px; justify-content: flex-start; }
+#map .rt-map-toggle[aria-pressed="true"] { background: var(--ds-primary); color: #fff; }
+#map .rt-map-toggle[aria-pressed="false"] { background: var(--ds-surface); color: var(--ds-muted); text-decoration: line-through; }
 #map .rt-map-btn:focus-visible { outline: 2px solid var(--ds-primary); outline-offset: -2px; }
 /* A finger that moves on the map is told once: two fingers move it. */
 .rt-map-hint { position: absolute; top: 50%; left: 50%; z-index: 900; transform: translate(-50%, -50%); max-width: calc(100% - 2rem);
@@ -158,12 +160,6 @@ body.rt-map-lock { overflow: hidden; }
 .rt-gather span { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 40px; height: 40px;
   border-radius: 50%; background: var(--ds-primary); color: #fff; border: 3px solid #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .4), 0 1px 4px rgba(0, 0, 0, .5); font: 800 .95rem/1 var(--ds-font); font-variant-numeric: tabular-nums; }
-.day-pin-n.rt-name-off { visibility: hidden; }
-.cp-pin span { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
-  border-radius: 50%; background: var(--rt-pin); color: #fff; border: 2px solid #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .4); font: 800 12px/1 var(--ds-font); }
-.cp-pin.arrived span { background: var(--rt-ok); }
-.cp-pin.skipped span { background: #6b7280; }
 .post-pin span { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
   border-radius: 50%; background: var(--rt-post-pin); color: #fff; border: 2px solid #fff; font-size: 12px;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .4); }
@@ -548,10 +544,6 @@ button.hud-tool { width: 100%; font-family: inherit; cursor: pointer; }
 .rt-list { list-style: none; margin: 0; padding: .4rem; display: flex; flex-direction: column; gap: .4rem;
   height: 14rem; overflow-y: auto; overscroll-behavior: contain; border: 2px dashed #d1d5db; border-radius: .6rem; }
 .rt-list a, .rt-list button { display: block; width: 100%; text-align: left; font-size: 1rem; padding: .6rem .7rem; border: 2px solid #111827; border-radius: .6rem; background: #fff; color: #111827; font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
-
-/* --- the hours labels on the map: a day's drive in whole hours, light theme only -------- */
-.hours-lbl span { display: inline-block; transform: translate(-50%, -50%); white-space: nowrap; font-size: .68rem;
-  color: #6b7280; opacity: .85; text-shadow: 0 0 2px #fff, 0 0 2px #fff; pointer-events: none; }
 
 .post-done { margin: .6rem 0; padding: .7rem .9rem; border: 1px solid #059669; border-radius: var(--ds-radius); background: #ecfdf5; color: #065f46; font-weight: 600; }
 .start-drive { display: block; width: 100%; margin: .75rem 0; font-size: 1.25rem; }

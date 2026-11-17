@@ -32,7 +32,9 @@ let mapOpts = null;            // what L.map was asked for
 let invalidated = 0;
 const trace = { opening: null };
 const state = { center: null, zoom: 0, size: { ...cur }, fits: 0 };
-const markers = [];
+const markers = [];            // every marker the page made; visible() says which are on the map
+const lines = [];              // every polyline
+const circles = [];            // every circle marker
 const layers = {};             // name -> group, from L.control.layers
 let ourFit = false;
 
@@ -44,8 +46,10 @@ class Bounds {
   isValid() { return this.p.length > 0; }
 }
 
+// A layer is on the map when it sits on the map itself, or in a group that is on the map and holds it.
+const visible = (o) => { const p = o.parent; return !!p && (p === map || (p.layers.indexOf(o) >= 0 && !!p.onMap)); };
 const group = () => {
-  const g = { layers: [], addTo() { return g; }, addLayer(l) { g.layers.push(l); return g; }, clearLayers() { g.layers.forEach((l) => { const k = markers.indexOf(l); if (k >= 0) markers.splice(k, 1); }); g.layers.length = 0; return g; } };
+  const g = { layers: [], onMap: false, addTo(t) { g.parent = t; g.onMap = t === map; return g; }, addLayer(l) { l.parent = g; if (g.layers.indexOf(l) < 0) g.layers.push(l); return g; }, clearLayers() { g.layers.length = 0; return g; } };
   return g;
 };
 const gathers = [];            // every L.markerClusterGroup the page made
@@ -53,7 +57,7 @@ const clusterGroup = (opts) => {
   const g = group();
   g.opts = opts || {};
   g.gathering = true;
-  g.removeLayers = (ls) => { ls.forEach((l) => { const k = g.layers.indexOf(l); if (k >= 0) g.layers.splice(k, 1); const j = markers.indexOf(l); if (j >= 0) markers.splice(j, 1); }); return g; };
+  g.removeLayers = (ls) => { ls.forEach((l) => { const k = g.layers.indexOf(l); if (k >= 0) g.layers.splice(k, 1); }); return g; };
   g.addLayers = (ls) => { ls.forEach((l) => g.addLayer(l)); return g; };
   gathers.push(g);
   return g;
@@ -62,6 +66,7 @@ const clusterGroup = (opts) => {
 const gatherNow = () => {
   const out = [];
   gathers.forEach((g) => {
+    if (!g.onMap) return;
     const r = (g.opts.maxClusterRadius) || 80;
     const left = g.layers.slice();
     while (left.length) {
@@ -75,10 +80,13 @@ const gatherNow = () => {
   });
   return out;
 };
-const chain = () => { const o = { addTo(t) { if (t && t.addLayer) t.addLayer(o); return o; }, bindPopup(h) { o.popup = h; return o; } }; return o; };
+const chain = () => { const o = { addTo(t) { o.parent = t; if (t && t.addLayer) t.addLayer(o); return o; }, bindPopup(h) { o.popup = h; return o; } }; return o; };
 
 const map = {
   whenReady(f) { f(); },
+  addLayer(g) { g.onMap = true; g.parent = map; return map; },
+  removeLayer(g) { g.onMap = false; return map; },
+  hasLayer(g) { return !!g.onMap; },
   on(ev, f) { (listeners[ev] = listeners[ev] || []).push(f); return map; },
   invalidateSize() { state.size = { ...cur }; invalidated++; },
   getContainer() { return el; },
@@ -139,8 +147,8 @@ const L = {
   DomEvent: { disableClickPropagation() {}, disableScrollPropagation() {} },
   layerGroup: group,
   markerClusterGroup: clusterGroup,
-  polyline(pts, o) { const c = chain(); c.style = o || {}; return c; },
-  circleMarker() { return chain(); },
+  polyline(pts, o) { const c = chain(); c.style = o || {}; lines.push(c); return c; },
+  circleMarker() { const c = chain(); circles.push(c); return c; },
   divIcon(o) { return o; },
   latLngBounds(pts) { return new Bounds(pts); },
   point(x, y) { return { x, y }; },
@@ -149,7 +157,8 @@ const L = {
     m.rec = { lat: ll[0], lng: ll[1], cls: (o.icon && o.icon.className) || '', iconSize: o.icon && o.icon.iconSize, iconAnchor: o.icon && o.icon.iconAnchor,
       z: o.zIndexOffset || 0, interactive: o.interactive !== false, html: o.icon && o.icon.html };
     const add = m.addTo;
-    m.addTo = (t) => { add(t); markers.push(m); return m; };
+    markers.push(m);   // made; it is on the map only once a group or the map holds it (visible())
+    m.addTo = (t) => { add(t); return m; };
     m.bindPopup = (h) => { m.rec.popup = h; return m; };
     m.getLatLng = () => ({ lat: ll[0], lng: ll[1] });
     return m;
@@ -233,7 +242,7 @@ for (const s of i.steps || []) {
 
 const hint = (() => { let h = null; walk(el, (n) => { if (/\brt-map-hint\b/.test(n.className || '')) h = n; }); return h; })();
 const buttons = [];
-controlNodes.forEach((c) => walk(c.node, (n) => { const k = n.getAttribute && n.getAttribute('data-rt'); if (k) buttons.push({ name: k, label: n.getAttribute('aria-label') || '', text: n.textContent || '', hidden: !!n.hidden, position: c.position }); }));
+controlNodes.forEach((c) => walk(c.node, (n) => { const k = n.getAttribute && n.getAttribute('data-rt'); if (k) buttons.push({ name: k, label: n.getAttribute('aria-label') || '', text: n.textContent || '', hidden: !!n.hidden, position: c.position, pressed: n.getAttribute('aria-pressed') }); }));
 
 const inView = (lat, lng) => {
   if (!state.center) return false;
@@ -247,7 +256,9 @@ process.stdout.write(JSON.stringify({
   panel: ctx.RTNowPlaying.panelHtml((i.tracks && i.tracks.tracks) || [], (s) => String(s == null ? '' : s), false, true),
   customControls,
   layerNames: Object.keys(layers),
-  markers: markers.map((m) => ({ ...m.rec, inView: inView(m.rec.lat, m.rec.lng), clustered: gathers.some((g) => g.layers.indexOf(m) >= 0) })),
+  lines: lines.map((l) => ({ color: l.style.color, weight: l.style.weight, opacity: l.style.opacity, visible: visible(l) })),
+  circles: circles.filter(visible).length,
+  markers: markers.filter(visible).map((m) => ({ ...m.rec, inView: inView(m.rec.lat, m.rec.lng), clustered: gathers.some((g) => g.layers.indexOf(m) >= 0 && g.onMap) })),
   mapOpts,
   hint: hint ? { shown: hint.classList.contains('on'), text: hint.textContent, role: hint.getAttribute('role') } : null,
   buttons,
