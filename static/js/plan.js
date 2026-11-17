@@ -123,12 +123,8 @@
   var map = null, lines = [], cpLayer = null, allBounds = null, userMoved = false, focusDay = 0;
 
   if (mapEl && typeof L !== 'undefined') {
-    map = L.map('map', { scrollWheelZoom: false, maxZoom: 18 });
-    mapEl._leafletMap = map;
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
-    }).addTo(map);
-    L.control.scale({ imperial: true, metric: true }).addTo(map);
+    /* The options and the buttons are the Ride's own: map_common.js. */
+    map = RTMap.create(mapEl);
     cpLayer = L.layerGroup().addTo(map);
 
     var every = [];
@@ -159,6 +155,7 @@
       map.fitBounds(allBounds, { padding: [44, 44] });
     };
     refit();
+    RTMap.controls(map, mapEl, { fitLabel: 'Fit trip', fit: function () { zoomAll(); } });
     if (window.ResizeObserver) { new ResizeObserver(refit).observe(mapEl); }
     else { window.addEventListener('load', refit); window.addEventListener('resize', refit); }
   }

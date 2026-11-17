@@ -79,13 +79,13 @@ func initPlanDaySummaryScenarios(t *testing.T, sc *godog.ScenarioContext, m *mar
 		return nil
 	})
 	script := func(path string) string { return doAs(t, m.sim.app, nil, "GET", path, nil).Body.String() }
-	sc.Step(`^the Plan map and the Ride map draw a night's end as its day badge with the town$`, func() error {
-		for _, p := range []string{"/static/js/plan.js", "/static/js/map.js"} {
-			js := script(p)
-			for _, want := range []string{"day-pin-b", "day-pin-n"} {
-				if !strings.Contains(js, want) {
-					return fmt.Errorf("%s lacks %q", p, want)
-				}
+	sc.Step(`^the Plan map draws a night's end as its day badge with the town and the Ride and leg maps draw none$`, func() error {
+		for _, want := range []string{"day-pin-b", "day-pin-n"} {
+			if !strings.Contains(script("/static/js/plan.js"), want) {
+				return fmt.Errorf("plan.js lacks %q", want)
+			}
+			if strings.Contains(script("/static/js/map.js"), want) {
+				return fmt.Errorf("map.js still draws a day badge (%q)", want)
 			}
 		}
 		return nil

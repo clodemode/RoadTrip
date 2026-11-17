@@ -66,7 +66,7 @@ func initMarksScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) 
 	sc.Step(`^the hours bar marks "(h1)" without the private stop's name$`, m.h1NoPrivate)
 	sc.Step(`^the map data carries an hours line for the leg with ticks h0, h1 and h2$`, m.mapTicks)
 	sc.Step(`^each tick lies on the planned line at that whole hour's distance$`, m.ticksOnLine)
-	sc.Step(`^the hours line is styled muted and drawn offset beside the route, not on it$`, m.mutedOffset)
+	sc.Step(`^the Ride and leg maps draw no hours stick, though the data still carries it$`, m.mutedOffset)
 	sc.Step(`^the stop 60 miles from Kingston is arrived at$`, m.arrivedAtSixty)
 	sc.Step(`^the stop 60 miles from Kingston is skipped$`, m.skippedAtSixty)
 	sc.Step(`^the hours bar reads "h0" at that stop first$`, m.barFirstAtStop)
@@ -451,13 +451,12 @@ func (m *marksWorld) h1SixtyFurther() error {
 
 func (m *marksWorld) mutedOffset() error {
 	js := doAs(m.t, m.sim.app, nil, "GET", "/static/js/map.js", nil).Body.String()
-	for _, want := range []string{"hours_line", "HOURS_OFFSET_PX = 8", "'#6b7280'", "weight: 2", "opacity: 0.5", "zoomend"} {
-		if !strings.Contains(js, want) {
-			return fmt.Errorf("map.js lacks %q", want)
+	for _, bad := range []string{"hours_line", "HOURS_OFFSET_PX", "hours-lbl"} {
+		if strings.Contains(js, bad) {
+			return fmt.Errorf("map.js still draws the hours stick (%q)", bad)
 		}
 	}
-	// The data holds the stretch on the route itself; the beside-the-route
-	// offset is drawn in screen space, so the payload must not pre-offset it.
+	// The data still holds the stretch on the route itself; it is just not drawn.
 	g := regexp.MustCompile(`"hours_line":(\[\[.*?\]\])`).FindStringSubmatch(m.page)
 	if g == nil {
 		return fmt.Errorf("the map data has no hours_line")

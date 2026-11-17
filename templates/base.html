@@ -19,10 +19,13 @@
      Order: Leaflet, Bootstrap (vendored, never a CDN), the folded foundation,
      then roadtrip's own app.css, each one able to refine the one before. -->
 <link rel="stylesheet" href="/static/vendor/leaflet.css?v={{.V}}">
+<link rel="stylesheet" href="/static/vendor/MarkerCluster.css?v={{.V}}">
+<link rel="stylesheet" href="/static/vendor/MarkerCluster.Default.css?v={{.V}}">
 <link rel="stylesheet" href="/static/vendor/bootstrap.min.css?v={{.V}}">
 <link rel="stylesheet" href="/static/css/foundation.css?v={{.V}}">
 <link rel="stylesheet" href="/static/css/app.css?v={{.V}}">
 <script defer src="/static/vendor/leaflet.js?v={{.V}}"></script>
+<script defer src="/static/vendor/leaflet.markercluster.js?v={{.V}}"></script>
 </head>
 <body data-leg="{{.PageLeg}}"{{if .IsLogin}} data-page="login"{{end}}{{if .Embed}} data-embed="1"{{end}}>
 {{if .SimBanner}}<div class="sim-banner" role="status" style="position:sticky;top:0;z-index:1000;box-sizing:border-box;min-height:2.25rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.4rem .75rem;background:#b91c1c;color:#fff;font:600 .85rem/1.2 system-ui,sans-serif;">

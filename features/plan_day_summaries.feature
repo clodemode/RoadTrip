@@ -29,6 +29,6 @@ Feature: Plan summarises each day in words, and the map marks each night
     When anyone opens the Plan page
     Then day 1 names no milestones
 
-  Scenario: The map marks each night's end with its day badge and the rest as small dots
-    Then the Plan map and the Ride map draw a night's end as its day badge with the town
+  Scenario: The Plan map marks each night's end with its day badge and the rest as small dots; the Ride map no longer does
+    Then the Plan map draws a night's end as its day badge with the town and the Ride and leg maps draw none
     And the Plan map draws the start and the milestones as small plain dots

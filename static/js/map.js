@@ -1,7 +1,10 @@
-/* roadtrip — map.
+/* roadtrip — map (the Ride and a leg).
  *
- * Leg polylines in a colour cycle, numbered checkpoint pins, muted sight
- * pins, photo pins with a thumbnail popup. Plain Leaflet, no framework.
+ * The route (leg polylines in a colour cycle, and the driven track over it) is
+ * always drawn. On top of it go three kinds of pin the visitor can switch with
+ * plain buttons on the map: Music (music notes), Photos (posts with a photo) and
+ * Notes (posts without one). There are no day, start, checkpoint, sight or hours
+ * markers: the checkpoints list under the map says that. Plain Leaflet.
  * window.RIDE is {legs, tracks, checkpoints, sights, posts} from the server;
  * a leg that has a track is the plan and goes dashed under it. A post
  * carries pin_source (exif | browser | checkpoint) and, for a checkpoint
@@ -22,17 +25,9 @@
     return m ? '?ride=' + m[1] : '';
   })();
 
-  var map = L.map('map', {
-    // Scrolling the page with the pointer over the map must not zoom it.
-    scrollWheelZoom: false,
-    maxZoom: 18
-  });
-  el._leafletMap = map;
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
-  }).addTo(map);
-  L.control.scale({ imperial: true, metric: true }).addTo(map);
+  // The options and the buttons every map shares come from map_common.js: one
+  // finger scrolls the page on a touch screen, two move the map.
+  var map = RTMap.create(el);
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -40,7 +35,10 @@
     });
   }
 
-  var all = [];   // every latlng we draw, for the initial fit
+  var all = [];   // every latlng the route draws (the leg lines and the driven track), for the initial fit
+  var cpPts = []; // the checkpoints: not drawn, they only stand in for the fit when the route is empty
+  (data.checkpoints || []).forEach(function (c) { cpPts.push([c.lat, c.lng]); });
+  var postPts = [];   // the pinned posts: they join the fit only when they belong to the view (see the fit)
 
   /* --- legs ------------------------------------------------------------- */
   /* A leg that has an actual track drawn over it gives up the solid line: the
@@ -49,9 +47,19 @@
   (data.tracks || []).forEach(function (t) { driven[t.leg] = true; });
 
   var legLayer = L.layerGroup().addTo(map);
+  var legRuns = [];
   (data.legs || []).forEach(function (leg) {
     var pts = (leg.line || []).map(function (c) { return [c[1], c[0]]; });
-    if (!pts.length) return;
+    if (pts.length) legRuns.push({ leg: leg, pts: pts });
+  });
+  /* A white casing under each line, drawn first for every leg so no casing ever
+     paints over a neighbour's line: the route stays readable on the busy tiles at
+     trip zoom. A leg whose actual track is drawn over it stays a dim dashed plan. */
+  legRuns.forEach(function (r) {
+    if (!driven[r.leg.ord]) L.polyline(r.pts, { color: '#fff', weight: 8, opacity: 0.9, interactive: false }).addTo(legLayer);
+  });
+  legRuns.forEach(function (r) {
+    var leg = r.leg, pts = r.pts;
     var style = driven[leg.ord]
       ? { color: leg.color, weight: 3, opacity: 0.35, dashArray: '6,8' }
       : { color: leg.color, weight: 4, opacity: 0.85 };
@@ -62,75 +70,22 @@
     all = all.concat(pts);
   });
 
-  /* --- the hours stick ---------------------------------------------------
-     A thin, muted measuring stick beside the route: the stretch of planned
-     line still to drive, drawn HOURS_OFFSET_PX to one side, with a short
-     perpendicular tick and a small label ("h1 Trenton") at each whole hour.
-     The server sends leg.hours (points ON the planned line) and
-     leg.hours_line (the stretch they measure); the offset is computed here in
-     screen space and redrawn on zoomend, so it stays 8 px off the road at any
-     zoom. Grey and faint on purpose: a ruler, not a second route. */
-  var HOURS_OFFSET_PX = 8;
-  var HOURS_LABEL_ZOOM = 8;
-  var hoursLayer = L.layerGroup().addTo(map);
-
-  function unit(a, b) {
-    var dx = b.x - a.x, dy = b.y - a.y, n = Math.sqrt(dx * dx + dy * dy) || 1;
-    return { x: dx / n, y: dy / n };
-  }
-  function drawHours() {
-    hoursLayer.clearLayers();
-    (data.legs || []).forEach(function (leg) {
-      var stretch = (leg.hours_line || []).map(function (c) { return map.latLngToLayerPoint([c[1], c[0]]); });
-      if (stretch.length < 2) return;
-      // The right-hand normal of each segment; a vertex takes the mean of its two.
-      var segN = [];
-      for (var i = 1; i < stretch.length; i++) {
-        var u = unit(stretch[i - 1], stretch[i]);
-        segN.push({ x: -u.y, y: u.x });
-      }
-      function normalAt(i) {
-        var a = segN[Math.max(0, i - 1)], b = segN[Math.min(segN.length - 1, i)];
-        var x = a.x + b.x, y = a.y + b.y, n = Math.sqrt(x * x + y * y) || 1;
-        return { x: x / n, y: y / n };
-      }
-      function off(p, n, d) { return map.layerPointToLatLng(L.point(p.x + n.x * d, p.y + n.y * d)); }
-      var side = stretch.map(function (p, i) { return off(p, normalAt(i), HOURS_OFFSET_PX); });
-      L.polyline(side, { color: '#6b7280', weight: 2, opacity: 0.5, interactive: false }).addTo(hoursLayer);
-      (leg.hours || []).forEach(function (h) {
-        var p = map.latLngToLayerPoint([h.lat, h.lng]);
-        // The segment the tick sits on: the nearest one.
-        var best = 0, bd = Infinity;
-        for (var i = 1; i < stretch.length; i++) {
-          var a = stretch[i - 1], b = stretch[i], dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
-          var t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
-          var d = Math.pow(a.x + t * dx - p.x, 2) + Math.pow(a.y + t * dy - p.y, 2);
-          if (d < bd) { bd = d; best = i - 1; }
-        }
-        var n = segN[best];
-        L.polyline([off(p, n, HOURS_OFFSET_PX - 5), off(p, n, HOURS_OFFSET_PX + 5)],
-          { color: '#6b7280', weight: 2, opacity: 0.5, interactive: false }).addTo(hoursLayer);
-        /* Zoomed out, a whole trip's hour names pile on top of each other and
-           of the pins: the ticks stay, the names wait for a closer look. */
-        if (map.getZoom() < HOURS_LABEL_ZOOM) return;
-        L.marker(off(p, n, HOURS_OFFSET_PX + 12), { interactive: false, keyboard: false,
-          icon: L.divIcon({ className: 'hours-lbl', iconSize: null,
-            html: '<span>' + esc(h.label + (h.name ? ' ' + h.name : '')) + '</span>' }) }).addTo(hoursLayer);
-      });
-    });
-  }
-  map.whenReady(drawHours);   /* after the first fit: projection needs a view */
-  map.on('zoomend', drawHours);
-
   /* --- the actual track -------------------------------------------------- */
   /* Where the car is known to have gone: the arrived origin, the leg's pinned
      posts in the order they happened, the arrived terminus. The server only
      builds one for a leg that has some of that, so an untravelled leg shows
      its plan alone. */
   var trackLayer = L.layerGroup().addTo(map);
+  var trackRuns = [];
   (data.tracks || []).forEach(function (t) {
     var pts = (t.line || []).map(function (c) { return [c[1], c[0]]; });
-    if (pts.length < 2) return;
+    if (pts.length >= 2) trackRuns.push({ t: t, pts: pts });
+  });
+  trackRuns.forEach(function (r) {
+    L.polyline(r.t.planned_start ? r.pts.slice(1) : r.pts, { color: '#fff', weight: 8, opacity: 0.9, interactive: false }).addTo(trackLayer);
+  });
+  trackRuns.forEach(function (r) {
+    var t = r.t, pts = r.pts;
     /* planned_start: the first vertex is where the leg was planned to begin,
        not a place the ride was stamped at. That first stretch is drawn lighter
        and dashed, so the line never claims more than is known. */
@@ -150,59 +105,30 @@
     all = all.concat(pts);
   });
 
-  /* --- checkpoints ------------------------------------------------------ */
-  var cpLayer = L.layerGroup().addTo(map);
-  var colorBySlug = {};
-  (data.legs || []).forEach(function (leg) { colorBySlug[leg.slug] = leg.color; });
-  (data.checkpoints || []).forEach(function (c) {
-    /* A night's end is marked d1, d2 ...: it wears its day's badge in the day's
-       colour with the town beside it. Every other place stays a small pin. */
-    var dayMark = /^d\d+$/.test(c.mark || '');
-    var isDayEnd = dayMark && !c.is_start;
-    var m;
-    if (c.is_start && dayMark) {
-      /* The start is a small plain dot, like a place passed on the way. */
-      m = L.circleMarker([c.lat, c.lng], { radius: 5, color: '#374151', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(cpLayer);
-    } else {
-      var icon = isDayEnd
-        ? L.divIcon({ className: 'day-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
-            iconSize: [0, 0], iconAnchor: [0, 0],
-            html: '<span class="day-pin-b" style="background:' + esc(colorBySlug[c.leg_slug] || '#0d6efd') + '">' +
-              esc(c.mark) + '</span><span class="day-pin-n">' + esc(c.name) + '</span>' })
-        : L.divIcon({ className: 'cp-pin' + (c.arrived ? ' arrived' : '') + (c.skipped ? ' skipped' : ''),
-            iconSize: [26, 26], iconAnchor: [13, 13], html: '<span>' + esc(c.mark || c.ord) + '</span>' });
-      m = L.marker([c.lat, c.lng], { icon: icon, keyboard: false, zIndexOffset: isDayEnd ? 600 : 500 }).addTo(cpLayer);
+  /* --- posts and music notes: one gathering group -------------------------
+     Photo pins (34 px) and music notes (30 px) that would sit on top of each other
+     gather into one round count; a tap on the count zooms in place to spread them.
+     The radius is a little more than a photo pin, so two pins that touch always
+     gather. Each kind keeps its own list of markers: a button takes them out of the
+     group (and out of every count) or puts them back. */
+  var gather = L.markerClusterGroup({
+    maxClusterRadius: 45, showCoverageOnHover: false, spiderfyOnMaxZoom: true, zoomToBoundsOnClick: true,
+    iconCreateFunction: function (c) {
+      return L.divIcon({ className: 'rt-gather', iconSize: [40, 40], html: '<span>' + c.getChildCount() + '</span>' });
     }
-    var bits = ['<div class="popup"><h3>' + esc(c.mark || c.ord) + '. ' + esc(c.name) + '</h3>'];
-    if (c.label) bits.push('<p>' + esc(c.label) + '</p>');
-    if (c.precision === 'fuzzed') bits.push('<p class="muted">approximate position</p>');
-    if (c.arrived) bits.push('<p><b>' + (c.is_start ? 'Left' : 'Arrived') + '</b> ' + esc(c.arrived) + '</p>');
-    else if (c.skipped) bits.push('<p><b>' + (c.skip_reason === 'rerouted' ? 'Rerouted around' : 'Missed') + '</b></p>');
-    else if (c.planned) bits.push('<p class="muted">plan: ' + esc(c.planned) + '</p>');
-    bits.push('<p class="muted">' + esc(c.tz) + '</p></div>');
-    m.bindPopup(bits.join(''));
-    all.push([c.lat, c.lng]);
-  });
-
-  /* --- sights (muted, off by default on the ride view) ------------------- */
-  var sightLayer = L.layerGroup();
-  (data.sights || []).forEach(function (s) {
-    var m = L.circleMarker([s.lat, s.lng], { radius: 5, color: '#6b7280', weight: 1,
-      fillColor: '#9ca3af', fillOpacity: 0.7 }).addTo(sightLayer);
-    m.bindPopup('<div class="popup"><h3>' + esc(s.name) + '</h3>' +
-      (s.why ? '<p>' + esc(s.why) + '</p>' : '') + '<p class="muted">' + esc(s.kind) + ' &middot; candidate</p></div>');
-  });
-  if (el.dataset.mode === 'leg') sightLayer.addTo(map);
-
-  /* --- posts ------------------------------------------------------------ */
-  var postLayer = L.layerGroup().addTo(map);
+  }).addTo(map);
+  var kinds = { music: { on: true, marks: [] }, photos: { on: true, marks: [] }, notes: { on: true, marks: [] } };
+  function place(kind, m) {
+    kinds[kind].marks.push(m);
+    if (kinds[kind].on) gather.addLayer(m);
+  }
   (data.posts || []).forEach(function (p) {
     var html = p.thumb ? '<img src="' + esc(p.thumb) + '" alt="">' : '<span>&#9679;</span>';
     var m = L.marker([p.lat, p.lng], {
       icon: L.divIcon({ className: 'post-pin' + (p.thumb ? ' has-photo' : ''),
         iconSize: [34, 34], iconAnchor: [17, 17], html: html }),
       keyboard: false, zIndexOffset: 1000
-    }).addTo(postLayer);
+    });
     var bits = ['<div class="popup">'];
     if (p.thumb) bits.push('<a href="/photo/' + p.id + '"><img class="popup-photo" src="' + esc(p.thumb) + '" alt=""></a>');
     bits.push('<h3>' + (p.title ? esc(p.title) : esc(p.kind)) + '</h3>');
@@ -214,7 +140,8 @@
     }
     bits.push('<p><a href="/#post-' + p.id + '">On the timeline &rarr;</a></p></div>');
     m.bindPopup(bits.join(''), { minWidth: 200 });
-    all.push([p.lat, p.lng]);
+    place(p.thumb ? 'photos' : 'notes', m);
+    postPts.push([p.lat, p.lng]);
   });
 
   /* --- music notes (nowplaying.js, text only) ----------------------------
@@ -222,19 +149,18 @@
      Inn itself is a card of its own, off the map (listeninn.js); it asks
      /tracks.json once a minute and tells this map what it read. */
   var NP = window.RTNowPlaying;
-  var playLayer = L.layerGroup().addTo(map);
   var drawPlays = function (doc) {
-    playLayer.clearLayers();
+    gather.removeLayers(kinds.music.marks);
+    kinds.music.marks = [];
     ((doc && doc.tracks) || []).forEach(function (p) {
       if (typeof p.lat !== 'number' || typeof p.lng !== 'number' || !isFinite(p.lat) || !isFinite(p.lng)) return;
-      /* A track often starts at a stop, so a note sits above the stop pins
-         (500 and 600) and under a photo (1000); it is drawn as a pin whose tip
-         is the spot, 30 px across, so it can be seen and tapped beside the
-         stop's own circle. */
-      L.marker([p.lat, p.lng], {
+      /* A note is drawn as a pin whose tip is the spot, 30 px across, so it can be
+         seen and tapped beside a photo (1000); it sits under the photos. */
+      var note = L.marker([p.lat, p.lng], {
         icon: L.divIcon({ className: 'np-pin', iconSize: [30, 30], iconAnchor: [15, 34], html: '<span>&#9834;</span>' }),
         keyboard: false, zIndexOffset: 700
-      }).addTo(playLayer).bindPopup('<div class="popup">' + NP.rowHtml(p, esc) + '</div>');
+      }).bindPopup('<div class="popup">' + NP.rowHtml(p, esc) + '</div>');
+      place('music', note);
     });
   };
   if (NP && window.RIDE_TRACKS) {
@@ -242,13 +168,31 @@
     document.addEventListener('rt:tracks', function (e) { if (e && e.detail) drawPlays(e.detail); });
   }
 
-  L.control.layers(null, {
-    'Route': legLayer, 'Driven': trackLayer, 'Checkpoints': cpLayer,
-    'Candidate stops': sightLayer, 'Posts': postLayer, 'Music': playLayer
-  }, { collapsed: true }).addTo(map);
+  /* Music, Photos and Notes: three plain buttons in place of a layers menu. The route has none. */
+  RTMap.toggles(map, [['music', 'Music'], ['photos', 'Photos'], ['notes', 'Notes']].map(function (k) {
+    return { key: k[0], label: k[1], set: function (on) {
+      var kind = kinds[k[0]];
+      kind.on = on;
+      if (on) gather.addLayers(kind.marks); else gather.removeLayers(kind.marks);
+    } };
+  }));
 
   /* --- fit --------------------------------------------------------------- */
-  var bounds = all.length ? L.latLngBounds(all) : L.latLngBounds([[25, -125], [45, -95]]);
+  /* A leg's map opens on the leg: its line and its driven track. A post pinned
+     well off that stretch (a stray fix, a photo taken from a detour) stays on the
+     map but does not stretch the opening view out to it; the Ride keeps every post. */
+  var fitPts = all.slice();
+  if (el.dataset.mode === 'leg' && all.length) {
+    var S = 90, N = -90, W = 180, E = -180, M = 0.25;
+    all.forEach(function (q) { S = Math.min(S, q[0]); N = Math.max(N, q[0]); W = Math.min(W, q[1]); E = Math.max(E, q[1]); });
+    postPts.forEach(function (q) { if (q[0] >= S - M && q[0] <= N + M && q[1] >= W - M && q[1] <= E + M) fitPts.push(q); });
+  } else {
+    fitPts = all.concat(postPts);
+  }
+  /* The checkpoints are not drawn; they only keep the map from opening blank when
+     there is no route at all. */
+  if (!all.length) fitPts = cpPts.concat(postPts);
+  var bounds = fitPts.length ? L.latLngBounds(fitPts) : L.latLngBounds([[25, -125], [45, -95]]);
 
   /* Leaflet measures the container once, at construction. If the layout has
      not settled the map can be a couple of pixels wide and fitBounds clamps
@@ -268,6 +212,10 @@
     try { map.fitBounds(bounds, { padding: [24, 24], animate: false }); } finally { fitting = false; }
   }
   refit();
+  RTMap.controls(map, el, {
+    fitLabel: el.dataset.mode === 'leg' ? 'Fit leg' : 'Fit trip',
+    fit: function () { userMoved = false; refit(); }
+  });
   if (window.ResizeObserver) {
     new ResizeObserver(refit).observe(el);
   } else {

@@ -57,6 +57,7 @@ func TestFeatures(t *testing.T) {
 				initChesterCancelScenarios(t, sc)
 				initCombinationCapScenarios(sc)
 				initMapPolishScenarios(t, sc)
+				initMapPhoneScenarios(t, sc)
 				initFinderScenarios(t, sc)
 				initFinishedTripScenarios(t, sc)
 				initFuzzOneKilometreScenarios(sc)
