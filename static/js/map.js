@@ -168,8 +168,19 @@
     document.addEventListener('rt:tracks', function (e) { if (e && e.detail) drawPlays(e.detail); });
   }
 
-  /* Music, Photos and Notes: three plain buttons in place of a layers menu. The route has none. */
-  RTMap.toggles(map, [['music', 'Music'], ['photos', 'Photos'], ['notes', 'Notes']].map(function (k) {
+  /* --- dropped pins (drop_pin.go): a dot each, from the header's Drop Pin --- */
+  kinds.pins = { on: true, marks: [] };
+  (data.pins || []).forEach(function (p) {
+    if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+    var dot = L.marker([p.lat, p.lng], {
+      icon: L.divIcon({ className: 'drop-pin-dot', iconSize: [18, 18], iconAnchor: [9, 9], html: '<span></span>' }),
+      keyboard: false, zIndexOffset: 600
+    }).bindPopup('<div class="popup"><h3>Pin</h3><p class="muted">' + esc(p.when || '') + '</p></div>');
+    place('pins', dot);
+  });
+
+  /* Music, Photos, Notes and Pins: plain buttons in place of a layers menu. The route has none. */
+  RTMap.toggles(map, [['music', 'Music'], ['photos', 'Photos'], ['notes', 'Notes'], ['pins', 'Pins']].map(function (k) {
     return { key: k[0], label: k[1], set: function (on) {
       var kind = kinds[k[0]];
       kind.on = on;

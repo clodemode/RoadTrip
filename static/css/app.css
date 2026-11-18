@@ -701,3 +701,8 @@ body:has(.listen-dock) { padding-bottom: calc(6rem + env(safe-area-inset-bottom)
 /* A tile's link lands on its row or card with a little room above it. */
 .cp, .post { scroll-margin-top: 3rem; }
 .photo-step { justify-content: space-between; }
+
+/* Drop Pin (drop_pin.go): the header button and the map's dot. */
+.mast-links .drop-pin { min-height: 44px; white-space: nowrap; }
+.drop-pin-dot span { display: block; width: 18px; height: 18px; border-radius: 50%;
+  background: #dc2626; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
