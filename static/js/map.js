@@ -106,7 +106,7 @@
   });
 
   /* --- posts and music notes: one gathering group -------------------------
-     Photo pins (34 px) and music notes (30 px) that would sit on top of each other
+     Photo pins (44 px), notes (38 px) and music notes (32 px) that would sit on top of each other
      gather into one round count; a tap on the count zooms in place to spread them.
      The radius is a little more than a photo pin, so two pins that touch always
      gather. Each kind keeps its own list of markers: a button takes them out of the
@@ -123,12 +123,20 @@
     if (kinds[kind].on) gather.addLayer(m);
   }
   (data.posts || []).forEach(function (p) {
-    var html = p.thumb ? '<img src="' + esc(p.thumb) + '" alt="">' : '<span>&#9679;</span>';
-    var m = L.marker([p.lat, p.lng], {
-      icon: L.divIcon({ className: 'post-pin' + (p.thumb ? ' has-photo' : ''),
-        iconSize: [34, 34], iconAnchor: [17, 17], html: html }),
-      keyboard: false, zIndexOffset: 1000
-    });
+    /* Sizes and stacking (Kris, 2026-11-18: pins and notes were too small;
+       a photo belongs on top): photo 44 px above a note 38 px, above a music
+       note, above a dropped pin. */
+    var m = p.thumb
+      ? L.marker([p.lat, p.lng], {
+        icon: L.divIcon({ className: 'post-pin has-photo',
+          iconSize: [44, 44], iconAnchor: [22, 22], html: '<img src="' + esc(p.thumb) + '" alt="">' }),
+        keyboard: false, zIndexOffset: 1000
+      })
+      : L.marker([p.lat, p.lng], {
+        icon: L.divIcon({ className: 'post-pin note-pin',
+          iconSize: [38, 38], iconAnchor: [19, 19], html: '<span>&#9998;</span>' }),
+        keyboard: false, zIndexOffset: 800
+      });
     var bits = ['<div class="popup">'];
     if (p.thumb) bits.push('<a href="/photo/' + p.id + '"><img class="popup-photo" src="' + esc(p.thumb) + '" alt=""></a>');
     bits.push('<h3>' + (p.title ? esc(p.title) : esc(p.kind)) + '</h3>');
@@ -157,7 +165,7 @@
       /* A note is drawn as a pin whose tip is the spot, 30 px across, so it can be
          seen and tapped beside a photo (1000); it sits under the photos. */
       var note = L.marker([p.lat, p.lng], {
-        icon: L.divIcon({ className: 'np-pin', iconSize: [30, 30], iconAnchor: [15, 34], html: '<span>&#9834;</span>' }),
+        icon: L.divIcon({ className: 'np-pin', iconSize: [32, 32], iconAnchor: [16, 36], html: '<span>&#9834;</span>' }),
         keyboard: false, zIndexOffset: 700
       }).bindPopup('<div class="popup">' + NP.rowHtml(p, esc) + '</div>');
       place('music', note);
@@ -173,7 +181,7 @@
   (data.pins || []).forEach(function (p) {
     if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
     var dot = L.marker([p.lat, p.lng], {
-      icon: L.divIcon({ className: 'drop-pin-dot', iconSize: [18, 18], iconAnchor: [9, 9], html: '<span></span>' }),
+      icon: L.divIcon({ className: 'drop-pin-dot', iconSize: [30, 30], iconAnchor: [15, 15], html: '<span></span>' }),
       keyboard: false, zIndexOffset: 600
     }).bindPopup('<div class="popup"><h3>Pin</h3><p class="muted">' + esc(p.when || '') + '</p></div>');
     place('pins', dot);

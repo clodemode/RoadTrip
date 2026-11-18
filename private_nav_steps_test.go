@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -93,6 +94,52 @@ func initPrivateNavScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		return nil
 	})
 	sc.Step(`^kris reads the Ride page's navigation$`, func() error { return w.n.get("/", true) })
+	sc.Step(`^kris opens the driver screen for its Waze button$`, func() error {
+		if err := w.readHUD(); err != nil {
+			return err
+		}
+		return w.n.get("/driver", true)
+	})
+	sc.Step(`^the driver screen's Waze button reads "([^"]*)"$`, func(want string) error {
+		return wazeButtonReads("the driver screen", w.n.page, want)
+	})
+	sc.Step(`^the driver screen's navigation says it goes to "([^"]*)"$`, func(want string) error {
+		if got, _ := w.hud["nav_to"].(string); got != want {
+			return fmt.Errorf("hud.json nav_to is %q, want %q", got, want)
+		}
+		return nil
+	})
+	sc.Step(`^the Ride row for ([ABCD]) has a Waze button that reads "([^"]*)"$`, func(s, want string) error {
+		r, err := w.n.row(s)
+		if err != nil {
+			return err
+		}
+		return wazeButtonReads("the Ride row for "+s, r, want)
+	})
+	sc.Step(`^the day's end Waze button reads "([^"]*)"$`, func(want string) error {
+		b := dayEndRe.FindString(w.n.page)
+		if b == "" {
+			return fmt.Errorf("the page has no day's end block")
+		}
+		return wazeButtonReads("the day's end", b, want)
+	})
+}
+
+var wazeButtonRe = regexp.MustCompile(`(?s)<a[^>]*href="https://waze\.com[^"]*"[^>]*>(.*?)</a>`)
+var navTagRe = regexp.MustCompile(`<[^>]*>`)
+
+// wazeButtonReads finds the first Waze link in body and compares its visible
+// words, tags stripped and spaces collapsed, with want.
+func wazeButtonReads(where, body, want string) error {
+	m := wazeButtonRe.FindStringSubmatch(body)
+	if m == nil {
+		return fmt.Errorf("%s has no Waze button", where)
+	}
+	got := strings.Join(strings.Fields(html.UnescapeString(navTagRe.ReplaceAllString(m[1], " "))), " ")
+	if got != want {
+		return fmt.Errorf("%s's Waze button reads %q, want %q", where, got, want)
+	}
+	return nil
 }
 
 func (w *privNavWorld) name(s string) string { return w.n.p.cps[strings.Index("ABCD", s)].Name }

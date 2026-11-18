@@ -68,6 +68,9 @@ type hudView struct {
 	// go to the stop itself. A Waze link holds one destination, so a routing
 	// point works by being the next one.
 	Via string `json:"via,omitempty"`
+	// NavTo is where the links above go, as the Waze button says it
+	// (stopNavLabel / viaNavLabel).
+	NavTo string `json:"nav_to,omitempty"`
 
 	Hazards []hazardChip `json:"hazards,omitempty"`
 
@@ -246,6 +249,7 @@ func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, movin
 		// the trip-keeper has one, else its name, never the cell (stopNav).
 		nav := stopNav(c, addr)
 		h.Waze, h.Google, h.Apple = nav.Waze, nav.Google, nav.Apple
+		h.NavTo = stopNavLabel(c, addr)
 		if c.Precision != precisionFuzzed {
 			la, ln := c.Lat, c.Lng
 			h.NextLat, h.NextLng = &la, &ln
@@ -258,6 +262,7 @@ func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, movin
 		}, posAlong, haveLine && haveBase); rp != nil {
 			nav := mapLinks(rp.Lat, rp.Lng, rp.Name)
 			h.Waze, h.Google, h.Apple, h.Via = nav.Waze, nav.Google, nav.Apple, rp.Name
+			h.NavTo = viaNavLabel(rp.Name)
 		}
 		// Do the clocks change somewhere ahead on this leg?
 		here := now.In(loadLoc(curTZ)).Format("MST")

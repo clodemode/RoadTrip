@@ -62,7 +62,7 @@
   <h2 id="dayend-h" class="dayend-h">Day's end{{if .Multi}} &middot; d{{.LegOrd}}{{end}}: {{.Name}}</h2>
   {{if .ViaFirst}}<p class="dayend-via">Waze and Apple Maps go to {{.ViaFirst}} first and move on once you pass it. Google Maps carries {{if gt (len .Via) 1}}every stop ahead{{else}}it{{end}} on the way to {{.Name}}.</p>{{end}}
   <p class="dayend-nav">
-    <a class="btn btn-primary" href="{{.Waze}}" rel="noopener">Navigate in Waze</a>
+    <a class="btn btn-primary" href="{{.Waze}}" rel="noopener">Navigate in Waze <span class="nav-to">to {{.NavTo}}</span></a>
     <a class="btn btn-outline-dark" href="{{.Google}}" rel="noopener">Google Maps</a>
     <a class="btn btn-outline-dark" href="{{.Apple}}" rel="noopener">Apple Maps</a>
   </p>
