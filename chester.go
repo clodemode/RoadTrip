@@ -723,6 +723,13 @@ func coarseTown(name string) (city, region string) {
 // how far along it the nearest point is, the line's whole length, and how
 // far off the line the point sits, all in kilometres.
 func alongLine(line json.RawMessage, lat, lng float64) (alongKm, totalKm, offKm float64, ok bool) {
+	return alongLineFrom(line, lat, lng, 0)
+}
+
+// alongLineFrom is alongLine searching only the line at or beyond fromKm. A
+// stop is measured from the stop before it, so a round trip's finish, which
+// sits on its start, lands at the line's end and not its first mile.
+func alongLineFrom(line json.RawMessage, lat, lng, fromKm float64) (alongKm, totalKm, offKm float64, ok bool) {
 	var pts [][]float64
 	if err := json.Unmarshal(line, &pts); err != nil || len(pts) < 2 {
 		return 0, 0, 0, false
@@ -734,6 +741,10 @@ func alongLine(line json.RawMessage, lat, lng float64) (alongKm, totalKm, offKm 
 			return 0, 0, 0, false
 		}
 		seg := haversineKm(a[1], a[0], b[1], b[0])
+		if totalKm+seg < fromKm {
+			totalKm += seg
+			continue
+		}
 		// A flat projection is good to well under a percent over one segment.
 		kx := math.Cos((a[1] + b[1]) / 2 * math.Pi / 180)
 		dx, dy := (b[0]-a[0])*kx, b[1]-a[1]
@@ -741,6 +752,9 @@ func alongLine(line json.RawMessage, lat, lng float64) (alongKm, totalKm, offKm 
 		t := 0.0
 		if d := dx*dx + dy*dy; d > 0 {
 			t = math.Max(0, math.Min(1, (px*dx+py*dy)/d))
+		}
+		if seg > 0 && totalKm+t*seg < fromKm {
+			t = (fromKm - totalKm) / seg
 		}
 		off := haversineKm(lat, lng, a[1]+t*(b[1]-a[1]), a[0]+t*(b[0]-a[0]))
 		if off < offKm {

@@ -67,6 +67,7 @@ func initPostScenarios(t *testing.T, sc *godog.ScenarioContext, sim *simWorld) *
 	initPostOneTapScenarios(sc, p)
 	initTracksTopScenarios(p.t, sc, p)
 	initDropPinScenarios(sc, p)
+	initRoundTripScenarios(sc, p)
 	return s
 }
 

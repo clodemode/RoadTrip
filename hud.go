@@ -159,9 +159,15 @@ func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, movin
 
 	_, totalKm, _, haveLine := alongLine(leg.Line, 0, 0)
 	cps := leg.Checkpoints
+	// Each stop is measured from the one before it: a finish on the start
+	// (a round trip) lies at the line's end, not its first mile.
 	alongs := make([]float64, len(cps))
 	for i, c := range cps {
-		if a, _, _, ok := alongLine(leg.Line, c.Lat, c.Lng); ok {
+		from := 0.0
+		if i > 0 {
+			from = alongs[i-1]
+		}
+		if a, _, _, ok := alongLineFrom(leg.Line, c.Lat, c.Lng, from); ok {
 			alongs[i] = a
 		}
 	}
