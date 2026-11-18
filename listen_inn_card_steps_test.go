@@ -63,14 +63,14 @@ func initListenInnCardScenarios(t *testing.T, sc *godog.ScenarioContext, np *npW
 	}
 
 	// --- the floating card
-	sc.Step(`^the Ride page for a visitor carries the Listen Inn card docked after the page content$`, func() error {
+	sc.Step(`^the Ride page for a visitor carries the Listen Inn card in the top band before the map$`, func() error {
 		page := w.visit("/")
-		at := strings.Index(page, `<section class="tune-card listen-card listen-dock" id="np"`)
+		at := strings.Index(page, `<section class="tune-card listen-card listen-top" id="np"`)
 		if at < 0 {
-			return fmt.Errorf("the Ride page has no docked Listen Inn card")
+			return fmt.Errorf("the Ride page has no in-page Listen Inn card")
 		}
-		if end := strings.Index(page, "</main>"); end < 0 || at < end {
-			return fmt.Errorf("the card is inside the page content, not docked after it")
+		if m := strings.Index(page, `<div id="map"`); m < 0 || at > m {
+			return fmt.Errorf("the card does not come before the map")
 		}
 		if strings.Contains(page, `<aside class="np"`) {
 			return fmt.Errorf("the old map control is still on the page")
@@ -273,16 +273,10 @@ func initListenInnCardScenarios(t *testing.T, sc *godog.ScenarioContext, np *npW
 		}
 		return fmt.Errorf("no phone rule caps the open list")
 	})
-	sc.Step(`^the page keeps room under its content for the docked card$`, func() error {
-		b, err := staticFS.ReadFile("static/css/app.css")
-		if err != nil {
-			return err
-		}
-		if !regexp.MustCompile(`body:has\(\.listen-dock\)\s*\{[^}]*padding-bottom`).Match(b) {
-			return fmt.Errorf("the docked card would sit on the end of the page")
-		}
-		if !regexp.MustCompile(`\.listen-dock\s*\{[^}]*position:\s*fixed[^}]*bottom`).Match(b) {
-			return fmt.Errorf("the card is not docked at the bottom")
+	sc.Step(`^the open card takes its own room in the page and is not fixed to the window$`, func() error {
+		r := ruleOf(appCSS(w.t), `.listen-top`)
+		if r == "" || strings.Contains(r, "position: fixed") {
+			return fmt.Errorf("the card is not an in-page block: %q", r)
 		}
 		return nil
 	})

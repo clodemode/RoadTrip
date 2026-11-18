@@ -9,9 +9,11 @@ Feature: Listen Inn is its own floating card, off the map
   Background:
     Given the trip is active and the driver is signed in with RoadTracks on
 
-  Scenario: A visitor's Ride page carries Listen Inn as a docked card outside the map
+  # Kris, 2026-11-18: "move the Listen Inn off the map as the map should not be obscured if possible.
+  # Put it in the white space above." The card is in the page's top band, no longer docked to the window.
+  Scenario: A visitor's Ride page carries Listen Inn as an in-page card above the map
     When the driver's player reports track "Come Together" of album 42 "Abbey Road" by "The Beatles" started
-    Then the Ride page for a visitor carries the Listen Inn card docked after the page content
+    Then the Ride page for a visitor carries the Listen Inn card in the top band before the map
     And the card's title is its header button and the card starts closed
     And the card holds one audio element and one Play button
 
@@ -37,9 +39,10 @@ Feature: Listen Inn is its own floating card, off the map
   Scenario: A song's time is shown in the zone where it played
     Then a song that started at "2026-11-13T23:23:00Z" in "America/Chicago" reads "5:23 PM" and never "UTC"
 
+  # Kris, 2026-11-18: the card is in the page, so an open list pushes the map down and covers none of it.
   Scenario: On a phone the open card leaves the map in sight
     Then at phone width the open song list is capped at 30vh or less
-    And the page keeps room under its content for the docked card
+    And the open card takes its own room in the page and is not fixed to the window
 
   # Kris, 2026-11-18, on the road: "we now see both Drive Tracks and Listen Inn
   # at the same screen. No double player please." Inside the signed-in player

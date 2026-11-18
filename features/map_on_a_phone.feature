@@ -55,7 +55,7 @@ Feature: The map on a phone
     Then the zoom buttons and the Music, Photos and Notes buttons are at least 44 by 44 pixels
     And the Fit and Full screen and Done buttons are at least 44 by 44 pixels
     And the Plan map takes the same controls as the Ride map
-    And full screen sits above the Listen Inn card
+    And full screen sits above everything else on the page
 
   Scenario: Fit trip puts the map back on the opening view
     Given the Ride map is opened on a phone
@@ -118,9 +118,11 @@ Feature: The map on a phone
     Then the Plan map still draws its stop pins
     And the Plan map has no Music, Photos or Notes buttons
 
-  Scenario: No map control sits where the docked Listen Inn covers it
+  # Kris, 2026-11-18: "the map should not be obscured if possible. Put it in the white space above."
+  # The Listen Inn card is in the page now, so nothing is drawn over the map but the map's own controls.
+  Scenario: Nothing is drawn over the map but the map's own controls
     Given a phone 375 pixels wide and 812 tall
     And the Ride map is opened on a phone
     Then the Music, Photos and Notes and the Fit and Full screen buttons are in the top corners of the map
     And the zoom buttons are in the top left corner of the map
-    And the Listen Inn card is fixed to the bottom of the window
+    And no card is fixed over the page

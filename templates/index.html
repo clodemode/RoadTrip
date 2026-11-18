@@ -2,23 +2,30 @@
 {{/* The latest at a glance (latest.go): where the trip is now, what last played,
      the latest photo. First on the page so nobody scrolls for it; every list
      below reads oldest first. A tile with nothing to show is not drawn. */}}
-{{with .Latest}}<nav class="latest" id="latest" aria-label="Latest from the trip">
+{{$card := and .NowPlaying (or (not .Embed) .ListenOpen)}}
+{{/* The top band (Kris, 2026-11-18): the Listen Inn card sits in the page here,
+     beside the latest tiles, never over the map. It replaces the Last played
+     tile, so with the card on the page that tile is not drawn. */}}
+<div class="top-band">
+{{with .Latest}}{{if or .Point .Photo (and .Song (not $card))}}<nav class="latest" id="latest" aria-label="Latest from the trip">
   {{with .Point}}<a class="latest-tile latest-point" href="{{.Href}}">
     <span class="latest-k">{{.Label}}</span>
     <b class="latest-v">{{.Name}}</b>
     <time class="latest-t">{{.Sub}}</time>
   </a>{{end}}
-  {{with .Song}}<a class="latest-tile latest-song" href="{{.Href}}">
+  {{if not $card}}{{with .Song}}<a class="latest-tile latest-song" href="{{.Href}}">
     <span class="latest-k">{{.Label}}</span>
     <b class="latest-v">{{.Name}}</b>
     <span class="latest-t">{{.Sub}}</span>
-  </a>{{end}}
+  </a>{{end}}{{end}}
   {{with .Photo}}<a class="latest-tile latest-photo" href="{{.Href}}">
     <img src="/media/{{.Thumb}}" alt="{{.Name}}" width="48" height="48">
     <span class="latest-k">{{.Label}}</span>
     <time class="latest-t">{{.Sub}}</time>
   </a>{{end}}
-</nav>{{end}}
+</nav>{{end}}{{end}}
+{{if $card}}{{template "listen_card" .}}{{end}}
+</div>
 <section class="hero hero-sky">
   {{template "terrain" .PageLeg}}
   <div class="hero-top">

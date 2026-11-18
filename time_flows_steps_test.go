@@ -249,6 +249,14 @@ func initTimeFlowScenarios(t *testing.T, sc *godog.ScenarioContext) {
 	sc.Step(`^the viewer offers no Next$`, func() error { return w.lacks(`class="photo-next"`) })
 	sc.Step(`^the page draws no now-playing chip$`, func() error { return w.lacks(`id="np-chip"`) })
 	sc.Step(`^the page draws no latest strip$`, func() error { return w.lacks(`class="latest`) })
+	// Kris, 2026-11-18, ruling 8: the Listen Inn card replaces the Last played tile.
+	sc.Step(`^the Listen Inn card stands in the top band and the strip draws no song tile$`, func() error {
+		band := regexp.MustCompile(`(?s)<div class="top-band">.*?<div id="map"`).FindString(w.body)
+		if !strings.Contains(band, `id="np"`) {
+			return fmt.Errorf("the top band holds no Listen Inn card")
+		}
+		return w.lacks(`latest-song`)
+	})
 	sc.Step(`^the page draws no photo tile$`, func() error { return w.lacks(`latest-photo`) })
 	sc.Step(`^the page draws no point tile and no photo tile$`, func() error {
 		if err := w.lacks(`latest-point`); err != nil {
