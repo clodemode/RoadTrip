@@ -575,7 +575,7 @@ func initMapPhoneScenarios(t *testing.T, sc *godog.ScenarioContext) {
 			return err
 		}
 		for _, b := range bs {
-			if b["pressed"] != nil && b["name"] != "music" && b["name"] != "photos" && b["name"] != "notes" {
+			if b["pressed"] != nil && b["name"] != "music" && b["name"] != "photos" && b["name"] != "notes" && b["name"] != "pins" { // pins: Drop Pin dots (2026-11-18)
 				return fmt.Errorf("an extra toggle button: %v", b)
 			}
 			if strings.Contains(strings.ToLower(fmt.Sprint(b["label"])), "route") {
