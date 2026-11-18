@@ -83,6 +83,7 @@ Feature: Drive Tracks asks Chester for one album and plays it on the RoadTracks 
 
   Scenario: No album found says so and points at the search box
     Given the model will write "Nothing in the library fits that."
+    And the model will then write "Nothing in the library fits that."
     When the driver taps Drive Tracks
     Then the card shows the sentence "Chester found no album; search below"
     And the card is told to start no album

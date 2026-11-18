@@ -68,7 +68,7 @@ func TestChesterPromptPutsTheAnswerAfterTheCards(t *testing.T) {
 		!strings.Contains(desc, "do not replace it") || strings.Contains(desc, "after the complete written answer") {
 		t.Errorf("the tool's description does not put the cards before the answer: %s", desc)
 	}
-	if r.PromptVersion != "chester-rt-18" || chesterPromptVersion != "chester-rt-18" {
+	if r.PromptVersion != "chester-rt-19" || chesterPromptVersion != "chester-rt-19" {
 		t.Errorf("the prompt version is %q; the prompt changed, so it must have too", r.PromptVersion)
 	}
 	// Control: words that did arrive ahead of the cards are an answer, the

@@ -64,7 +64,7 @@ const (
 	// only ever compared when they were asked the same way.
 	// (chester-rt-3 was two wordings tried against the live API in one
 	// sitting and is not used again: rows carrying it are not all alike.)
-	chesterPromptVersion = "chester-rt-18"
+	chesterPromptVersion = "chester-rt-19"
 
 	maxChesterQuestion = 1000
 )
@@ -1229,11 +1229,11 @@ func (c *Chester) ask(ctx context.Context, mode string, cx *chesterContext, ques
 		tunes = newChesterMusicRun(music)
 		params.Tools = append(params.Tools, chesterMusicTools()...)
 	}
-	// Drive Tracks is one tap that must end in one album card, so its first
-	// request is made to search the library (Kris, 2026-11-14: three taps of
-	// four ended in words alone while nothing set tool_choice).
+	// Drive Tracks is one tap that must end in one album card (Kris,
+	// 2026-11-14: three taps of four ended in words alone). The API takes no
+	// forced tool on the Chester models (2026-11-18), so a turn that ends
+	// short of a card is asked again in words: chesterSearchNow, chesterShowNow.
 	drive := tunes != nil && tunes.lib.one
-	chesterForce(&params, drive, tunes, 0)
 	var casts *chesterPodcastRun
 	if cx.podcasts != nil {
 		casts = newChesterPodcastRun(cx.podcasts)
@@ -1463,25 +1463,34 @@ rounds:
 			// ahead of the cards are an answer already: done, and the second
 			// request is not spent.
 			if (!wrote() || searched) && len(results) > 0 && round < chesterRounds-1 {
+				// The last round of a Drive Tracks turn that has searched and
+				// shown nothing is asked for the card beside the results.
+				if round+1 == chesterRounds-1 && chesterOwesCard(drive, tunes) {
+					results = append(results, anthropic.NewBetaTextBlock(chesterShowNow))
+				}
 				params.Messages = append(params.Messages, msg.ToParam(), anthropic.NewBetaUserMessage(results...))
 				if lastNext {
 					chesterWithdrawSearches(&params, tunes != nil, casts != nil)
 				}
-				chesterForce(&params, drive, tunes, round+1)
 				continue
 			}
 		}
 		// A Drive Tracks turn that is about to end with no album card gets one
-		// more request that must call show_music, on what the searches found.
-		if round < chesterRounds-1 && chesterOwesCard(drive, tunes) {
+		// more request, asking in words to search or to show what was found.
+		// The ask to search is made once: a model that still will not search
+		// has answered.
+		ask := chesterOwedWords(drive, tunes)
+		if ask == chesterSearchNow && round > 0 {
+			ask = ""
+		}
+		if round < chesterRounds-1 && ask != "" {
 			params.Messages = append(params.Messages, msg.ToParam())
-			next := anthropic.NewBetaTextBlock(chesterShowNow)
+			next := anthropic.NewBetaTextBlock(ask)
 			if len(results) > 0 {
 				params.Messages = append(params.Messages, anthropic.NewBetaUserMessage(append(results, next)...))
 			} else {
 				params.Messages = append(params.Messages, anthropic.NewBetaUserMessage(next))
 			}
-			chesterForceShow(&params)
 			continue
 		}
 		whole = true
@@ -1577,6 +1586,11 @@ rounds:
 // told, beside the one request that must call show_music.
 const chesterShowNow = "No album is on the page yet. Call show_music now with exactly one album from your searches."
 
+// chesterSearchNow is what a Drive Tracks turn that ended without searching
+// the library is told: the API takes no forced tool on the Chester models
+// (2026-11-18), so the push to search is in words.
+const chesterSearchNow = "No album is on the page yet. Call search_music now to search the library, then show exactly one album with show_music."
+
 // chesterOwesCard is true when a Drive Tracks question has searched the library
 // and has no album card yet, and the library is up and a search found an album
 // to show: a card is owed. A search that found nothing owes none.
@@ -1584,31 +1598,18 @@ func chesterOwesCard(drive bool, tunes *chesterMusicRun) bool {
 	return drive && tunes != nil && tunes.searches > 0 && !tunes.down && len(tunes.refs) > 0 && len(tunes.cards) == 0
 }
 
-// chesterForce sets the tool the request to be sent as round must call, and
-// takes the setting off every request that need not. Only Drive Tracks forces
-// a tool: round 0 must search the library, and the last round, when no card
-// has been shown by then, must show one. The API refuses a forced tool beside
-// adaptive thinking, so a forced request thinks only between tool calls.
-func chesterForce(params *anthropic.BetaMessageNewParams, drive bool, tunes *chesterMusicRun, round int) {
+// chesterOwedWords is what a Drive Tracks turn about to end with no album
+// card is asked next: to show one when a search found albums, to search when
+// none has been made. Empty when nothing is owed, including a library that is
+// down or a search that found nothing.
+func chesterOwedWords(drive bool, tunes *chesterMusicRun) string {
 	switch {
-	case !drive:
-		return
-	case round == 0:
-		params.ToolChoice = anthropic.BetaToolChoiceUnionParam{OfTool: &anthropic.BetaToolChoiceToolParam{Name: chesterSearchMusicTool}}
-		params.Thinking = anthropic.BetaThinkingConfigParamUnion{OfBetweenTools: &anthropic.BetaThinkingConfigBetweenToolsParam{}}
-	case round == chesterRounds-1 && chesterOwesCard(drive, tunes):
-		chesterForceShow(params)
-	default:
-		params.ToolChoice = anthropic.BetaToolChoiceUnionParam{}
-		params.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}}
+	case chesterOwesCard(drive, tunes):
+		return chesterShowNow
+	case drive && tunes != nil && tunes.searches == 0 && !tunes.down:
+		return chesterSearchNow
 	}
-}
-
-// chesterForceShow makes the next request call show_music, once.
-func chesterForceShow(params *anthropic.BetaMessageNewParams) {
-	params.ToolChoice = anthropic.BetaToolChoiceUnionParam{OfTool: &anthropic.BetaToolChoiceToolParam{
-		Name: chesterShowMusicTool, DisableParallelToolUse: anthropic.Bool(true)}}
-	params.Thinking = anthropic.BetaThinkingConfigParamUnion{OfBetweenTools: &anthropic.BetaThinkingConfigBetweenToolsParam{}}
+	return ""
 }
 
 // chesterWithdrawSearches takes the search tools away from the last round. The
