@@ -1,11 +1,11 @@
-Feature: The signed-in trip-keeper navigates to a private stop's own address
+Feature: The signed-in trip-keeper navigates to a stop's own address
   (Kris, 2026-11-12.) A friend's address may be in the database, marked
   private: a visitor never sees it and the stop is fuzzed for them. For the
   signed-in trip-keeper the database and the navigation are precise. When the
   stop being navigated to is private and has an address on the volume's private
   overlay, the Waze, Google Maps and Apple Maps links go to that address, as
   search text. A private stop with no address navigates as before, by its
-  name. A precise stop still navigates by its coordinates. Every navigate link
+  name. Every navigate link
   is built in one place. Nothing here reaches a visitor: no page and no JSON
   they can read carries the address. Every place and address here is invented.
 
@@ -43,10 +43,30 @@ Feature: The signed-in trip-keeper navigates to a private stop's own address
     When a visitor reads every page and JSON the site offers
     Then none of them carries the address of B
 
-  Scenario: A precise stop is unchanged
+  # Kris, 2026-11-18, made late to a 9:00 appointment: the stop's point was a
+  # guess near the town, its address was on file, and Navigate went to the
+  # guess. "Must use precise addresses for navigation." A stop is a place the
+  # car drives to, so a stop with an address on file is navigated to that
+  # address whether or not it is private. A routing point is a swing-past point
+  # that only steers the route, and keeps its approximate point.
+  Scenario: A stop that is not private still navigates to its address on file
     Given B has the private address "7 Quill Hollow Lane, Pemberwick"
     When kris reads the driver screen's navigation
+    Then the driver links for Waze, Google Maps and Apple Maps carry the address of B
+
+  Scenario: The Ride page's Navigate buttons for a stop that is not private go to its address on file
+    Given B has the private address "7 Quill Hollow Lane, Pemberwick"
+    When kris reads the Ride page's navigation
+    Then the Ride row for B has Waze, Google Maps and Apple Maps links that carry the address of B
+
+  Scenario: A stop that is not private and has no address navigates by its coordinates
+    When kris reads the driver screen's navigation
     Then the driver links go to B by its coordinates
+
+  Scenario: Signed out, a stop that is not private carries no address
+    Given B has the private address "7 Quill Hollow Lane, Pemberwick"
+    When a visitor reads every page and JSON the site offers
+    Then none of them carries the address of B
 
   # Kris, 2026-11-13. A route choice can put a different stop under the same
   # number (a visit on the way pushes the finish from stop 7 to stop 8 and takes
