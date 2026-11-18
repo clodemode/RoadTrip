@@ -214,12 +214,13 @@ func dayEnd(legs []Leg, leg *Leg, multi bool, addr map[int]string, held []Post) 
 	}
 	v := &dayEndView{LegSlug: leg.Slug, LegOrd: leg.Ord, Multi: multi, Name: term.Name}
 	v.nearLat, v.nearLng = lineMiddle(leg.Line)
-	// A private place is a snapped cell; every navigator gets its address
-	// when the trip-keeper has one, else its name, never the cell.
+	// Every navigator goes to the stop's address when the trip-keeper has
+	// one (stopNav); else a private place goes by its name, never the cell,
+	// and any other stop by its point.
 	destPt := ""
 	destText := stopNavText(*term, addr)
 	dest := stopNav(*term, addr)
-	if term.Precision != precisionFuzzed {
+	if term.Precision != precisionFuzzed && addr[term.Ord] == "" {
 		destPt = pointText(term.Lat, term.Lng)
 	}
 	v.Waze, v.Google, v.Apple = dest.Waze, dest.Google, dest.Apple
