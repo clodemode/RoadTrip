@@ -703,6 +703,9 @@ body:has(.listen-dock) { padding-bottom: calc(6rem + env(safe-area-inset-bottom)
 .photo-step { justify-content: space-between; }
 
 /* Drop Pin (drop_pin.go): the header button and the map's dot. */
-.mast-links .drop-pin { min-height: 44px; white-space: nowrap; }
+/* A solid light button on the dark masthead: near-black words on white (Kris, 2026-11-18). */
+.mast-links .drop-pin { min-height: 44px; white-space: nowrap; background: #ffffff; color: #111827;
+  border: 1px solid #ffffff; font-weight: 700; margin-left: .35rem; }
+.mast-links .drop-pin:hover, .mast-links .drop-pin:focus { background: #f3f4f6; color: #111827; }
 .drop-pin-dot span { display: block; width: 18px; height: 18px; border-radius: 50%;
   background: #dc2626; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }

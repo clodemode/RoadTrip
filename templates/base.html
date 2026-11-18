@@ -46,7 +46,7 @@
     <nav class="mast-nav" aria-label="Site">
       <span class="mast-links">
         {{range .Menu}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}{{if .Post}} class="post-link"{{end}}>{{.Label}}</a>
-        {{end}}{{if .Authed}}<button type="button" class="btn btn-sm btn-outline-dark drop-pin" id="drop-pin" aria-label="Drop a pin on the map where the phone is"><span aria-hidden="true">&#128205;</span> Drop Pin</button><script defer src="/static/js/droppin.js?v={{.V}}"></script>
+        {{end}}{{if .Authed}}<button type="button" class="btn btn-sm drop-pin" id="drop-pin" aria-label="Drop a pin on the map where the phone is"><span aria-hidden="true">&#128205;</span> Drop Pin</button><script defer src="/static/js/droppin.js?v={{.V}}"></script>
         <form method="post" action="/driver/logout" target="_top"><button class="linkish">Sign out</button></form>
         {{else}}<a href="/driver/login">Sign in</a>
         {{end}}
