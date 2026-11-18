@@ -83,7 +83,7 @@ func TestDriverCannotReachAnotherRideByNamingIt(t *testing.T) {
 // The nav and tool bar show a driver only what their ride has.
 func TestNavShowsOnlyTheDriversRides(t *testing.T) {
 	app, ann, bob, admin := ridesApp(t)
-	tools := []string{`href="/driver/post"`, `href="/driver/lodging"`}
+	tools := []string{`href="/driver/post"`}
 	for _, c := range []struct {
 		who  string
 		ck   *http.Cookie

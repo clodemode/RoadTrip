@@ -136,6 +136,12 @@ func initMenuStateScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	sc.Step(`^the page has a link to "([^"]*)"$`, func(href string) error {
+		if !strings.Contains(page, `href="`+href+`"`) {
+			return fmt.Errorf("the page has no link to %s", href)
+		}
+		return nil
+	})
 	sc.Step(`^the page has no link to "([^"]*)"$`, func(href string) error {
 		if strings.Contains(page, `href="`+href+`"`) {
 			return fmt.Errorf("the page links to %s", href)

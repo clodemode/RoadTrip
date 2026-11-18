@@ -96,12 +96,12 @@ func TestSignedInToolsAreSignedInOnly(t *testing.T) {
 	if !strings.Contains(pg, "What about &lt;b&gt;Kingston&lt;/b&gt;") {
 		t.Error("chester page does not prefill the question as escaped text")
 	}
-	// An editor's bar has no Users link; an admin's does.
+	// An editor sees no Users link; an admin's is on the Plan page, not the bar.
 	if strings.Contains(in, "/driver/users") {
 		t.Error("editor sees the users link")
 	}
 	kris := asUser(t, app, "kris", roleAdmin)
-	if !strings.Contains(doAs(t, app, kris, "GET", "/", nil).Body.String(), `href="/driver/users"`) {
+	if !strings.Contains(doAs(t, app, kris, "GET", "/plan", nil).Body.String(), `href="/driver/users"`) {
 		t.Error("admin lacks the users link")
 	}
 }
