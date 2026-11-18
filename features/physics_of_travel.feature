@@ -52,9 +52,9 @@ Feature: Think like a human, a car can only go so far in the time
 
   Scenario: A long silence is never out of step
     Given the car was last checked in at A at 06:00
-    And a photo taken at 23:00 with its GPS at D
+    And a photo taken at 23:00 with its GPS at C
     When kris posts that photo
-    Then D is arrived at 23:00 in D's zone
+    Then C is arrived at 23:00 in C's zone
     And the post is not flagged
 
   Scenario: A photo older than the last check-in does not move the car back

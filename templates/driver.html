@@ -26,7 +26,7 @@
   </section>{{end}}
 
   <nav class="hud-tools hud-left" aria-label="Driver tools, left">
-    {{if .Driver}}<a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>{{if or .DriveStarted .Aimless .Destined}}Post photo{{else}}Start the drive{{end}}</a>{{end}}
+    {{if .Driver}}<a class="hud-tool" href="/driver/post"><span class="hud-ico" aria-hidden="true">&#128247;</span>{{if or .DriveStarted .DriveOpened .Aimless .Destined}}Post photo{{else}}Start the drive{{end}}</a>{{end}}
     {{if .ChesterOn}}<a class="hud-tool" href="/chester"><span class="hud-ico" aria-hidden="true"><img class="ch-icon" src="/static/img/chester.svg?v={{.V}}" alt="" width="28" height="28"></span>Ask Chester</a>{{end}}
   </nav>
 
@@ -94,8 +94,9 @@
     </form>
     {{$nav := and .H.HasNext .H.DriveStarted}}
     <p class="hud-k" id="hud-k">{{if .H.DriveStarted}}Next{{else}}Drive{{end}}</p>
-    <p class="hud-next" id="hud-next">{{if not .H.DriveStarted}}Start &middot; {{.H.StartName}}{{else if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</p>
-    {{if and .Driver (not .H.DriveStarted)}}<a class="btn btn-primary btn-lg start-drive" href="/driver/post">Start the drive</a>{{end}}
+    <p class="hud-next" id="hud-next">{{if .H.Opened}}Packing, not driving yet{{else if not .H.DriveStarted}}Start &middot; {{.H.StartName}}{{else if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</p>
+    {{if and .Driver .H.Opened}}<form method="post" action="/driver/ride/depart"><button class="btn btn-primary btn-lg start-drive" id="hud-depart">Driving now</button></form>
+    {{else if and .Driver (not .H.DriveStarted)}}<a class="btn btn-primary btn-lg start-drive" href="/driver/post">Start the drive</a>{{end}}
     <p class="hud-dist"{{if not .H.DriveStarted}} hidden{{end}}><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
     <p class="hud-s" id="hud-via"{{if not (and $nav .H.Via)}} hidden{{end}}>Drive through <b id="hud-via-name">{{.H.Via}}</b> first</p>
     <a class="btn btn-primary hud-waze" id="hud-waze" href="{{if $nav}}{{.H.Waze}}{{else}}#{{end}}" rel="noopener"{{if not $nav}} hidden{{end}}>Navigate in Waze <span class="nav-to" id="hud-nav-to">to {{.H.NavTo}}</span></a>

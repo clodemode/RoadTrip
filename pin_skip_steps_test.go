@@ -41,7 +41,7 @@ func initPinSkipScenarios(sc *godog.ScenarioContext, p *postWorld, s *scWorld) {
 		p.photo = jpegGPSAt("2026:11:07 11:30:00", 58.0, -78.0)
 		return nil
 	})
-	sc.Step(`^the phone reports a position near (Belleville|Toronto)$`, func(name string) error {
+	sc.Step(`^the phone reports a position near (Belleville|Oshawa|Toronto)$`, func(name string) error {
 		t := w.town(name)
 		s.phone, s.phoneAt = true, &[2]float64{t.lat, t.lng}
 		return nil
@@ -53,7 +53,7 @@ func initPinSkipScenarios(sc *godog.ScenarioContext, p *postWorld, s *scWorld) {
 	sc.Step(`^the post is pinned near (Belleville)$`, w.pinnedNear)
 	sc.Step(`^the post's pin source is "([a-z]+)"$`, w.pinSource)
 	sc.Step(`^the post is not pinned at the photo's own GPS$`, w.notAtPhotoGPS)
-	sc.Step(`^(Belleville|Toronto) is arrived at$`, func(name string) error { return s.arrived(w.index(name)) })
+	sc.Step(`^(Belleville|Oshawa|Toronto) is arrived at$`, func(name string) error { return s.arrived(w.index(name)) })
 	sc.Step(`^([A-Z][a-z]+(?:, [A-Z][a-z]+)*) and ([A-Z][a-z]+) are skipped as "([a-z]+)"$`, w.skippedAll)
 	sc.Step(`^the form requests the phone's location as soon as it opens$`, w.formAsksOnOpen)
 	sc.Step(`^the form sends the phone's position with the post when it has one$`, w.formSends)

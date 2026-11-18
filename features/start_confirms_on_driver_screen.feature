@@ -8,11 +8,12 @@ Feature: Starting the drive says it worked and returns to the driver screen
     Given kris is signed in
     And the active trip has stops A, B, C and D in order along a line, none arrived at
 
-  Scenario: A start goes to the driver screen and says the drive started
+  # Rewritten 2026-11-18: a Start post opens the trip, it does not start the drive.
+  Scenario: A start goes to the driver screen and says the trip is open
     Given a photo taken at 09:15 with its GPS at A
     When kris starts the drive with that photo
     Then the answer goes to the driver screen
-    And the driver screen confirms the drive started from A
+    And the driver screen confirms the trip is open at A
 
   Scenario: An ordinary photo stays on the post form so the next one is quick
     Given the drive has started at A
