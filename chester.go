@@ -1477,7 +1477,13 @@ rounds:
 		}
 		// A Drive Tracks turn that is about to end with no album card gets one
 		// more request, asking in words to search or to show what was found.
-		if ask := chesterOwedWords(drive, tunes); round < chesterRounds-1 && ask != "" {
+		// The ask to search is made once: a model that still will not search
+		// has answered.
+		ask := chesterOwedWords(drive, tunes)
+		if ask == chesterSearchNow && round > 0 {
+			ask = ""
+		}
+		if round < chesterRounds-1 && ask != "" {
 			params.Messages = append(params.Messages, msg.ToParam())
 			next := anthropic.NewBetaTextBlock(ask)
 			if len(results) > 0 {
