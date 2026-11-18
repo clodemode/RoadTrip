@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,6 +26,47 @@ type dropPinWorld struct {
 }
 
 var dropPinBtnRe = regexp.MustCompile(`id="drop-pin"`)
+var dropPinTagRe = regexp.MustCompile(`<button[^>]*id="drop-pin"[^>]*>`)
+
+// dropPinColours reads the background and ink of the masthead's Drop Pin rule
+// in app.css, both as #rrggbb.
+func dropPinColours() (bg, ink string, err error) {
+	css, err := os.ReadFile("static/css/app.css")
+	if err != nil {
+		return "", "", err
+	}
+	rule := regexp.MustCompile(`(?s)\.mast-links \.drop-pin \{([^}]*)\}`).FindSubmatch(css)
+	if rule == nil {
+		return "", "", fmt.Errorf("app.css has no .mast-links .drop-pin rule")
+	}
+	b := regexp.MustCompile(`background:\s*(#[0-9a-fA-F]{6})`).FindSubmatch(rule[1])
+	c := regexp.MustCompile(`(?:^|[;\s])color:\s*(#[0-9a-fA-F]{6})`).FindSubmatch(rule[1])
+	if b == nil || c == nil {
+		return "", "", fmt.Errorf("the .mast-links .drop-pin rule sets no #rrggbb background and color: %s", rule[1])
+	}
+	return string(b[1]), string(c[1]), nil
+}
+
+// relLuminance is the WCAG relative luminance of a #rrggbb colour.
+func relLuminance(hex string) float64 {
+	ch := func(i int) float64 {
+		v, _ := strconv.ParseUint(hex[i:i+2], 16, 8)
+		c := float64(v) / 255
+		if c <= 0.03928 {
+			return c / 12.92
+		}
+		return math.Pow((c+0.055)/1.055, 2.4)
+	}
+	return 0.2126*ch(1) + 0.7152*ch(3) + 0.0722*ch(5)
+}
+
+func contrastRatio(a, b string) float64 {
+	la, lb := relLuminance(a), relLuminance(b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
+}
 
 func initDropPinScenarios(sc *godog.ScenarioContext, p *postWorld) {
 	w := &dropPinWorld{p: p}
@@ -32,6 +75,36 @@ func initDropPinScenarios(sc *godog.ScenarioContext, p *postWorld) {
 	sc.Step(`^the header carries exactly one Drop Pin button$`, func() error {
 		if n := len(dropPinBtnRe.FindAllString(w.header(), -1)); n != 1 {
 			return fmt.Errorf("the header carries %d Drop Pin buttons", n)
+		}
+		return nil
+	})
+	sc.Step(`^the Drop Pin button carries no dark outline style$`, func() error {
+		btn := dropPinTagRe.FindString(w.header())
+		if btn == "" {
+			return fmt.Errorf("the header carries no Drop Pin button")
+		}
+		if strings.Contains(btn, "btn-outline-dark") {
+			return fmt.Errorf("the Drop Pin button is still a dark outline: %s", btn)
+		}
+		return nil
+	})
+	sc.Step(`^the Drop Pin button's words contrast with its own background at least 7 to 1$`, func() error {
+		bg, ink, err := dropPinColours()
+		if err != nil {
+			return err
+		}
+		if r := contrastRatio(bg, ink); r < 7 {
+			return fmt.Errorf("the Drop Pin button's words are %.1f to 1 against its background, want at least 7", r)
+		}
+		return nil
+	})
+	sc.Step(`^the Drop Pin button's background is light against the dark masthead$`, func() error {
+		bg, _, err := dropPinColours()
+		if err != nil {
+			return err
+		}
+		if l := relLuminance(bg); l < 0.7 {
+			return fmt.Errorf("the Drop Pin button's background %s is not light (luminance %.2f)", bg, l)
 		}
 		return nil
 	})

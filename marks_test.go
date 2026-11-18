@@ -78,7 +78,7 @@ func TestSignedInToolsAreSignedInOnly(t *testing.T) {
 			}
 		}
 		in := doAs(t, app, pat, "GET", p, nil).Body.String()
-		for _, want := range []string{`aria-label="Site"`, `href="/driver/post"`, `href="/chester"`, `href="/plan"`} {
+		for _, want := range []string{`aria-label="Site"`, `href="/driver/post"`, `href="/chester"`, `id="drop-pin"`} {
 			if !strings.Contains(in, want) {
 				t.Errorf("%s: signed-in bar lacks %s", p, want)
 			}

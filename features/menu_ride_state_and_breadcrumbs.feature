@@ -5,6 +5,10 @@ Feature: The menu follows the ride's state, Drive Tracks rides along, every page
   The state is read from the store, never from dates: Active is a started
   drive whose finish is not yet reached or skipped.
 
+  Kris, 2026-11-18: the menu is cluttered with links nobody uses on the
+  road. Plan and Photos leave the menu; their pages stay at /plan and
+  /photos, and the driver screen keeps its Plan button.
+
   Background:
     Given a trip with a start, two stops and a finish, a music library, and Chester switched on
     And the menu trip-keeper Kris signs in
@@ -33,29 +37,29 @@ Feature: The menu follows the ride's state, Drive Tracks rides along, every page
 
   Scenario: The Active menu
     When the drive is started
-    Then Kris's menu reads "Ride, Driver, Post, Chester, Lodging, Photos, Plan"
+    Then Kris's menu reads "Ride, Driver, Post, Chester, Lodging"
 
   Scenario: The Planning menu keeps Post to start the drive and drops Chester
-    Then Kris's menu reads "Ride, Driver, Post, Plan, Lodging, Photos"
+    Then Kris's menu reads "Ride, Driver, Post, Lodging"
 
   Scenario: The Planning menu after the finish drops Post and Chester
     When the drive is started
     And the finish is reached
-    Then Kris's menu reads "Ride, Driver, Plan, Lodging, Photos"
+    Then Kris's menu reads "Ride, Driver, Lodging"
 
   Scenario: Only an admin's menu carries Users
     When the drive is started
     And an admin opens "/"
-    Then the menu reads "Ride, Driver, Post, Chester, Lodging, Photos, Plan, Users"
+    Then the menu reads "Ride, Driver, Post, Chester, Lodging, Users"
 
   Scenario: The current page is marked
-    When Kris opens "/plan"
-    Then exactly one menu link is marked as the current page, "Plan"
+    When Kris opens "/driver/lodging"
+    Then exactly one menu link is marked as the current page, "Lodging"
 
   Scenario: A visitor never gets Post, Chester, Lodging or the strip
     When the drive is started
     And a visitor opens "/"
-    Then the menu reads "Ride, Photos, Plan"
+    Then the menu reads "Ride"
     And the page has no Drive Tracks strip
     And the page has no link to "/driver/post"
     And the page has no link to "/chester"

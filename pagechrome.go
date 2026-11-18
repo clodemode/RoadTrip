@@ -56,6 +56,8 @@ func (a *App) rideIsFinished() bool {
 
 // menuFor lists the masthead links in the order of the ride's state. Each link
 // keeps the gate it always had; the state only decides which are worth the room.
+// Plan and Photos are not in it (Kris, 2026-11-18): their pages stay at /plan
+// and /photos, and the driver screen keeps its Plan button.
 func menuFor(active, started, driver, chesterOn, admin bool, path string) []menuItem {
 	cur := func(href string) bool { return path == href }
 	var m []menuItem
@@ -72,14 +74,10 @@ func menuFor(active, started, driver, chesterOn, admin bool, path string) []menu
 		add("Post", "/driver/post", driver, cur("/driver/post"))
 		add("Chester", "/chester", chesterOn, chester)
 		add("Lodging", "/driver/lodging", driver, cur("/driver/lodging"))
-		add("Photos", "/photos", true, cur("/photos"))
-		add("Plan", "/plan", true, cur("/plan"))
 	} else {
 		// Planning: Post stays only to Start the drive.
 		add("Post", "/driver/post", driver && !started, cur("/driver/post"))
-		add("Plan", "/plan", true, cur("/plan"))
 		add("Lodging", "/driver/lodging", driver, cur("/driver/lodging"))
-		add("Photos", "/photos", true, cur("/photos"))
 	}
 	add("Users", "/driver/users", admin, cur("/driver/users"))
 	return m

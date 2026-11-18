@@ -23,6 +23,15 @@ Feature: One Drop Pin button in the header drops a dot on the map
       | /plan   |
       | /photos |
 
+  Scenario: The Drop Pin button is a solid light button its words and icon stand out on
+    Kris, 2026-11-18: "the contrast on the button background is poor. It's
+    hard to see the word and the icon." It was a dark outline on the dark
+    masthead.
+    When kris opens the page "/"
+    Then the Drop Pin button carries no dark outline style
+    And the Drop Pin button's words contrast with its own background at least 7 to 1
+    And the Drop Pin button's background is light against the dark masthead
+
   Scenario: A visitor's header has no Drop Pin button
     When a visitor opens the Ride page for its header
     Then the header carries no Drop Pin button
