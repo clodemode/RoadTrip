@@ -106,7 +106,7 @@
   });
 
   /* --- posts and music notes: one gathering group -------------------------
-     Photo pins (44 px), notes (38 px) and music notes (32 px) that would sit on top of each other
+     Photo pins (64 px), notes (38 px) and music notes (32 px) that would sit on top of each other
      gather into one round count; a tap on the count zooms in place to spread them.
      The radius is a little more than a photo pin, so two pins that touch always
      gather. Each kind keeps its own list of markers: a button takes them out of the
@@ -124,12 +124,13 @@
   }
   (data.posts || []).forEach(function (p) {
     /* Sizes and stacking (Kris, 2026-11-18: pins and notes were too small;
-       a photo belongs on top): photo 44 px above a note 38 px, above a music
-       note, above a dropped pin. */
+       a photo belongs on top): photo 64 px (Kris: about 64 at most, so it
+       does not hide the map) above a note 38 px, above a music note, above a
+       dropped pin, an 18 px dot that only marks the road. */
     var m = p.thumb
       ? L.marker([p.lat, p.lng], {
         icon: L.divIcon({ className: 'post-pin has-photo',
-          iconSize: [44, 44], iconAnchor: [22, 22], html: '<img src="' + esc(p.thumb) + '" alt="">' }),
+          iconSize: [64, 64], iconAnchor: [32, 32], html: '<img src="' + esc(p.thumb) + '" alt="">' }),
         keyboard: false, zIndexOffset: 1000
       })
       : L.marker([p.lat, p.lng], {
@@ -181,7 +182,7 @@
   (data.pins || []).forEach(function (p) {
     if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
     var dot = L.marker([p.lat, p.lng], {
-      icon: L.divIcon({ className: 'drop-pin-dot', iconSize: [30, 30], iconAnchor: [15, 15], html: '<span></span>' }),
+      icon: L.divIcon({ className: 'drop-pin-dot', iconSize: [18, 18], iconAnchor: [9, 9], html: '<span></span>' }),
       keyboard: false, zIndexOffset: 600
     }).bindPopup('<div class="popup"><h3>Pin</h3><p class="muted">' + esc(p.when || '') + '</p></div>');
     place('pins', dot);

@@ -139,6 +139,16 @@ func initDropPinScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		}
 		return nil
 	})
+	sc.Step(`^the (photo|note|music note|dropped pin) marker is at most (\d+) px across$`, func(kind string, max int) error {
+		size, _, err := markerOf(mapJS, kind)
+		if err != nil {
+			return err
+		}
+		if size > max {
+			return fmt.Errorf("the %s marker is %d px across, want at most %d", kind, size, max)
+		}
+		return nil
+	})
 	sc.Step(`^the (photo|note|music note|dropped pin) marker is drawn above the (photo|note|music note|dropped pin) marker$`, func(top, under string) error {
 		_, zt, err := markerOf(mapJS, top)
 		if err != nil {
