@@ -47,6 +47,21 @@ func dropPinColours() (bg, ink string, err error) {
 	return string(b[1]), string(c[1]), nil
 }
 
+// markerOf reads one kind of map marker's size and stacking from map.js: each
+// kind's icon is built from a divIcon whose className names it, with an
+// iconSize and a zIndexOffset beside it.
+func markerOf(js, kind string) (size, z int, err error) {
+	class := map[string]string{"photo": "post-pin has-photo", "note": "post-pin note-pin", "music note": "np-pin", "dropped pin": "drop-pin-dot"}[kind]
+	re := regexp.MustCompile(`(?s)className: '` + regexp.QuoteMeta(class) + `'.*?iconSize: \[(\d+), \d+\].*?zIndexOffset: (\d+)`)
+	m := re.FindStringSubmatch(js)
+	if m == nil {
+		return 0, 0, fmt.Errorf("map.js builds no %s marker with className %q, an iconSize and a zIndexOffset", kind, class)
+	}
+	size, _ = strconv.Atoi(m[1])
+	z, _ = strconv.Atoi(m[2])
+	return size, z, nil
+}
+
 // relLuminance is the WCAG relative luminance of a #rrggbb colour.
 func relLuminance(hex string) float64 {
 	ch := func(i int) float64 {
@@ -105,6 +120,36 @@ func initDropPinScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		}
 		if l := relLuminance(bg); l < 0.7 {
 			return fmt.Errorf("the Drop Pin button's background %s is not light (luminance %.2f)", bg, l)
+		}
+		return nil
+	})
+	var mapJS string
+	sc.Step(`^the Ride map's script is read$`, func() error {
+		b, err := os.ReadFile("static/js/map.js")
+		mapJS = string(b)
+		return err
+	})
+	sc.Step(`^the (photo|note|music note|dropped pin) marker is at least (\d+) px across$`, func(kind string, min int) error {
+		size, _, err := markerOf(mapJS, kind)
+		if err != nil {
+			return err
+		}
+		if size < min {
+			return fmt.Errorf("the %s marker is %d px across, want at least %d", kind, size, min)
+		}
+		return nil
+	})
+	sc.Step(`^the (photo|note|music note|dropped pin) marker is drawn above the (photo|note|music note|dropped pin) marker$`, func(top, under string) error {
+		_, zt, err := markerOf(mapJS, top)
+		if err != nil {
+			return err
+		}
+		_, zu, err := markerOf(mapJS, under)
+		if err != nil {
+			return err
+		}
+		if zt <= zu {
+			return fmt.Errorf("the %s marker (zIndexOffset %d) is not above the %s marker (%d)", top, zt, under, zu)
 		}
 		return nil
 	})

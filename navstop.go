@@ -24,6 +24,23 @@ func stopNav(c Checkpoint, addr map[int]string) navLinks {
 	return mapLinks(c.Lat, c.Lng, c.Name)
 }
 
+// stopNavLabel is what a Navigate button says it goes to, in the words of
+// what stopNav's links carry (Kris, 2026-11-18: the button must show the
+// destination): the address, a search for the stop's name, or its map point.
+// A guess then reads as one before the driver taps it.
+func stopNavLabel(c Checkpoint, addr map[int]string) string {
+	if a := addr[c.Ord]; a != "" {
+		return a
+	}
+	if c.Precision == precisionFuzzed {
+		return "a search for the name " + c.Name
+	}
+	return "the map point for " + c.Name
+}
+
+// viaNavLabel is the same for a routing point the links go to first.
+func viaNavLabel(name string) string { return "the swing-past point " + name }
+
 // stopNavText is the text a stop is navigated to when it has no coordinates
 // to go by: its address when the trip-keeper has one on file, else its name.
 func stopNavText(c Checkpoint, addr map[int]string) string {

@@ -92,3 +92,33 @@ Feature: The signed-in trip-keeper navigates to a stop's own address
     Then neither shows the address
     When kris saves the Lodging screen as it stands
     Then the overlay still holds the address filed for "Elsewhere Corners"
+
+  # Kris, 2026-11-18: "the Navigate in Waze button needs to show what the
+  # destination is." The button says where the link goes, in the words of what
+  # it carries: an address, a search for a name, or a map point. A guess then
+  # reads as one before the driver taps it.
+  Scenario: The driver screen's Waze button names the address it goes to
+    Given B has the private address "7 Quill Hollow Lane, Pemberwick"
+    When kris opens the driver screen for its Waze button
+    Then the driver screen's Waze button reads "Navigate in Waze to 7 Quill Hollow Lane, Pemberwick"
+    And the driver screen's navigation says it goes to "7 Quill Hollow Lane, Pemberwick"
+
+  Scenario: A private stop with no address says its Waze button searches its name
+    Given B is a private place
+    When kris opens the driver screen for its Waze button
+    Then the driver screen's Waze button reads "Navigate in Waze to a search for the name Birch Gate"
+
+  Scenario: A stop with no address says its Waze button goes to a map point
+    When kris opens the driver screen for its Waze button
+    Then the driver screen's Waze button reads "Navigate in Waze to the map point for Birch Gate"
+    And the driver screen's navigation says it goes to "the map point for Birch Gate"
+
+  Scenario: The Ride page's Waze button names the address it goes to
+    Given B has the private address "7 Quill Hollow Lane, Pemberwick"
+    When kris reads the Ride page's navigation
+    Then the Ride row for B has a Waze button that reads "Navigate in Waze to 7 Quill Hollow Lane, Pemberwick"
+
+  Scenario: The day's end Waze button names the address it goes to
+    Given D has the private address "7 Quill Hollow Lane, Pemberwick"
+    When kris reads the Ride page's navigation
+    Then the day's end Waze button reads "Navigate in Waze to 7 Quill Hollow Lane, Pemberwick"

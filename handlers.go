@@ -1162,6 +1162,9 @@ type stopRow struct {
 // (stopNav): a private place's carry its address or its name, never the cell.
 func (s stopRow) Links() navLinks { return stopNav(s.Checkpoint, s.Addr) }
 
+// NavTo is where the row's Waze button says it goes (stopNavLabel).
+func (s stopRow) NavTo() string { return stopNavLabel(s.Checkpoint, s.Addr) }
+
 // isDriver is render's Driver rule, for a handler that must decide before it
 // renders: signed in AND on the ride the site shows.
 func (a *App) isDriver(r *http.Request) bool {

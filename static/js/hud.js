@@ -212,6 +212,7 @@
     var w = $('hud-waze');
     w.hidden = !nav;
     if (nav && h.waze) w.setAttribute('href', h.waze);
+    setText('hud-nav-to', h.nav_to ? 'to ' + h.nav_to : '');
     var via = $('hud-via');
     if (via) {
       setText('hud-via-name', h.via || '');
