@@ -286,12 +286,9 @@ func initListenInnCardScenarios(t *testing.T, sc *godog.ScenarioContext, np *npW
 		}
 		return nil
 	})
-	sc.Step(`^the Ride page inside the driver's player frame carries the Listen Inn card with no audio element and no Play button$`, func() error {
+	sc.Step(`^the Ride page inside the driver's player frame carries no Listen Inn card$`, func() error {
 		page := doAs(t, w.app, w.kris, "GET", "/?embed=1", nil).Body.String()
-		if !strings.Contains(page, `id="np"`) || !strings.Contains(page, `id="np-toggle"`) {
-			return fmt.Errorf("the driver's Ride page has no Listen Inn card")
-		}
-		for _, bad := range []string{"<audio", `id="np-listen"`, "/static/js/listen.js", `class="drive-card"`} {
+		for _, bad := range []string{`id="np"`, `id="np-toggle"`, "listeninn.js", "<audio", `class="drive-card"`} {
 			if strings.Contains(page, bad) {
 				return fmt.Errorf("the framed page holds %q", bad)
 			}

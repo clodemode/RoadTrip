@@ -86,7 +86,9 @@
 
 {{define "foot"}}
 </main>
-{{template "listen_card" .}}{{template "drive_strip_scripts" .}}{{if .Embed}}<script defer src="/static/js/frame.js?v={{.V}}"></script>{{end}}
+{{/* Inside the signed-in player frame Drive Tracks is the one player card:
+     no Listen Inn card there (Kris, 2026-11-18: "No double player") unless
+     Listen Inn itself was asked for (/listeninn or a song link, ListenOpen). */}}{{if or (not .Embed) .ListenOpen}}{{template "listen_card" .}}{{end}}{{template "drive_strip_scripts" .}}{{if .Embed}}<script defer src="/static/js/frame.js?v={{.V}}"></script>{{end}}
 <footer>
   <p>Route coordinates are planning-grade: town centroids, about a kilometre.
      Times are shown in the zone where they happened.</p>
