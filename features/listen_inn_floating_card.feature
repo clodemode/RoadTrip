@@ -41,7 +41,10 @@ Feature: Listen Inn is its own floating card, off the map
     Then at phone width the open song list is capped at 30vh or less
     And the page keeps room under its content for the docked card
 
-  Scenario: A signed-in driver's Ride page shows the list but no second player
+  # Kris, 2026-11-18, on the road: "we now see both Drive Tracks and Listen Inn
+  # at the same screen. No double player please." Inside the signed-in player
+  # frame Drive Tracks is the one player card; the Listen Inn card is not drawn.
+  Scenario: A signed-in driver's Ride page inside the player frame has no Listen Inn card
     Given the driver has left the start
     When the driver's player reports track "Come Together" of album 42 "Abbey Road" by "The Beatles" started
-    Then the Ride page inside the driver's player frame carries the Listen Inn card with no audio element and no Play button
+    Then the Ride page inside the driver's player frame carries no Listen Inn card
