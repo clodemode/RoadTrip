@@ -236,6 +236,8 @@ func (a *App) routes() http.Handler {
 	// a question spends money and the log is the trip-keeper's own.
 	mux.Handle("GET /chester", a.requireAuth(a.chesterPage))
 	mux.Handle("POST /chester/ask", a.requireRide(a.chesterAsk))
+	// Drop Pin: anyone signed in, driver or rider (drop_pin.go).
+	mux.Handle("POST /driver/pin", a.requireAuth(a.dropPin))
 	mux.Handle("GET /chester/preferences", a.requireAuth(a.chesterPreferencesJSON))
 	mux.Handle("POST /chester/preferences", a.requireAuth(a.chesterPreferences))
 	mux.Handle("GET /driver/chester/memory", a.requireAuth(a.chesterMemoryPage))
@@ -963,13 +965,14 @@ type mapJS struct {
 	Checkpoints []cpJS    `json:"checkpoints"`
 	Sights      []sightJS `json:"sights"`
 	Posts       []postJS  `json:"posts"`
+	Pins        []pinJS   `json:"pins"`
 }
 
 // buildMap takes tracks rather than deriving them: they are computed over the
 // whole ride (a leg's origin sits on the leg before it) while this is called
 // with one leg on a leg page. planned is plannedStarts over the same ride.
 func buildMap(legs []Leg, posts []Post, tracks map[int64][][]float64, planned map[int64]bool) mapJS {
-	m := mapJS{Legs: []legJS{}, Tracks: []trackJS{}, Checkpoints: []cpJS{}, Sights: []sightJS{}, Posts: []postJS{}}
+	m := mapJS{Legs: []legJS{}, Tracks: []trackJS{}, Checkpoints: []cpJS{}, Sights: []sightJS{}, Posts: []postJS{}, Pins: []pinJS{}}
 	for _, l := range legs {
 		m.Legs = append(m.Legs, legJS{ID: l.ID, Ord: l.Ord, Slug: l.Slug, Name: l.Name, Date: l.Date,
 			Color: legColor(l.Ord), Line: l.Line})
@@ -1052,6 +1055,10 @@ func (a *App) ridePage(w http.ResponseWriter, r *http.Request, ask *listenAsk) {
 		"NavLegID": navLegID, "NavAddr": a.navAddresses(r),
 		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, a.withTrail(rv.Ride.Slug, posts)), plannedStarts(rv.Legs, a.withTrail(rv.Ride.Slug, posts))), bars)}
 	a.lookingAt(r, data, viewed)
+	if m, ok := data["Map"].(mapJS); ok {
+		m.Pins = a.mapPins(rv.Ride.Slug, nil)
+		data["Map"] = m
+	}
 	if data["LookingAt"] != nil {
 		// Another trip than the one the site shows: a record to read, with no
 		// tools, no day's end and nothing playing. The page is drawn below.
@@ -1123,6 +1130,10 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 		"Map":     withHours(buildMap([]Leg{*leg}, posts, legTracks(rv.Legs, a.withTrail(rv.Ride.Slug, posts)), plannedStarts(rv.Legs, a.withTrail(rv.Ride.Slug, posts))), bars),
 		"PageLeg": leg.Slug}
 	a.lookingAt(r, data, viewed)
+	if m, ok := data["Map"].(mapJS); ok {
+		m.Pins = a.mapPins(rv.Ride.Slug, []Leg{*leg})
+		data["Map"] = m
+	}
 	a.render(w, r, "leg.html", data)
 }
 
