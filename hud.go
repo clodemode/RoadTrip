@@ -71,6 +71,10 @@ type hudView struct {
 	// NavTo is where the links above go, as the Waze button says it
 	// (stopNavLabel / viaNavLabel).
 	NavTo string `json:"nav_to,omitempty"`
+	// NavNone is true when the next stop has no navigation target (no address
+	// on file, no navigate-by-point mark): the links above are empty and the
+	// screen says so in words (navstop.go).
+	NavNone bool `json:"nav_none,omitempty"`
 
 	Hazards []hazardChip `json:"hazards,omitempty"`
 
@@ -250,6 +254,7 @@ func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, movin
 		nav := stopNav(c, addr)
 		h.Waze, h.Google, h.Apple = nav.Waze, nav.Google, nav.Apple
 		h.NavTo = stopNavLabel(c, addr)
+		h.NavNone = navTarget(c, addr) == navNone
 		if c.Precision != precisionFuzzed {
 			la, ln := c.Lat, c.Lng
 			h.NextLat, h.NextLng = &la, &ln
@@ -259,7 +264,7 @@ func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, movin
 		if rp := nextRoutingPoint(leg, c.Ord, func(r RoutingPoint) (float64, bool) {
 			a, _, _, ok := alongLine(leg.Line, r.Lat, r.Lng)
 			return a, ok
-		}, posAlong, haveLine && haveBase); rp != nil {
+		}, posAlong, haveLine && haveBase); rp != nil && !h.NavNone {
 			nav := mapLinks(rp.Lat, rp.Lng, rp.Name)
 			h.Waze, h.Google, h.Apple, h.Via = nav.Waze, nav.Google, nav.Apple, rp.Name
 			h.NavTo = viaNavLabel(rp.Name)

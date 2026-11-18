@@ -447,8 +447,23 @@ func (a *App) tripPush(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError)
 		return
 	}
+	// The stops with no address, by name. The plan is stored either way (the
+	// overlay may arrive second); going live is what is refused.
+	needs, nerr := a.rideNavMissing(slug)
+	if nerr != nil {
+		log.Printf("trip push: could not read the stops back: %v", nerr)
+		http.Error(w, "the trip was stored but its stops could not be read back", http.StatusInternalServerError)
+		return
+	}
 	activated := false
 	if r.URL.Query().Get("activate") != "" {
+		if len(needs) > 0 {
+			log.Printf("trip push: %s stored, not made active: %d stop(s) have no address", slug, len(needs))
+			body := activationRefusal(slug, needs)
+			body["stored"] = true
+			writeJSON(w, http.StatusConflict, body)
+			return
+		}
 		if err := a.store.SetMeta(metaActiveRide, slug); err != nil {
 			log.Printf("trip push: could not activate: %v", err)
 			http.Error(w, "the trip was stored but could not be made active", http.StatusInternalServerError)
@@ -466,6 +481,8 @@ func (a *App) tripPush(w http.ResponseWriter, r *http.Request) {
 		"status": "ok", "ride": slug, "created": created,
 		"legs": len(sd.Legs), "checkpoints": len(sd.Checkpoints), "options": len(sd.Options),
 		"selection": sd.Selection, "active": a.activeSlug() == slug, "activated": activated,
+		// Every stop the driver cannot yet navigate to, by name (navstop.go).
+		"needs_address": needs,
 		// The start date the ride is on now, whichever source it came from.
 		"start_date": sd.Selection.StartDate,
 	}
@@ -502,6 +519,25 @@ func (a *App) rideActivate(w http.ResponseWriter, r *http.Request) {
 	if _, err := a.store.Ride(slug); err != nil {
 		http.Error(w, "no ride "+strconv.Quote(slug)+" in the database", http.StatusNotFound)
 		return
+	}
+	// A trip with a stop the driver cannot navigate to does not go live (Kris,
+	// 2026-11-18). A ride the image carries is the past and is let through: the
+	// check applies at push and at activation, never to history.
+	if !embeddedRideSlugs()[slug] {
+		needs, err := a.rideNavMissing(slug)
+		if err != nil {
+			http.Error(w, "could not read the ride's stops", http.StatusInternalServerError)
+			return
+		}
+		if len(needs) > 0 {
+			log.Printf("active ride: %s refused, %d stop(s) have no address", slug, len(needs))
+			if wantsHTML(r) {
+				http.Error(w, noAddressNote(needs), http.StatusConflict)
+				return
+			}
+			writeJSON(w, http.StatusConflict, activationRefusal(slug, needs))
+			return
+		}
 	}
 	if err := a.store.SetMeta(metaActiveRide, slug); err != nil {
 		http.Error(w, "could not set the active ride", http.StatusInternalServerError)

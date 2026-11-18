@@ -89,6 +89,10 @@ type Checkpoint struct {
 	// from. Set by markCheckpoints, never stored: Ord is per leg, so it cannot
 	// say which stop is the start.
 	IsStart bool `json:"-"`
+	// NavPoint is true when the trip document says "nav": "point" on this
+	// stop: it is navigated to by its exact point, no street address needed
+	// (navstop.go). Read from meta by Store.Legs, never stored on the row.
+	NavPoint bool `json:"-"`
 }
 
 // Checkpoint precision. "fuzzed" is the privacy seam: the store snaps such a
@@ -1030,7 +1034,35 @@ func (s *Store) Legs(rideSlug string) ([]Leg, error) {
 	for i := range out {
 		out[i].Line = maskLine(out[i].Line, fuzzed)
 	}
+	if pts := s.navPointNames(rideSlug); len(pts) > 0 {
+		for i := range out {
+			for j := range out[i].Checkpoints {
+				out[i].Checkpoints[j].NavPoint = pts[out[i].Checkpoints[j].Name]
+			}
+		}
+	}
 	return out, nil
+}
+
+// navPointKey is where a trip's navigate-by-point stop names are kept.
+func navPointKey(slug string) string { return "navpoint:" + slug }
+
+// navPointNames is the set of stop names the trip document marked "nav":
+// "point" (written by applyTrip). Empty when none.
+func (s *Store) navPointNames(slug string) map[string]bool {
+	v, ok := s.Meta(navPointKey(slug))
+	if !ok || v == "" {
+		return nil
+	}
+	var names []string
+	if json.Unmarshal([]byte(v), &names) != nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, n := range names {
+		out[n] = true
+	}
+	return out
 }
 
 // LegBySlug reads one leg THROUGH Legs, not beside it: the line mask needs the
@@ -1506,6 +1538,9 @@ type seedCP struct {
 	IsTerminal                   bool
 	PlannedArrive, PlannedDepart string
 	When                         map[string]string
+	// Nav is "point" when the document says the stop is navigated by its
+	// exact point (a trailhead, a border crossing); empty otherwise.
+	Nav string
 }
 
 // seedRP is a routing point as a trip document gives it: a Point feature with
@@ -1913,9 +1948,12 @@ func parseSeedBytes(raw []byte, defaultSlug string, sel *Selection) (*seedData, 
 				Label: pstr(p, "label"), Lat: xy[1], Lng: xy[0], TZ: pstr(p, "tz"),
 				Precision: pstr(p, "precision"), IsTerminal: pbool(p, "is_terminal"),
 				PlannedArrive: toUTC(pstr(p, "planned_arrive")), PlannedDepart: toUTC(pstr(p, "planned_depart")),
-				When: when}
+				When: when, Nav: pstr(p, "nav")}
 			if c.Precision == "" {
 				c.Precision = precisionApprox
+			}
+			if c.Nav != "" && c.Nav != "point" {
+				return nil, fmt.Errorf("seed checkpoint %q: nav %q is not \"point\"", c.Name, c.Nav)
 			}
 			if c.TZ == "" {
 				return nil, fmt.Errorf("seed checkpoint %q: tz is required (per-checkpoint, never ride-wide)", c.Name)

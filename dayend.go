@@ -30,6 +30,7 @@ type dayEndView struct {
 	Google  string
 	Apple   string
 	NavTo   string // where the Waze link goes, as its button says (stopNavLabel)
+	NoAddr  bool   // the last stop has no navigation target: no links, said in words
 	// ViaFirst is the stop Waze and Apple Maps go to before the day's end;
 	// Via is every stop still ahead, in order. Both empty when none.
 	ViaFirst string
@@ -226,7 +227,10 @@ func dayEnd(legs []Leg, leg *Leg, multi bool, addr map[int]string, held []Post) 
 	}
 	v.Waze, v.Google, v.Apple = dest.Waze, dest.Google, dest.Apple
 	v.NavTo = stopNavLabel(*term, addr)
-	if ahead := routingAhead(leg, held); len(ahead) > 0 {
+	v.NoAddr = navTarget(*term, addr) == navNone
+	// A stop with no target gets no links, so the swing-past points ahead have
+	// no destination to steer toward either.
+	if ahead := routingAhead(leg, held); len(ahead) > 0 && !v.NoAddr {
 		first := mapLinks(ahead[0].Lat, ahead[0].Lng, ahead[0].Name)
 		v.Waze, v.Apple, v.ViaFirst = first.Waze, first.Apple, ahead[0].Name
 		v.NavTo = viaNavLabel(ahead[0].Name)

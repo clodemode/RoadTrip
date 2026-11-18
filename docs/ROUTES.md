@@ -49,6 +49,8 @@ files it renders with.
 | `POST /driver/checkpoint/{id}/arrive` | stamp, re-stamp or clear an arrival (see [Made it to](DESIGN.md#made-it-to)) |
 | `GET /driver/lodging`, `POST /driver/lodging` | private addresses and notes for the ride's stops |
 | `POST /driver/private` | replace the private overlay by machine; an admin or the push token |
+| `POST /driver/private/ride/{slug}` | replace one ride's block of the overlay; 400 naming the entry when one matches no stop; an admin or the push token |
+| `GET /driver/ready`, `POST /driver/ready/stop/{ord}` | the readiness page: where each stop's Navigate links go, and a per-stop "Checked" tick; signed in |
 | `POST /driver/trip` | push a trip document (see [Trips](TRIPS.md)); an admin or the push token |
 | `POST /driver/ride/active` | choose the ride the site shows; an admin or the push token |
 | `POST /driver/ride/{slug}/delete` | delete a ride nothing has happened on (rows, trip file, private block); 409 for the active ride, an embedded ride, or one with an arrival, post or photo; an admin or the push token |

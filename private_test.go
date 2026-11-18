@@ -363,14 +363,15 @@ func TestOverlayOneRidesTextNeverRendersOnAnother(t *testing.T) {
 }
 
 // The carriage: the shape it has always sent replaces the first ride's block
-// and nothing else; ?ride= addresses another ride; a document with rides is
+// and nothing else; /ride/<slug> addresses another ride (a query parameter is
+// refused: URLs are REST paths); a document with rides is
 // the whole overlay.
 func TestPrivatePushIsPerRide(t *testing.T) {
 	app := activeTripApp(t)
 	push := func(query, body string) *httptest.ResponseRecorder {
 		return send(t, app, "POST", "/driver/private"+query, testToken, "application/json", []byte(body))
 	}
-	if w := push("?ride="+fixtureSlug, `{"checkpoints":{"2":{"address":"OVERLAY-SECOND-RIDE dock"}}}`); w.Code != 200 ||
+	if w := push("/ride/"+fixtureSlug, `{"checkpoints":{"2":{"address":"OVERLAY-SECOND-RIDE dock"}}}`); w.Code != 200 ||
 		!strings.Contains(w.Body.String(), `"checkpoints":1`) {
 		t.Fatalf("push one ride's block: %d %s", w.Code, w.Body.String())
 	}
@@ -390,9 +391,10 @@ func TestPrivatePushIsPerRide(t *testing.T) {
 	// Refusals, each leaving the file as it is.
 	before, _ := os.ReadFile(filepath.Join(app.dataDir, privateFile))
 	for name, c := range map[string][2]string{
-		"a ride that is not in the database": {"?ride=no-such-ride", `{"checkpoints":{"1":{"address":"x"}}}`},
-		"a ride that is a path":              {"?ride=../escape", `{"checkpoints":{"1":{"address":"x"}}}`},
-		"?ride= with a whole document":       {"?ride=" + fixtureSlug, `{"rides":{}}`},
+		"a ride that is not in the database": {"/ride/no-such-ride", `{"checkpoints":{"1":{"address":"x"}}}`},
+		"a ride that is a path":              {"/ride/no%20such", `{"checkpoints":{"1":{"address":"x"}}}`},
+		"the old ?ride= query form":          {"?ride=" + fixtureSlug, `{"checkpoints":{"2":{"address":"x"}}}`},
+		"a ride path with a whole document":  {"/ride/" + fixtureSlug, `{"rides":{}}`},
 		"a rides key that is a path":         {"", `{"rides":{"../escape":{"checkpoints":{}}}}`},
 		"an ord that is not one, in a ride":  {"", `{"rides":{"` + fixtureSlug + `":{"checkpoints":{"dock":{"address":"x"}}}}}`},
 		"the first ride given twice":         {"", `{"checkpoints":{"1":{"address":"x"}},"rides":{"` + app.rideSlug + `":{"checkpoints":{"1":{"address":"y"}}}}}`},

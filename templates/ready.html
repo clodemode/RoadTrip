@@ -1,0 +1,31 @@
+{{template "head" .}}
+<section class="card narrow admin">
+  <div class="card-body">
+  <h1 class="h4">Ready to go: {{.Ride.Name}}</h1>
+  <p class="muted small">Where each Navigate link will go. Open every link and tick the stop once the map shows the right place.
+    Addresses live only on the volume and are shown only to you.</p>
+  {{with .Missing}}<p class="error" role="status">{{.}}</p>{{end}}
+  <ol class="ready-list">
+    {{range .Rows}}
+    <li class="ready-row" id="ready-{{.Ord}}">
+      <p><b>{{.Name}}</b>{{if .Start}} <span class="muted">start, not navigated to</span>{{end}}</p>
+      {{if .Start}}
+      {{else if eq .Kind "none"}}<p class="no-address">No address on file</p>
+      {{else}}
+      <p class="ready-goes">Navigate goes to {{.Goes}}{{if eq .Kind "point"}} <span class="muted">(by point)</span>{{end}}</p>
+      <p>
+        <a class="btn btn-sm btn-outline-primary" href="{{.Links.Waze}}" rel="noopener" target="_blank">Waze</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{.Links.Google}}" rel="noopener" target="_blank">Google Maps</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{.Links.Apple}}" rel="noopener" target="_blank">Apple Maps</a>
+      </p>
+      <form method="post" action="/driver/ready/stop/{{.Ord}}">
+        {{if .Checked}}<span class="ready-ok">Checked</span> <input type="hidden" name="checked" value="0"><button class="btn btn-sm btn-outline-dark">Untick</button>
+        {{else}}<span class="muted">not checked</span> <input type="hidden" name="checked" value="1"><button class="btn btn-sm btn-primary">Checked</button>{{end}}
+      </form>
+      {{end}}
+    </li>
+    {{end}}
+  </ol>
+  </div>
+</section>
+{{template "foot" .}}

@@ -48,6 +48,50 @@ func initPrivateNavScenarios(sc *godog.ScenarioContext, p *postWorld) {
 	})
 	sc.Step(`^kris saves the Lodging screen as it stands$`, w.saveLodging)
 	sc.Step(`^the overlay still holds the address filed for "([^"]*)"$`, w.overlayHolds)
+	// Kris, 2026-11-18: a stop with no address and no navigate-by-point mark is
+	// navigated by nothing. The world's trip marks every stop by point, so
+	// these scenarios start from unmarked stops and say which are marked.
+	sc.Step(`^no stop is marked navigate by point$`, func() error {
+		app := w.n.p.sim.app
+		rv, err := app.loadRide()
+		if err != nil {
+			return err
+		}
+		return app.store.DeleteMeta(navPointKey(rv.Ride.Slug))
+	})
+	sc.Step(`^([ABCD]) is marked navigate by point$`, func(s string) error {
+		app := w.n.p.sim.app
+		rv, err := app.loadRide()
+		if err != nil {
+			return err
+		}
+		raw, _ := json.Marshal([]string{w.name(s)})
+		return app.store.SetMeta(navPointKey(rv.Ride.Slug), string(raw))
+	})
+	sc.Step(`^the driver links are empty and the driver screen says there is no address$`, func() error {
+		for _, k := range []string{"waze", "google", "apple"} {
+			if l, _ := w.hud[k].(string); l != "" {
+				return fmt.Errorf("the %s link is %q, want none", k, l)
+			}
+		}
+		if none, _ := w.hud["nav_none"].(bool); !none {
+			return fmt.Errorf("hud.json does not say the next stop has no navigation")
+		}
+		return nil
+	})
+	sc.Step(`^the Ride row for ([ABCD]) says "No address on file" and has no Navigate link$`, func(s string) error {
+		r, err := w.n.row(s)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(r, "No address on file") {
+			return fmt.Errorf("the Ride row for %s does not say there is no address", s)
+		}
+		if strings.Contains(r, "waze.com") || strings.Contains(r, "google.com/maps") || strings.Contains(r, "maps.apple.com") {
+			return fmt.Errorf("the Ride row for %s still carries a Navigate link", s)
+		}
+		return nil
+	})
 	sc.Step(`^kris reads the driver screen's navigation$`, w.readHUD)
 	sc.Step(`^the driver links for Waze, Google Maps and Apple Maps carry the address of ([ABCD])$`, func(s string) error {
 		return w.hudLinksCarry(true, "")

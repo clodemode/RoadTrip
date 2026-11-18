@@ -590,6 +590,7 @@ func TestFreePicksNeedAFixAndADestination(t *testing.T) {
 // drive has to have started for the driver screen to carry any.
 func TestEveryStopPageOffersWazeGoogleAndApple(t *testing.T) {
 	app := testApp(t)
+	markNavigableByPoint(t, app, app.rideSlug)
 	c := asUser(t, app, "kris", roleAdmin)
 	rv, err := app.loadRide()
 	if err != nil {

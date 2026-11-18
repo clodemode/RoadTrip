@@ -13,6 +13,7 @@ Feature: The signed-in trip-keeper navigates to a stop's own address
     Given kris is signed in
     And the active trip has stops A, B, C and D in order along a line, none arrived at
     And the drive has started at A
+    And no stop is marked navigate by point
 
   Scenario: The driver screen's links go to the private address
     Given B is a private place
@@ -32,8 +33,18 @@ Feature: The signed-in trip-keeper navigates to a stop's own address
     When kris reads the Ride page's navigation
     Then the day's end links carry the address of D
 
-  Scenario: A private stop with no address navigates as today
+  # Kris, 2026-11-18: "Must use precise addresses for navigation." A stop with
+  # no address and no navigate-by-point mark used to go by its name (private)
+  # or its point; it now goes by nothing, and says so in words. Never a link to
+  # a guess.
+  Scenario: A private stop with no address has no Navigate link
     Given B is a private place
+    When kris reads the driver screen's navigation
+    Then the driver links are empty and the driver screen says there is no address
+
+  Scenario: A private stop marked navigate by point goes by its name
+    Given B is a private place
+    And B is marked navigate by point
     When kris reads the driver screen's navigation
     Then the driver links go to B by its name and carry no coordinates
 
@@ -59,7 +70,12 @@ Feature: The signed-in trip-keeper navigates to a stop's own address
     When kris reads the Ride page's navigation
     Then the Ride row for B has Waze, Google Maps and Apple Maps links that carry the address of B
 
-  Scenario: A stop that is not private and has no address navigates by its coordinates
+  # Rewritten 2026-11-18 (Kris: precise addresses for navigation): the
+  # coordinates are used only for a stop the trip document marks "nav": "point"
+  # (a trailhead, a border crossing). An unmarked stop with no address has no
+  # link at all.
+  Scenario: A stop marked navigate by point navigates by its coordinates
+    Given B is marked navigate by point
     When kris reads the driver screen's navigation
     Then the driver links go to B by its coordinates
 
@@ -83,7 +99,7 @@ Feature: The signed-in trip-keeper navigates to a stop's own address
     Given B is a private place
     And B has the private address "7 Quill Hollow Lane, Pemberwick" filed for the stop "Elsewhere Corners"
     When kris reads the driver screen's navigation
-    Then the driver links go to B by its name and carry no coordinates
+    Then the driver links are empty and the driver screen says there is no address
 
   Scenario: An address filed for another stop is not on the post form or the Lodging screen, and a Lodging save keeps it
     Given B is a private place
@@ -105,10 +121,12 @@ Feature: The signed-in trip-keeper navigates to a stop's own address
 
   Scenario: A private stop with no address says its Waze button searches its name
     Given B is a private place
+    And B is marked navigate by point
     When kris opens the driver screen for its Waze button
     Then the driver screen's Waze button reads "Navigate in Waze to a search for the name Birch Gate"
 
-  Scenario: A stop with no address says its Waze button goes to a map point
+  Scenario: A stop marked navigate by point says its Waze button goes to a map point
+    Given B is marked navigate by point
     When kris opens the driver screen for its Waze button
     Then the driver screen's Waze button reads "Navigate in Waze to the map point for Birch Gate"
     And the driver screen's navigation says it goes to "the map point for Birch Gate"

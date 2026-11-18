@@ -115,10 +115,10 @@
         {{if .Driver}}
           {{if and .IsStart (not .ArrivedAt)}}<a class="btn btn-sm btn-primary" href="/driver/post">Start the drive</a>{{end}}
           {{if .CheckIn}}<a class="btn btn-sm btn-primary" href="/driver/post?checkpoint={{.ID}}">Check in</a>{{end}}
-          {{if .Nav}}{{$l := .Links}}
+          {{if .Nav}}{{if .NoAddr}}<span class="no-address muted small">No address on file</span>{{else}}{{$l := .Links}}
           <a class="btn btn-sm btn-outline-primary" href="{{$l.Waze}}" rel="noopener">Navigate in Waze <span class="nav-to">to {{.NavTo}}</span></a>
           <a class="btn btn-sm btn-outline-secondary" href="{{$l.Google}}" rel="noopener">Google Maps</a>
-          <a class="btn btn-sm btn-outline-secondary" href="{{$l.Apple}}" rel="noopener">Apple Maps</a>{{end}}
+          <a class="btn btn-sm btn-outline-secondary" href="{{$l.Apple}}" rel="noopener">Apple Maps</a>{{end}}{{end}}
           {{if .ChesterOn}}<a class="btn btn-sm btn-outline-secondary" href="{{askChester .Name}}">Ask Chester about here</a>{{end}}
           {{if or .ArrivedAt .SkippedAt}}<form method="post" action="/driver/checkpoint/{{.ID}}/arrive" class="d-inline">
             <input type="hidden" name="clear" value="1"><button class="undo">Undo</button>
