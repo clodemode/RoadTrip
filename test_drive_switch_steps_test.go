@@ -25,7 +25,7 @@ func initTestDriveSwitchScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		line := [][]float64{{-76.48, 44.23}, {-76.6, 44.5}}
 		stop := func(n, ord int, nm string, c []float64) map[string]any {
 			return map[string]any{"type": "Feature", "geometry": map[string]any{"type": "Point", "coordinates": c},
-				"properties": map[string]any{"kind": "checkpoint", "leg": 1, "order": ord, "name": nm, "precision": "exact",
+				"properties": map[string]any{"kind": "checkpoint", "nav": "point", "leg": 1, "order": ord, "name": nm, "precision": "exact",
 					"is_terminal": n == 1, "tz": "America/Toronto"}}
 		}
 		doc, _ := json.Marshal(map[string]any{"type": "FeatureCollection", "name": name, "avg_mph": 60,

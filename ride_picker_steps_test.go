@@ -24,7 +24,7 @@ func initRidePickerScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		line := [][]float64{{-100.0, 40.0}, {-100.0, 40.5}}
 		stop := func(ord int, nm string, c []float64) map[string]any {
 			return map[string]any{"type": "Feature", "geometry": map[string]any{"type": "Point", "coordinates": c},
-				"properties": map[string]any{"kind": "checkpoint", "leg": 1, "order": ord, "name": nm, "precision": "approx",
+				"properties": map[string]any{"kind": "checkpoint", "nav": "point", "leg": 1, "order": ord, "name": nm, "precision": "approx",
 					"is_terminal": true, "tz": "America/Chicago"}}
 		}
 		doc, _ := json.Marshal(map[string]any{"type": "FeatureCollection", "name": name, "avg_mph": 60,

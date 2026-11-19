@@ -1,5 +1,6 @@
 {{template "head" .}}
 {{with .Notice}}<p class="post-done" role="status">{{.}}</p>{{end}}
+{{with .NoAddress}}<p class="error no-address-note" role="status">{{.}} <a href="/driver/ready">Ready to go</a></p>{{end}}
 {{with .NoticePost}}<form method="post" action="/driver/post/{{.ID}}/fuzz" class="post-fuzz">
   <button class="btn btn-sm btn-outline-primary">Fuzz This</button>
   <span class="muted small">&mdash; make that post&rsquo;s location inexact</span></form>{{end}}
@@ -92,12 +93,13 @@
       <button class="btn btn-sm {{if .Destined}}btn-dark{{else}}btn-outline-dark{{end}}" name="mode" value="destined"{{if .Destined}} aria-current="true"{{end}}>FreeLance: Destined</button>
       <button class="btn btn-sm btn-outline-dark" name="mode" value="aimless">FreeLance: Aimless</button>
     </form>
-    {{$nav := and .H.HasNext .H.DriveStarted}}
+    {{$nav := and .H.HasNext .H.DriveStarted (not .H.NavNone)}}
     <p class="hud-k" id="hud-k">{{if .H.DriveStarted}}Next{{else}}Drive{{end}}</p>
     <p class="hud-next" id="hud-next">{{if not .H.DriveStarted}}Start &middot; {{.H.StartName}}{{else if .H.HasNext}}{{.H.NextName}}{{else}}No stop ahead{{end}}</p>
     {{if and .Driver (not .H.DriveStarted)}}<a class="btn btn-primary btn-lg start-drive" href="/driver/post">Start the drive</a>{{end}}
     <p class="hud-dist"{{if not .H.DriveStarted}} hidden{{end}}><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
     <p class="hud-s" id="hud-via"{{if not (and $nav .H.Via)}} hidden{{end}}>Drive through <b id="hud-via-name">{{.H.Via}}</b> first</p>
+    <p class="hud-s muted no-address" id="hud-no-address"{{if not (and .H.HasNext .H.DriveStarted .H.NavNone)}} hidden{{end}}>No address on file</p>
     <a class="btn btn-primary hud-waze" id="hud-waze" href="{{if $nav}}{{.H.Waze}}{{else}}#{{end}}" rel="noopener"{{if not $nav}} hidden{{end}}>Navigate in Waze <span class="nav-to" id="hud-nav-to">to {{.H.NavTo}}</span></a>
     <p class="nav-alt" id="hud-nav-alt"{{if not $nav}} hidden{{end}}><a class="btn btn-sm btn-outline-dark" id="hud-google" href="{{if $nav}}{{.H.Google}}{{else}}#{{end}}" rel="noopener">Google Maps</a> <a class="btn btn-sm btn-outline-dark" id="hud-apple" href="{{if $nav}}{{.H.Apple}}{{else}}#{{end}}" rel="noopener">Apple Maps</a></p>
     <ul class="hud-chips" id="hud-chips" aria-label="Hazards on this leg" aria-live="polite">
@@ -119,6 +121,7 @@
 
   <nav class="hud-tools hud-right" aria-label="Driver tools, right">
     <a class="hud-tool" href="/plan"><span class="hud-ico" aria-hidden="true">&#128506;</span>Plan</a>
+    {{if .Driver}}<a class="hud-tool" href="/driver/ready"><span class="hud-ico" aria-hidden="true">&#9989;</span>Ready to go</a>{{end}}
     {{if .Driver}}<a class="hud-tool" href="/driver/lodging"><span class="hud-ico" aria-hidden="true">&#127976;</span>Lodging</a>{{end}}
   </nav>
 

@@ -224,6 +224,10 @@ func (a *App) routes() http.Handler {
 	// The data carriage's landing point: an admin's session or the push token
 	// (requireKeeper). A driver is not the trip-keeper and gets a 403.
 	mux.Handle("POST /driver/private", a.requireKeeper(a.privatePush))
+	mux.Handle("POST /driver/private/ride/{slug}", a.requireKeeper(a.privatePushRide))
+	// Where every Navigate link will go, before the drive (navigable.go).
+	mux.Handle("GET /driver/ready", a.requireRide(a.readyPage))
+	mux.Handle("POST /driver/ready/stop/{ord}", a.requireRide(a.readyTick))
 	// The trip carriage and its switches: a trip document onto the volume,
 	// which ride the site shows, and the saved selection. Same gate as above.
 	mux.Handle("POST /driver/trip", a.requireKeeper(a.tripPush))
@@ -493,6 +497,11 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	// look-at picker instead, for everyone.
 	if a.auth.IsAdmin(r) && (name == "plan.html" || name == "driver.html") {
 		data["TripSwitch"] = a.tripSwitch()
+	}
+	// Stops the driver cannot navigate to say so on the Plan page and the
+	// driver screen, to the signed-in driver only (navigable.go).
+	if (name == "plan.html" || name == "driver.html") && data["Driver"] == true {
+		data["NoAddress"] = a.noAddressFor()
 	}
 	if authed {
 		// Every page goes through here, and this is where the session is known.
@@ -1161,6 +1170,11 @@ type stopRow struct {
 // Links are the row's three navigators, built as the driver screen's are
 // (stopNav): a private place's carry its address or its name, never the cell.
 func (s stopRow) Links() navLinks { return stopNav(s.Checkpoint, s.Addr) }
+
+// NoAddr is true when the stop has no navigation target: no address on file
+// and no navigate-by-point mark. The row then says so in place of the links
+// (navstop.go).
+func (s stopRow) NoAddr() bool { return navTarget(s.Checkpoint, s.Addr) == navNone }
 
 // NavTo is where the row's Waze button says it goes (stopNavLabel).
 func (s stopRow) NavTo() string { return stopNavLabel(s.Checkpoint, s.Addr) }
@@ -3154,10 +3168,12 @@ func (a *App) lodgingSave(w http.ResponseWriter, r *http.Request) {
 //	                                     and only that: the shape the carriage
 //	                                     has always sent, meaning what it
 //	                                     always meant
-//	{"checkpoints": {…}}  with ?ride=x   ride x's block, and only that
 //	{"rides": {…}, "checkpoints": {…}}   the whole document
 //
-// So one ride's push never removes another ride's entries.
+// One other ride's block goes to POST /driver/private/ride/{slug}
+// (privatePushRide). A ?ride= query parameter is refused: URLs are paths. An
+// entry that matches no stop of its ride is refused whole, by name
+// (refuseUnmatched). So one ride's push never removes another ride's entries.
 func (a *App) privatePush(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxPrivateBytes)
 	raw, err := io.ReadAll(r.Body)
@@ -3198,29 +3214,28 @@ func (a *App) privatePush(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	ride := strings.TrimSpace(r.URL.Query().Get("ride"))
+	// URLs are REST paths, never query parameters (Kris, 2026-11-16): one
+	// ride's block goes to POST /driver/private/ride/{slug} (privatePushRide).
+	if strings.TrimSpace(r.URL.Query().Get("ride")) != "" {
+		http.Error(w, "a ride is named in the path, not a query parameter: POST /driver/private/ride/<slug>", 400)
+		return
+	}
+	// A filed entry that matches no stop is refused by name, for every block
+	// whose ride is in the database (a ride not there yet cannot be judged).
+	for slug, block := range in.Rides {
+		if a.refuseUnmatched(w, slug, block.Checkpoints) {
+			return
+		}
+	}
+	if len(in.Checkpoints) > 0 && a.refuseUnmatched(w, a.rideSlug, in.Checkpoints) {
+		return
+	}
 	var out privateData
 	switch {
-	case ride != "":
-		if in.Rides != nil {
-			http.Error(w, "?ride= takes one ride's block, {\"checkpoints\": {…}}, not a document with rides", 400)
-			return
-		}
-		if !validSlug(ride) {
-			http.Error(w, "ride is not a ride slug", 400)
-			return
-		}
-		if _, err := a.store.Ride(ride); err != nil {
-			http.Error(w, "no ride "+strconv.Quote(ride)+" in the database", http.StatusNotFound)
-			return
-		}
-		fallthrough
 	case in.Rides == nil:
-		// One ride's block. Everything else on the volume stays as it is, so
-		// the file has to read cleanly first.
-		if ride == "" {
-			ride = a.rideSlug
-		}
+		// The first ride's block. Everything else on the volume stays as it
+		// is, so the file has to read cleanly first.
+		ride := a.rideSlug
 		out, err = loadPrivate(a.dataDir)
 		if err != nil {
 			log.Printf("private overlay: push refused, the overlay on the volume does not parse: %v", err)

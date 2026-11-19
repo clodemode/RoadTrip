@@ -42,6 +42,30 @@ checkpoint at either end is refused too, because nothing could place its line.
 The same check runs on a saved selection. The embedded seed passes it (a test holds that), though boot does not run it
 on an embedded seed.
 
+**Every stop is navigable before a trip goes live** (Kris, 2026-11-18: "Must use
+precise addresses for navigation."). A stop is a destination and needs a precise
+address, which lives in the private overlay, never in the trip document. One
+function, `navTarget`, says how a stop is navigated: by an **address** (an
+overlay entry for it), by **point** (the document says `"nav": "point"` on the
+checkpoint feature: a trailhead or a border crossing with no street address), or
+**none**. Every Navigate link, the push's check and `/driver/ready` ask it, so
+they cannot disagree. A stop with target none shows no Navigate links and says
+"No address on file"; it is never linked by a guess. A routing point is a
+swing-past point, never a stop, and is not held to the rule. The start, and a stop
+already arrived at or passed, are not asked.
+
+- `POST /driver/trip` stores the plan either way and answers `"needs_address"`:
+  the names of the stops with target none (an empty list when none), so the
+  overlay may arrive second. The Plan page and the driver screen say the same.
+- `?activate=1` on a push, and `POST /driver/ride/active`, answer **409** with the
+  same list while any stop has target none. An embedded ride is exempt, and the
+  check never runs at boot, so no ride already on the volume is refused.
+- `GET /driver/ready` lists each stop in order with where Navigate will go, the
+  three links to open, and a **Checked** tick kept on the server (it clears when
+  the stop's name, point or address changes). The check is the trip-keeper
+  opening the link; no geocoder is called. A trip is not ready until each is
+  ticked.
+
 **The active ride** is a row in the `meta` table, read per request. Setting it
 moves every page, the post form and `/route.geojson` together. The ride that
 stops being shown is not touched: it stays in the database whole.

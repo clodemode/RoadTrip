@@ -347,7 +347,7 @@ the directory is the one write a concurrent reader cannot catch mid-way.
 
 The carriage follows the same rule. The shape it has always sent,
 `{"checkpoints":{…}}`, replaces the first ride's block and leaves every other
-ride's alone; `POST /driver/private?ride=<slug>` replaces that ride's block;
+ride's alone; `POST /driver/private/ride/<slug>` replaces that ride's block (a `?ride=` query parameter is refused: URLs are paths) and refuses the whole push, by name, when an entry matches no stop of the ride, either by number or by its `for` text (the refusal names the entry number and the `for`, never an address);
 only a document that carries `"rides"` replaces the whole overlay.
 
 ⚠️ The two copies can drift. A `/driver/lodging` edit does not update

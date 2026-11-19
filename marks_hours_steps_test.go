@@ -111,7 +111,7 @@ func (m *marksWorld) push(legs [][]mhStop, mph float64, places []map[string]any,
 			"geometry": map[string]any{"type": "LineString", "coordinates": coords}})
 		for _, s := range stops {
 			order++
-			pr := map[string]any{"kind": "checkpoint", "order": order, "leg": li + 1, "name": s.name,
+			pr := map[string]any{"kind": "checkpoint", "nav": "point", "order": order, "leg": li + 1, "name": s.name,
 				"label": "Stop", "tz": "America/Toronto", "is_terminal": s.legEnd}
 			if s.fuzzed {
 				pr["precision"] = "fuzzed"

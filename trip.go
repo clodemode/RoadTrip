@@ -335,7 +335,43 @@ func applyTrip(store *Store, raw []byte, slug string) (created bool, n RefreshCo
 		return false, n, nil, err
 	}
 	created, n, err = store.ApplyPlan(sd)
-	return created, n, sd, err
+	if err != nil {
+		return created, n, sd, err
+	}
+	// The stops the document marks "nav": "point" (navstop.go). Kept by name,
+	// so a route choice that renumbers stops keeps the mark with its stop.
+	if pts, jerr := json.Marshal(navPointNames(raw)); jerr == nil {
+		if serr := store.SetMeta(navPointKey(slug), string(pts)); serr != nil {
+			return created, n, sd, serr
+		}
+	}
+	return created, n, sd, nil
+}
+
+// navPointNames is the name of every checkpoint, in every alternative of the
+// document, that says "nav": "point" (navstop.go). The document was already
+// parsed whole, so a malformed one never reaches here; one that cannot be read
+// again yields none.
+func navPointNames(raw []byte) []string {
+	var doc struct {
+		Features []struct {
+			Properties map[string]any `json:"properties"`
+		} `json:"features"`
+	}
+	out := []string{}
+	if json.Unmarshal(raw, &doc) != nil {
+		return out
+	}
+	seen := map[string]bool{}
+	for _, f := range doc.Features {
+		if pstr(f.Properties, "kind") == "checkpoint" && pstr(f.Properties, "nav") == "point" {
+			if n := pstr(f.Properties, "name"); n != "" && !seen[n] {
+				seen[n] = true
+				out = append(out, n)
+			}
+		}
+	}
+	return out
 }
 
 // loadVolumeTrips is the boot half: every trip file on the volume goes

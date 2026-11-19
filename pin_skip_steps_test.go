@@ -94,7 +94,7 @@ func (w *pinWorld) kingstonStarted() error {
 		"geometry":   map[string]any{"type": "LineString", "coordinates": line},
 	}}
 	for i, t := range kgnTowns {
-		props := map[string]any{"kind": "checkpoint", "order": i + 1, "leg": 1, "name": t.name, "label": "Stop",
+		props := map[string]any{"kind": "checkpoint", "nav": "point", "order": i + 1, "leg": 1, "name": t.name, "label": "Stop",
 			"tz": "America/Toronto", "precision": "approx"}
 		if i == 0 || i == len(kgnTowns)-1 {
 			props["is_terminal"] = true

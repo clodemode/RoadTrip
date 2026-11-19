@@ -87,7 +87,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 1,
     "leg": 1,
     "name": "Alder",
@@ -110,7 +110,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 2,
     "leg": 1,
     "name": "Birch Gate",
@@ -132,7 +132,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 3,
     "leg": 1,
     "name": "Cedar Camp",
@@ -205,7 +205,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 4,
     "leg": 2,
     "name": "Dogwood",
@@ -255,7 +255,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 5,
     "leg": 3,
     "name": "Elm",
@@ -317,7 +317,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 1,
     "leg": 1,
     "name": "Alder",
@@ -340,7 +340,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 2,
     "leg": 1,
     "name": "Birch Gate",
@@ -362,7 +362,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 3,
     "leg": 1,
     "name": "Cedar Camp",
@@ -435,7 +435,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 4,
     "leg": 2,
     "name": "Fir Landing",
@@ -485,7 +485,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 5,
     "leg": 3,
     "name": "Elm",
@@ -547,7 +547,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 1,
     "leg": 1,
     "name": "Alder",
@@ -570,7 +570,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 2,
     "leg": 1,
     "name": "Birch Gate",
@@ -592,7 +592,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 3,
     "leg": 1,
     "name": "Cedar Camp",
@@ -665,7 +665,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 4,
     "leg": 2,
     "name": "Dogwood",
@@ -715,7 +715,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 5,
     "leg": 3,
     "name": "Elm",
@@ -777,7 +777,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 1,
     "leg": 1,
     "name": "Alder",
@@ -800,7 +800,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 2,
     "leg": 1,
     "name": "Birch Gate",
@@ -822,7 +822,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 3,
     "leg": 1,
     "name": "Cedar Camp",
@@ -895,7 +895,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 4,
     "leg": 2,
     "name": "Dogwood",
@@ -945,7 +945,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 5,
     "leg": 3,
     "name": "Elm",
@@ -1007,7 +1007,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 1,
     "leg": 1,
     "name": "Alder",
@@ -1030,7 +1030,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 2,
     "leg": 1,
     "name": "Birch Hill",
@@ -1052,7 +1052,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 3,
     "leg": 1,
     "name": "Cedar Camp",
@@ -1125,7 +1125,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 4,
     "leg": 2,
     "name": "Dogwood",
@@ -1175,7 +1175,7 @@
   {
    "type": "Feature",
    "properties": {
-    "kind": "checkpoint",
+    "kind": "checkpoint", "nav": "point",
     "order": 5,
     "leg": 3,
     "name": "Elm",

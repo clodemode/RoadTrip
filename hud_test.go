@@ -15,6 +15,7 @@ import (
 func hudRide(t *testing.T) (*App, *rideView) {
 	t.Helper()
 	app := testApp(t)
+	markNavigableByPoint(t, app, app.rideSlug)
 	rv, err := app.loadRide()
 	if err != nil {
 		t.Fatal(err)

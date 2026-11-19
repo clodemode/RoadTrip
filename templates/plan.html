@@ -43,6 +43,7 @@
     {{end}}
   </div>
   {{end}}
+  {{with .NoAddress}}<p class="error no-address-note" role="status">{{.}} <a href="/driver/ready">Ready to go</a></p>{{end}}
   {{if .Error}}<p class="error plan-msg" id="plan-result" role="alert">Not saved: {{.Error}}.</p>
   {{else if .Notice}}<p class="plan-saved plan-msg" id="plan-result" role="status">{{.Notice}}</p>{{end}}
 </form>

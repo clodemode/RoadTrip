@@ -203,7 +203,9 @@
     cross.hidden = !h.crossing;
     // Before the drive starts the headline is the start, never "Next", and
     // nothing here navigates to it.
-    var nav = h.drive_started && h.has_next;
+    var nav = h.drive_started && h.has_next && !h.nav_none;
+    var noAddr = $('hud-no-address');
+    if (noAddr) noAddr.hidden = !(h.drive_started && h.has_next && h.nav_none);
     setText('hud-k', h.drive_started ? 'Next' : 'Drive');
     setText('hud-next', !h.drive_started ? 'Start \u00b7 ' + (h.start_name || '') : (h.has_next ? h.next_name : 'No stop ahead'));
     setText('hud-nextmi', h.next_miles);
