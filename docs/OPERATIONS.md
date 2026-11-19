@@ -35,10 +35,19 @@ Two files on the volume are configuration too:
 | `$DATA_DIR/trips/<slug>.geojson` | a trip that is not in the image: pushed with `POST /driver/trip`, read at boot after the embedded seeds; never in the repo. Absent = only the embedded rides |
 | `$DATA_DIR/private.json` | private overlay, keyed by ride and then by checkpoint ord: the top-level `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` is the first ride's (`RIDE_SLUG`), every other ride has its own block under `"rides":{"<slug>":{"checkpoints":{…}}}`; rendered on admin pages only, never in the repo or the seed; absent = no private data |
 
-With `SITE_URL` set, every page carries `<link rel="canonical">` and `og:*`
-tags naming that origin, and a request on any other host (a `.fly.dev` host
-included) is answered with a 301 to the same path on `SITE_URL`; only
-`/healthz` answers on any host, because a platform health check needs it to.
+With `SITE_URL` set, every page carries `<link rel="canonical">` and one
+link-preview tag block (the `social_meta` partial, in the ride pages and the
+player shell alike): `og:*` and `twitter:*` tags naming that origin, with
+`og:image` the baked card `/static/img/og-card.png`, a 1200 by 630 PNG at an
+absolute https address. With `SITE_VISIBILITY=private` the block names no
+trip: a generic title and description over the same card. A request on any
+other host (a `.fly.dev` host included) is answered with a 301 to the same path
+on `SITE_URL`; only `/healthz` answers on any host, because a platform health
+check needs it to.
+
+The card is committed, not drawn at run time; `tools/og_card/README.md` says
+how to bake it again. After a deploy that changes the card, Facebook keeps its
+old copy until someone presses Scrape Again in its Sharing Debugger.
 
 ### Optional features that need an outside account
 

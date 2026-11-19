@@ -1,0 +1,13 @@
+{
+  "name": "roadtrip-og-card",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Bakes static/img/og-card.png, the fallback social card (1200x630 PNG). spec-roadtrip-social-preview-cards-a-live-route-card-per-trip-the-photo-itself-on-a-photo-page-a-baked-odo-card-as-the-fallback-one-tag-block-and-a-check-that-reads-the-page-as-a-scraper-does.",
+  "scripts": {
+    "bake": "node bake.mjs"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2"
+  }
+}

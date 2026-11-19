@@ -17,3 +17,5 @@ coWork_input/
 # LORE is its own private repo (clodemode/roadtrip-lore), cloned into LORE/ by hand,
 # like fintrack/LORE. Never tracked here: this repo is public.
 /LORE/
+# The og-card bake's dependencies (tools/og_card/README.md).
+node_modules/
