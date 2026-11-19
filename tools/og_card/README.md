@@ -3,7 +3,7 @@
 Bakes `static/img/og-card.png`, the fallback link-preview card: 1200 by 630 PNG,
 the masthead ground, Odo on his disc, "Road Trip" and his line. The colours are
 read from `static/css/app.css` and Odo from `static/img/creature.svg` at bake
-time. Contract: `spec-roadtrip-social-preview-cards`.
+time. Contract: `spec-roadtrip-social-preview-cards-a-live-route-card-per-trip-the-photo-itself-on-a-photo-page-a-baked-odo-card-as-the-fallback-one-tag-block-and-a-check-that-reads-the-page-as-a-scraper-does`.
 
 The bake is deterministic: fonts are passed by file (the Go family inside the
 `golang.org/x/image` module) and system fonts are never loaded.

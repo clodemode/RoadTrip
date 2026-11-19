@@ -1,6 +1,6 @@
 Feature: Every page carries one link-preview tag block that names a raster card
 
-  Contract: spec-roadtrip-social-preview-cards (wave W1, the baked fallback
+  Contract: spec-roadtrip-social-preview-cards-a-live-route-card-per-trip-the-photo-itself-on-a-photo-page-a-baked-odo-card-as-the-fallback-one-tag-block-and-a-check-that-reads-the-page-as-a-scraper-does (wave W1, the baked fallback
   card). A pasted link previews with a picture only if the card is a raster at
   an absolute https address. One partial, used by every full document, emits
   the Open Graph and Twitter tags, and only when the site's public address is

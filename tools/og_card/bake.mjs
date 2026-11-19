@@ -1,5 +1,5 @@
 // Bakes static/img/og-card.png: the fallback social card, 1200x630 PNG.
-// Contract: spec-roadtrip-social-preview-cards (wave W1). See README.md.
+// Contract: spec-roadtrip-social-preview-cards-a-live-route-card-per-trip-the-photo-itself-on-a-photo-page-a-baked-odo-card-as-the-fallback-one-tag-block-and-a-check-that-reads-the-page-as-a-scraper-does (wave W1). See README.md.
 //
 //   FONT_DIR=<golang.org/x/image>/font/gofont/ttfs node tools/og_card/bake.mjs
 //

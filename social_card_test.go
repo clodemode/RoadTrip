@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// The fallback card and the tag block. spec-roadtrip-social-preview-cards.
+// The fallback card and the tag block. spec-roadtrip-social-preview-cards-a-live-route-card-per-trip-the-photo-itself-on-a-photo-page-a-baked-odo-card-as-the-fallback-one-tag-block-and-a-check-that-reads-the-page-as-a-scraper-does.
 
 func TestSocialFallbackCardIsA1200x630PNGUnder300KB(t *testing.T) {
 	b, err := os.ReadFile("static/img/og-card.png")

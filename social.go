@@ -6,7 +6,7 @@ import (
 )
 
 // The link-preview tag block: one partial (templates/social_meta.html), one
-// data shape, used by every full document. spec-roadtrip-social-preview-cards.
+// data shape, used by every full document. spec-roadtrip-social-preview-cards-a-live-route-card-per-trip-the-photo-itself-on-a-photo-page-a-baked-odo-card-as-the-fallback-one-tag-block-and-a-check-that-reads-the-page-as-a-scraper-does.
 
 const (
 	socialCardPath = "/static/img/og-card.png"
