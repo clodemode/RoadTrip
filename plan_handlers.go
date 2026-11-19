@@ -61,8 +61,10 @@ type planState struct {
 
 // loadPlan reads the active ride's plan: from its trip file when it has one,
 // else from the store.
-func (a *App) loadPlan() (*planState, error) {
-	slug := a.activeSlug()
+func (a *App) loadPlan() (*planState, error) { return a.loadPlanSlug(a.activeSlug()) }
+
+// loadPlanSlug is loadPlan for a named ride (the trip card draws past trips too).
+func (a *App) loadPlanSlug(slug string) (*planState, error) {
 	ride, err := a.store.Ride(slug)
 	if err != nil {
 		return nil, err

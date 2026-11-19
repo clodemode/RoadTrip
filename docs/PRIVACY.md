@@ -229,6 +229,17 @@ logs its pin decision (`post N: pin browser ±12 m → snapped to checkpoint 1
 (…) (fallback)`, `pin none (hidden)`) — names, never coordinates — so a driveway GPS test is
 provable from the server log even though the public map hides a home fix.
 
+## What a link-preview card can and cannot show
+
+The trip card (`/og/ride/<slug>.png`) is a picture anyone can fetch, so it is
+drawn from the same legs a visitor's map is: fuzzed points already snapped,
+lines already masked near private places. It shows the trip's name, miles, days
+and dates as the public Plan page states them, a state word (planned, on the
+road with the day, finished), and the route with a disc at each night's end.
+It carries no place name, no address, no post, no photo, no position and no
+clock time, and it never reads the private overlay. A next trip is not served
+to a visitor, and with the site private every page names only the fallback card.
+
 ## A signed-in page is never cached
 
 **A signed-in page is never cached.** `/plan`, like every page, is one

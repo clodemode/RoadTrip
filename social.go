@@ -29,7 +29,11 @@ type socialMeta struct {
 
 // social builds the tag block for the page at r. With the whole site private
 // the title and description are generic and name no ride.
-func (a *App) social(r *http.Request, rideName, title, desc string) socialMeta {
+//
+// slug names the ride whose trip card the page shows; empty (the sign-in page,
+// any page with no ride) names the fallback card, as does a private site and a
+// ride that cannot be drawn.
+func (a *App) social(r *http.Request, slug, rideName, title, desc string) socialMeta {
 	if a.siteURL == "" {
 		return socialMeta{}
 	}
@@ -42,6 +46,9 @@ func (a *App) social(r *http.Request, rideName, title, desc string) socialMeta {
 	if a.sitePrivate {
 		m.SiteName, m.Title, m.Description = socialSite, socialSite, socialLine
 		return m
+	}
+	if img, alt, ok := a.cardAddress(slug); ok {
+		m.Image, m.Alt = img, alt
 	}
 	m.SiteName = rideName
 	m.Title = rideName

@@ -6,9 +6,9 @@ Feature: Every page carries one link-preview tag block that names a raster card
   the Open Graph and Twitter tags, and only when the site's public address is
   set. With the whole site private the block says nothing about the trip.
 
-  Scenario: A visitor's ride page names the fallback card in full
+  Scenario: A visitor's sign-in page names the fallback card in full
     Given the trip is active and the site's public address is "https://example.com"
-    When a visitor reads the page "/"
+    When a visitor reads the page "/driver/login"
     Then the page names the fallback card as an absolute https raster image
     And the card is declared 1200 by 630 as image/png with a description
     And the page carries the Twitter large-image tags
@@ -18,7 +18,7 @@ Feature: Every page carries one link-preview tag block that names a raster card
     Given the trip is active and the site's public address is "https://example.com"
     When the driver, signed in with the music library on, reads the page "/"
     Then the answer is the player shell
-    And the page names the fallback card as an absolute https raster image
+    And the page names an absolute https raster image
     And the card is declared 1200 by 630 as image/png with a description
     And the page carries the Twitter large-image tags
     And the tags come in the one fixed order

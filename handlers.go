@@ -168,6 +168,8 @@ func (a *App) routes() http.Handler {
 	// alternative. /plan.json is the same arithmetic as data.
 	mux.HandleFunc("GET /plan", a.planPage)
 	mux.HandleFunc("GET /plan.json", a.planJSON)
+	// The live trip card a link preview shows (social_card_ride.go).
+	mux.HandleFunc("GET /og/ride/{file}", a.rideCardPNG)
 	// What is playing and what played: open to a visitor, text only (plays.go).
 	mux.HandleFunc("GET /tracks.json", a.tracksJSON)
 	// A visitor hears one play of the active ride (listen.go): checked, then handed on.
@@ -567,7 +569,11 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		}
 		t, _ := data["Title"].(string)
 		d, _ := data["Description"].(string)
-		data["Social"] = a.social(r, rn, t, d)
+		slug := ""
+		if rd, ok := data["Ride"].(*Ride); ok && rd != nil && name != "login.html" {
+			slug = rd.Slug
+		}
+		data["Social"] = a.social(r, slug, rn, t, d)
 	}
 	a.chrome(r, name, data, authed, data["Driver"] == true)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

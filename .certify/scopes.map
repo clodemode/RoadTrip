@@ -53,6 +53,9 @@ APP_PROFILE.yaml            docs
 # the og-card bake: the baked card has its own Go test, the script nothing else runs
 tools/*                     unit
 
+# the baked layers the trip card is drawn on (embedded by social_card.go)
+cardlayers/*                unit,features
+
 # the module graph: everything
 go.mod                      whole
 go.sum                      whole
