@@ -6,13 +6,7 @@
 <title>{{if .Title}}{{.Title}} — {{end}}{{.Ride.Name}}</title>
 <meta name="description" content="{{if .Description}}{{.Description}}{{else}}{{.Ride.Name}}: a one-way drive, live from the road.{{end}}">
 {{if .SiteURL}}<link rel="canonical" href="{{.Canonical}}">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="{{.Ride.Name}}">
-<meta property="og:title" content="{{if .Title}}{{.Title}} — {{end}}{{.Ride.Name}}">
-<meta property="og:description" content="{{if .Description}}{{.Description}}{{else}}{{.Ride.Name}}: a one-way drive, live from the road.{{end}}">
-<meta property="og:url" content="{{.Canonical}}">
-<meta property="og:image" content="{{.SiteURL}}/static/img/creature.svg?v={{.V}}">
-{{end}}<link rel="icon" href="/static/img/creature.svg?v={{.V}}">
+{{end}}{{template "social_meta" .}}<link rel="icon" href="/static/img/creature.svg?v={{.V}}">
 <!-- Stylesheets BEFORE scripts: a deferred script executes while a
      stylesheet declared after it is still pending, and #map would then
      have zero height when Leaflet measures it -> fitBounds lands on maxZoom.

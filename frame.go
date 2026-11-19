@@ -142,7 +142,8 @@ func (a *App) shell(h http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "private, no-store")
 		w.Header().Add("Vary", "Cookie")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		data := map[string]any{"V": a.assetV, "FrameSrc": src, "Resume": a.resumeFor(r), "RideName": rv.Ride.Name}
+		data := map[string]any{"V": a.assetV, "FrameSrc": src, "Resume": a.resumeFor(r), "RideName": rv.Ride.Name,
+			"Social": a.social(r, rv.Ride.Name, "", "")}
 		if err := a.tmpl.ExecuteTemplate(w, "shell.html", data); err != nil {
 			http.Error(w, "template error", http.StatusInternalServerError)
 		}

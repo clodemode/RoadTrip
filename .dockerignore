@@ -22,3 +22,5 @@ LORE/
 scripts/
 .certify/
 .github/
+# The og-card bake is not part of the binary.
+tools/

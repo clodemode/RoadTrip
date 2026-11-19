@@ -272,6 +272,7 @@ var visibilityOpen = map[string]bool{
 	"/driver/login":            true,
 	"/static/css/app.css":      true,
 	"/static/img/creature.svg": true,
+	"/static/img/og-card.png":  true,
 }
 
 // visibility is the temporary whole-site gate: with SITE_VISIBILITY=private
@@ -558,6 +559,15 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		} else {
 			data["Ride"] = &Ride{Name: "Roadtrip"}
 		}
+	}
+	{
+		rn := "Roadtrip"
+		if rd, ok := data["Ride"].(*Ride); ok && rd != nil {
+			rn = rd.Name
+		}
+		t, _ := data["Title"].(string)
+		d, _ := data["Description"].(string)
+		data["Social"] = a.social(r, rn, t, d)
 	}
 	a.chrome(r, name, data, authed, data["Driver"] == true)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
