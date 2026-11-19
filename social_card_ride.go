@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -31,6 +30,9 @@ type cardCache struct {
 	mu   sync.Mutex
 	memo map[string]cardMemo
 	png  map[string]cardPNG
+	// the last few photo cards drawn, by address hash (social_card_photo.go)
+	photo      map[string][]byte
+	photoOrder []string
 }
 
 type cardMemo struct {
@@ -141,11 +143,8 @@ func (a *App) buildCardSpec(rv *rideView) (*cardSpec, error) {
 
 	// figures: what the public Plan page computes, not a new sum
 	start, end := rv.Ride.StartDate, rv.Ride.EndDate
-	if st, err := a.loadPlanSlug(slug); err == nil {
-		choices, from, _ := st.requested(url.Values{}, false)
-		sum := st.Doc.summarize(choices, from)
-		spec.Miles, spec.Days = int(math.Round(sum.TotalMiles)), sum.DayCount
-		start, end = sum.StartDate, sum.EndDate
+	if miles, days, st, en, ok := a.planFigures(slug); ok {
+		spec.Miles, spec.Days, start, end = miles, days, st, en
 	}
 	spec.Dates = cardDates(start, end)
 

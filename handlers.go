@@ -170,6 +170,8 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /plan.json", a.planJSON)
 	// The live trip card a link preview shows (social_card_ride.go).
 	mux.HandleFunc("GET /og/ride/{file}", a.rideCardPNG)
+	// The photo card a photo page's link preview shows (social_card_photo.go).
+	mux.HandleFunc("GET /og/photo/{file}", a.photoCardJPEG)
 	// What is playing and what played: open to a visitor, text only (plays.go).
 	mux.HandleFunc("GET /tracks.json", a.tracksJSON)
 	// A visitor hears one play of the active ride (listen.go): checked, then handed on.
@@ -573,7 +575,8 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		if rd, ok := data["Ride"].(*Ride); ok && rd != nil && name != "login.html" {
 			slug = rd.Slug
 		}
-		data["Social"] = a.social(r, slug, rn, t, d)
+		si, _ := data["SocialImage"].(socialImage)
+		data["Social"] = a.social(r, slug, rn, t, d, si)
 	}
 	a.chrome(r, name, data, authed, data["Driver"] == true)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1110,6 +1113,13 @@ func (a *App) ridePage(w http.ResponseWriter, r *http.Request, ask *listenAsk) {
 	if !a.listenCard(w, r, data, np, rv.Ride.Name, ask) {
 		return
 	}
+	if data["Description"] == nil {
+		if miles, days, st, en, ok := a.planFigures(rv.Ride.Slug); ok {
+			if f := figuresPhrase(miles, days, st, en); f != "" {
+				data["Description"] = cutWords(rv.Ride.Name+": "+f+". Live from the road.", 160)
+			}
+		}
+	}
 	a.render(w, r, "index.html", data)
 }
 
@@ -1148,8 +1158,16 @@ func (a *App) legPage(w http.ResponseWriter, r *http.Request) {
 	if dl := defaultLeg(rv.Legs, di); dl != nil {
 		navLegID = dl.ID
 	}
+	legDesc := "Day " + strconv.Itoa(legIndex(rv.Legs, leg)+1) + " of " + rv.Ride.Name + ": " + leg.Name
+	if leg.EstMiles > 0 {
+		legDesc += ", about " + thousands(int(math.Round(leg.EstMiles))) + " miles"
+	}
+	if d := cardDates(leg.Date, leg.Date); d != "" {
+		legDesc += " on " + d
+	}
 	data := map[string]any{
-		"Title": leg.Name, "Ride": rv.Ride, "Leg": leg, "Prev": prev, "Next": next,
+		"Description": cutWords(legDesc+".", 160),
+		"Title":       leg.Name, "Ride": rv.Ride, "Leg": leg, "Prev": prev, "Next": next,
 		"Posts": posts, "Day": di, "Total": len(rv.Legs), "Multi": len(rv.Legs) > 1,
 		"NextID":   nextOpenID(rv.Legs),
 		"NavLegID": navLegID, "NavAddr": a.navAddresses(r), "DriveStarted": driveStarted(rv.Legs),
@@ -1325,8 +1343,12 @@ func (a *App) photos(w http.ResponseWriter, r *http.Request) {
 	if len(rv.Legs) > 0 {
 		pageLeg = rv.Legs[0].Slug
 	}
+	desc := "Photos from " + rv.Ride.Name + " will appear here as the miles go by."
+	if total > 0 {
+		desc = strconv.Itoa(total) + " photo" + map[bool]string{true: "", false: "s"}[total == 1] + " from " + rv.Ride.Name + ", day by day."
+	}
 	a.render(w, r, "photos.html", map[string]any{
-		"Title": "Photos", "Ride": rv.Ride, "Groups": groups, "Total": total, "PageLeg": pageLeg})
+		"Description": cutWords(desc, 160), "Title": "Photos", "Ride": rv.Ride, "Groups": groups, "Total": total, "PageLeg": pageLeg})
 }
 
 // routeGeoJSON is the ride as open data: legs as LineStrings, checkpoints
@@ -3614,13 +3636,8 @@ func (a *App) photoView(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	rv, err := a.loadRide()
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	post, err := a.store.Post(id)
-	if err != nil || post.Photo == nil || !legInRide(rv.Legs, post.LegID) {
+	post, rv, ok := a.visitorPhoto(id)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
@@ -3641,9 +3658,17 @@ func (a *App) photoView(w http.ResponseWriter, r *http.Request) {
 			last = p.ID
 		}
 	}
-	a.render(w, r, "photo.html", map[string]any{
-		"Title": "Photo", "Ride": rv.Ride, "PageLeg": post.LegSlug,
-		"P": post, "Photo": post.Photo, "PrevID": prev, "NextID": next})
+	strip := photoStripOf(post, rv)
+	title, desc := photoPageText(strip, post.Title, post.Body)
+	data := map[string]any{
+		"Title": title, "Description": desc, "Ride": rv.Ride, "PageLeg": post.LegSlug,
+		"P": post, "Photo": post.Photo, "PrevID": prev, "NextID": next}
+	if a.siteURL != "" && !a.sitePrivate {
+		if img, alt, ok := a.photoCardAddress(post, rv); ok {
+			data["SocialImage"] = socialImage{URL: img, Alt: alt, Type: "image/jpeg"}
+		}
+	}
+	a.render(w, r, "photo.html", data)
 }
 
 func legInRide(legs []Leg, id int64) bool {

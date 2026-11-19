@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -262,8 +263,12 @@ func (a *App) planPage(w http.ResponseWriter, r *http.Request) {
 	if a.isDriver(r) {
 		marks, _ = a.store.TrackMarks(a.userOf(r))
 	}
+	planDesc := "The plan for " + st.Ride.Name + "."
+	if f := figuresPhrase(int(math.Round(sum.TotalMiles)), sum.DayCount, sum.StartDate, sum.EndDate); f != "" {
+		planDesc = "The plan for " + st.Ride.Name + ": " + f + "."
+	}
 	a.render(w, r, "plan.html", map[string]any{
-		"Title": "Plan", "Marks": marks, "Ride": st.Ride, "Sum": sum, "Opts": st.optViews(choices),
+		"Description": cutWords(planDesc, 160), "Title": "Plan", "Marks": marks, "Ride": st.Ride, "Sum": sum, "Opts": st.optViews(choices),
 		"Start": start, "HasFile": st.HasFile, "Plan": page, "PageLeg": pageLeg,
 		// Codes in, fixed sentences out; an unknown code is the empty string.
 		"Error": planRefusals[r.URL.Query().Get("error")], "Notice": planNotices[r.URL.Query().Get("ok")],

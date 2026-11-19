@@ -66,6 +66,8 @@ type cardDisc struct {
 
 type cardTokens struct {
 	LegBg, LegBg2, LegInk, LegMuted, LegAccent string
+	// the masthead, for the strip of a photo card
+	MastFrom, MastMid, MastTo, MastEdge, MastInk, MastTag, LegDisc string
 }
 
 type cardAssets struct {

@@ -60,6 +60,20 @@ exactly when the picture changed. The sky, horizon and Odo are the baked layers
 in `cardlayers/`. After a deploy that changes the card, Facebook keeps its
 old copy until someone presses Scrape Again in its Sharing Debugger.
 
+A photo page (`/photo/<id>`) names its own card instead of the trip card:
+`GET /og/photo/<id>.jpg?v=<hash>`, a 1200 by 630 JPEG (`og:image:type` is
+`image/jpeg`; the type is a field of `socialMeta`, so the one partial still
+writes every tag) under 300 KB, with `Cache-Control: public, max-age=86400`. The
+`?v=` is a hash of the photo's content identity, the rendition read, the strip
+text and `photoCardRendererVersion`; the handler ignores it. The card reads the
+public picture the photo page shows (the thumbnail when the picture has more
+than 20 million pixels), only after the photo page's own visibility check, so a
+removed photo, a photo of another ride and a private site get a 404 and the page
+names the trip card. The machine decodes one photo at a time and keeps the last
+six cards in memory. The strip colours are the masthead tokens in
+`cardlayers/tokens.json`. Each public page sets its own title and description
+from what the page shows (the ride, a leg, Photos, a photo, Plan, Listen Inn).
+
 ### Optional features that need an outside account
 
 Each is off when its variable is unset, the page says so, and the rest of

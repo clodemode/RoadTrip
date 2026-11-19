@@ -82,6 +82,8 @@ const T = ["t1", "t2", "t3", "t4"].map(token);
 const tokens = {
   legBg: token("leg-bg"), legBg2: token("leg-bg-2"), legInk: token("leg-ink"),
   legMuted: token("leg-muted"), legAccent: token("leg-accent"),
+  // the masthead, for the strip of a photo card (wave W3)
+  mastFrom: C.from, mastMid: C.mid, mastTo: C.to, mastEdge: C.edge, mastInk: C.ink, mastTag: C.tag, legDisc: C.disc,
 };
 writeFileSync(join(layerDir, "tokens.json"), JSON.stringify(tokens, null, 2) + "\n");
 

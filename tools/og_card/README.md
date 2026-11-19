@@ -7,7 +7,8 @@ layers the binary draws a trip's card on, into `cardlayers/` (embedded by
 `odo.png` (400 px wide, from `creature.svg` without its style and its road),
 `horizon.png` (1200 by 210, the leg 1 horizon of `templates/terrain.html` in the
 leg 1 `--t1` to `--t4` colours) and `tokens.json` (the leg 1 sky, ink, muted and
-accent colours). `TestCardTokensMatchAppCSS` fails when `app.css` moves on
+accent colours, and the masthead colours and the disc colour that the strip of a
+photo card is drawn in). `TestCardTokensMatchAppCSS` fails when `app.css` moves on
 without a re-bake. The colours are
 read from `static/css/app.css` and Odo from `static/img/creature.svg` at bake
 time. Contract: `spec-roadtrip-social-preview-cards-a-live-route-card-per-trip-the-photo-itself-on-a-photo-page-a-baked-odo-card-as-the-fallback-one-tag-block-and-a-check-that-reads-the-page-as-a-scraper-does`.

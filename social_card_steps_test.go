@@ -188,5 +188,12 @@ func initSocialCardScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	initSocialPhotoCardSteps(t, sc, func() *App { return app }, func() *http.Cookie { return kris },
+		func() *httptest.ResponseRecorder { return rec },
+		func(r *httptest.ResponseRecorder) {
+			rec = r
+			visitor = socialValue(socialTags(r.Body.String()), "og:image")
+		},
+		func() string { return visitor })
 	initSocialRouteCardSteps(t, sc, func() *App { return app }, func() *httptest.ResponseRecorder { return rec }, func() string { return visitor })
 }
