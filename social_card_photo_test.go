@@ -375,3 +375,17 @@ func photoPaths(app *App, p *Post) []string {
 	}
 	return []string{q.Photo.Path, q.Photo.ThumbPath}
 }
+
+func TestPhotoPageTextWithNoDayLineReadsPhotoAndDoesNotPanic(t *testing.T) {
+	title, desc := photoPageText(photoStripFor("Alder to Elm", 0), "", "")
+	if title != "Photo" || desc != "A photo from Alder to Elm, posted along the way." {
+		t.Errorf("title %q, description %q", title, desc)
+	}
+	title, _ = photoPageText(photoStripFor("Alder to Elm", 2), "", "")
+	if title != "Photo from day 2" {
+		t.Errorf("title %q", title)
+	}
+	if title, desc = photoPageText(photoStripFor("T", 0), "Pie", "A note."); title != "Pie" || desc != "A note." {
+		t.Errorf("own words: %q %q", title, desc)
+	}
+}

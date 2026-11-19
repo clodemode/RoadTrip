@@ -3659,16 +3659,7 @@ func (a *App) photoView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	strip := photoStripOf(post, rv)
-	title, desc := "Photo from "+strings.ToLower(strip.Line[:1])+strip.Line[1:], strip.alt()+", posted along the way."
-	if strip.Line == "" {
-		title = "Photo"
-	}
-	if post.Title != "" {
-		title = post.Title
-	}
-	if body := cutWords(post.Body, 150); body != "" {
-		desc = body
-	}
+	title, desc := photoPageText(strip, post.Title, post.Body)
 	data := map[string]any{
 		"Title": title, "Description": desc, "Ride": rv.Ride, "PageLeg": post.LegSlug,
 		"P": post, "Photo": post.Photo, "PrevID": prev, "NextID": next}

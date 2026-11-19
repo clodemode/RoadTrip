@@ -61,11 +61,14 @@ func photoStripFor(rideName string, day int) photoStrip {
 	return s
 }
 
+// lowerLine is the line in lower case ("day 2"), or "" when there is none.
+func (s photoStrip) lowerLine() string { return strings.ToLower(s.Line) }
+
 // alt is the card in plain words, for og:image:alt.
 func (s photoStrip) alt() string {
 	t := "A photo from " + s.Name
-	if s.Line != "" {
-		t += ", " + strings.ToLower(s.Line[:1]) + s.Line[1:]
+	if l := s.lowerLine(); l != "" {
+		t += ", " + l
 	}
 	return t
 }
@@ -358,4 +361,20 @@ func truncateWords(face font.Face, s string, max float64) string {
 		}
 	}
 	return truncate(face, s, max, 0) // one word too long for the strip: cut inside it
+}
+
+// photoPageText is a photo page's title and description: the post's own title
+// and note when it has them, else words built from the strip.
+func photoPageText(strip photoStrip, postTitle, postBody string) (title, desc string) {
+	title, desc = "Photo", strip.alt()+", posted along the way."
+	if l := strip.lowerLine(); l != "" {
+		title = "Photo from " + l
+	}
+	if postTitle != "" {
+		title = postTitle
+	}
+	if body := cutWords(postBody, 150); body != "" {
+		desc = body
+	}
+	return title, desc
 }
