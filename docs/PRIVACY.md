@@ -240,6 +240,18 @@ It carries no place name, no address, no post, no photo, no position and no
 clock time, and it never reads the private overlay. A next trip is not served
 to a visitor, and with the site private every page names only the fallback card.
 
+The photo card (`/og/photo/<id>.jpg`) is the picture the photo page already
+shows a visitor, cropped to fill 1200 by 630, with a strip along the foot that
+holds the trip's name and "Day N". It has no place name, no checkpoint, no
+caption, no clock time and no position. It is served only for a photo the photo
+page itself would open (a post with a photo, on a leg of the ride the site
+shows): a removed photo, a photo of another ride and, with the site private,
+every photo has no card. The card is drawn from decoded pixels and encoded
+afresh, so no EXIF or other metadata of the source reaches it; a source with
+too many pixels is read from its thumbnail instead, and one that cannot be read
+leaves the page naming the trip card. The photo page's description is the post's
+own public note, cut at a word.
+
 ## A signed-in page is never cached
 
 **A signed-in page is never cached.** `/plan`, like every page, is one

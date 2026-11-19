@@ -175,7 +175,9 @@ func TestCardTokensMatchAppCSS(t *testing.T) {
 	}
 	as := mustAssets(t)
 	for name, want := range map[string]string{"--leg-bg:": as.tok.LegBg, "--leg-bg-2:": as.tok.LegBg2, "--leg-ink:": as.tok.LegInk,
-		"--leg-muted:": as.tok.LegMuted, "--leg-accent:": as.tok.LegAccent} {
+		"--leg-muted:": as.tok.LegMuted, "--leg-accent:": as.tok.LegAccent, "--leg-disc:": as.tok.LegDisc,
+		"--rt-mast-from: ": as.tok.MastFrom, "--rt-mast-mid: ": as.tok.MastMid, "--rt-mast-to: ": as.tok.MastTo,
+		"--rt-mast-edge: ": as.tok.MastEdge, "--rt-mast-ink: ": as.tok.MastInk, "--rt-mast-tag: ": as.tok.MastTag} {
 		if !strings.Contains(string(css), name+want) {
 			t.Errorf("app.css has no %s%s: re-bake cardlayers (tools/og_card/README.md)", name, want)
 		}
