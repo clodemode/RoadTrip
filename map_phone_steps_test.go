@@ -357,7 +357,7 @@ func initMapPhoneScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^full screen sits above the Listen Inn card$`, func() error {
+	sc.Step(`^full screen sits above everything else on the page$`, func() error {
 		css := appCSS(w.t)
 		z := func(rule string) int {
 			m := regexp.MustCompile(`z-index:\s*(\d+)`).FindStringSubmatch(rule)
@@ -367,9 +367,12 @@ func initMapPhoneScenarios(t *testing.T, sc *godog.ScenarioContext) {
 			n, _ := strconv.Atoi(m[1])
 			return n
 		}
-		dock, full := z(ruleOf(css, `.listen-dock`)), z(ruleOf(css, `#map.rt-map-full`))
-		if dock < 0 || full <= dock {
-			return fmt.Errorf("full screen (z-index %d) does not sit above the Listen Inn card (z-index %d)", full, dock)
+		// Kris, 2026-11-18: the Listen Inn card is in the page and has no z-index at all.
+		if z(ruleOf(css, `.listen-top`)) >= 0 {
+			return fmt.Errorf("the Listen Inn card is layered over the page")
+		}
+		if full := z(ruleOf(css, `#map.rt-map-full`)); full <= 0 {
+			return fmt.Errorf("full screen has no layer above the page (z-index %d)", full)
 		}
 		return nil
 	})
@@ -659,7 +662,7 @@ func initMapPhoneScenarios(t *testing.T, sc *godog.ScenarioContext) {
 			case "music", "photos", "notes", "fit", "full", "done":
 				seen++
 				if !strings.HasPrefix(fmt.Sprint(b["position"]), "top") {
-					return fmt.Errorf("%v sits at %v, where the docked Listen Inn can cover it", b["name"], b["position"])
+					return fmt.Errorf("%v sits at %v, where something drawn over the map can cover it", b["name"], b["position"])
 				}
 			}
 		}
@@ -681,10 +684,11 @@ func initMapPhoneScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^the Listen Inn card is fixed to the bottom of the window$`, func() error {
-		r := ruleOf(appCSS(w.t), `.listen-dock`)
-		if !strings.Contains(r, "position: fixed") || !strings.Contains(r, "bottom:") {
-			return fmt.Errorf("the Listen Inn dock is not fixed to the bottom: %s", r)
+	sc.Step(`^no card is fixed over the page$`, func() error {
+		for _, m := range regexp.MustCompile(`([^{}]+)\{([^}]*)\}`).FindAllStringSubmatch(appCSS(w.t), -1) {
+			if strings.Contains(m[1], "listen") && strings.Contains(m[2], "position: fixed") {
+				return fmt.Errorf("the rule %q fixes a Listen Inn card over the page", strings.TrimSpace(m[1]))
+			}
 		}
 		return nil
 	})

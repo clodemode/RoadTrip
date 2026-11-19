@@ -589,15 +589,24 @@ body.rt-shell { margin: 0; display: flex; flex-direction: column; height: 100dvh
 .rt-toggle[aria-expanded="false"] .rt-chevron { transform: rotate(-90deg); }
 #rt-card-body[hidden] { display: none; }
 
-/* The Listen Inn card. Docked: fixed to the bottom of the window, full width
-   on a phone and a corner card on a wider screen, above the map's own layers.
-   The page keeps room under its last line so the closed card covers nothing.
-   The song list scrolls inside itself, oldest at the top; on a phone it is
-   short, so most of the page (and the map) stays in sight above the open card. */
-.listen-dock { position: fixed; left: .5rem; right: .5rem; bottom: calc(.5rem + env(safe-area-inset-bottom)); width: auto;
-  max-width: 30rem; margin: 0 auto; z-index: 1100; box-shadow: 0 4px 16px rgba(0, 0, 0, .28); }
-body:has(.listen-dock) { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); }
-@media (min-width: 768px) { .listen-dock { left: auto; right: 1rem; bottom: 1rem; width: 24rem; margin: 0; } }
+/* The Listen Inn card sits IN the page, in the top band of the Ride page beside
+   the latest tiles (Kris, 2026-11-18: the map must never be covered). It takes
+   its own room, so it cannot overlap the map at any width or scroll position.
+   On a phone the band stacks, tiles first and the card full width inside the
+   page's 16px gutter; from 768px it is one row and the card is at most 24rem.
+   Closed, the card is its title and one line, 72px tall at most. The song list
+   scrolls inside itself, oldest at the top, and the page moves down under it. */
+.top-band { display: flex; flex-direction: column; gap: .5rem; margin: .5rem 0; }
+.top-band .latest { margin: 0; }
+.listen-top { width: 100%; margin: 0; }
+.listen-top:has(#np-toggle[aria-expanded="false"]) { max-height: 72px; }
+.listen-top .tune-card-title { line-height: 1; }
+.listen-top .rt-toggle { min-height: 40px; }
+@media (min-width: 768px) {
+  .top-band { flex-direction: row; align-items: flex-start; }
+  .top-band .latest { flex: 1 1 auto; min-width: 0; }
+  .top-band .listen-top { flex: 0 0 24rem; width: 24rem; max-width: 24rem; }
+}
 .np-chip, .np-ready { margin: 0; font-size: .9rem; line-height: 1.3; overflow-wrap: anywhere; }
 /* Closed, the card is two lines: its title and what is playing, on one line.
    Open, the list says what played, so the line steps aside for it. */

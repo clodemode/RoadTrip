@@ -22,8 +22,8 @@ Feature: Time flows oldest to newest, and the latest is on the first screen
     When a visitor opens the Ride page
     Then the latest strip is drawn before the map
     And the point tile names "Dogwood" at "Wed May 1 · 5:30 PM MDT"
-    And the song tile reads "Last played" and names "Second Song" by "The Wrens"
-    And the song tile links to the Listen Inn
+    # Kris, 2026-11-18, ruling 8: the Listen Inn card replaces the Last played tile.
+    And the Listen Inn card stands in the top band and the strip draws no song tile
     And the photo tile shows the photo of "Evening view" and links to its viewer
     And the latest strip carries no coordinates
 
@@ -101,7 +101,7 @@ Feature: Time flows oldest to newest, and the latest is on the first screen
     Given the trip is finished at Elm at 02:00 UTC the next day
     When a visitor opens the Ride page
     Then the point tile names "Elm" at "Wed May 1 · 8:00 PM MDT"
-    And the song tile reads "Last played" and names "Second Song" by "The Wrens"
+    And the Listen Inn card stands in the top band and the strip draws no song tile
     And the photo tile shows the photo of "Evening view" and links to its viewer
     And the page draws no now-playing chip
 
@@ -112,11 +112,12 @@ Feature: Time flows oldest to newest, and the latest is on the first screen
       When a visitor opens the Ride page
       Then the page draws no latest strip
 
-    Scenario: A trip with only a song shows only the song tile
+    # Kris, 2026-11-18, ruling 8: the card carries the song, so a trip with only a song has no strip.
+    Scenario: A trip with only a song shows the Listen Inn card and no strip
       Given a trip that has not started and holds nothing
       And the song "Lonely Song" by "The Owls" played at 15:00 UTC
       When a visitor opens the Ride page
-      Then the song tile reads "Last played" and names "Lonely Song" by "The Owls"
+      Then the Listen Inn card stands in the top band and the strip draws no song tile
       And the page draws no point tile and no photo tile
 
     Scenario: A trip with posts but no photo shows no photo tile
@@ -130,4 +131,4 @@ Feature: Time flows oldest to newest, and the latest is on the first screen
       Given a trip that has not started and holds nothing
       And the song "Fresh Song" by "The Finches" started a minute ago
       When a visitor opens the Ride page
-      Then the song tile reads "Now playing" and names "Fresh Song" by "The Finches"
+      Then the Listen Inn card stands in the top band and the strip draws no song tile

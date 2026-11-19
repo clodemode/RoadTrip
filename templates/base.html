@@ -87,9 +87,10 @@
 
 {{define "foot"}}
 </main>
-{{/* Inside the signed-in player frame Drive Tracks is the one player card:
-     no Listen Inn card there (Kris, 2026-11-18: "No double player") unless
-     Listen Inn itself was asked for (/listeninn or a song link, ListenOpen). */}}{{if or (not .Embed) .ListenOpen}}{{template "listen_card" .}}{{end}}{{template "drive_strip_scripts" .}}{{if .Embed}}<script defer src="/static/js/frame.js?v={{.V}}"></script>{{end}}
+{{/* The Listen Inn card is not drawn here any more: it sits in the Ride page's
+     top band (index.html), in the page and never over the map. Inside the
+     signed-in player frame there is still none unless Listen Inn itself was
+     asked for (Kris, 2026-11-18: "No double player"). */}}{{template "drive_strip_scripts" .}}{{if .Embed}}<script defer src="/static/js/frame.js?v={{.V}}"></script>{{end}}
 <footer>
   <p>Route coordinates are planning-grade: town centroids, about a kilometre.
      Times are shown in the zone where they happened.</p>
@@ -223,12 +224,12 @@
 </section>{{end}}
 
 {{/* listen_card: the Listen Inn, for everyone, on the Ride page (the only page
-     that sets NowPlaying). ONE card docked at the bottom of the window, off the
+     that sets NowPlaying). ONE card in the top band of the page, off the
      map, its title its header button, the same family as the music card above.
      Hearing it (listen.go): one shared audio element and one Play button, drawn
      only when ListenPlay says this page has no other player. listeninn.js fills
      the list, oldest at the top, and keeps it fresh. */}}
-{{define "listen_card"}}{{with .NowPlaying}}<section class="tune-card listen-card listen-dock" id="np" aria-labelledby="np-card-h" data-open="{{if $.ListenOpen}}1{{else}}0{{end}}"{{with $.ListenSong}} data-song="{{.ID}}"{{end}}>
+{{define "listen_card"}}{{with .NowPlaying}}<section class="tune-card listen-card listen-top" id="np" aria-labelledby="np-card-h" data-open="{{if $.ListenOpen}}1{{else}}0{{end}}"{{with $.ListenSong}} data-song="{{.ID}}"{{end}}>
   <h2 class="tune-card-title" id="np-card-h"><button type="button" class="rt-toggle" id="np-toggle" aria-expanded="{{if $.ListenOpen}}true{{else}}false{{end}}" aria-controls="np-body"><img class="tune-icon" src="/static/img/charter.svg?v={{$.V}}" alt="" width="28" height="28"> Listen Inn <span class="rt-chevron" aria-hidden="true">&#9662;</span></button></h2>
   {{if not .Finished}}<p class="np-chip" id="np-chip"><span class="np-label" id="np-label">Currently playing</span> <span id="np-line"></span></p>{{end}}
   {{if $.ListenPlay}}<audio id="np-audio" preload="none"></audio>{{end}}
