@@ -45,6 +45,8 @@ func initSocialCardScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		app  *App
 		kris *http.Cookie
 		rec  *httptest.ResponseRecorder
+		// the og:image the visitor's page named, for the route-card steps
+		visitor string
 	)
 	page := func() string { return rec.Body.String() }
 	rideName := func() string {
@@ -71,6 +73,7 @@ func initSocialCardScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		if rec.Code != http.StatusOK {
 			return fmt.Errorf("%s answered %d", p, rec.Code)
 		}
+		visitor = socialValue(socialTags(page()), "og:image")
 		return nil
 	})
 	sc.Step(`^the driver reads the page "([^"]*)"$`, func(p string) error {
@@ -105,6 +108,13 @@ func initSocialCardScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		if p, _, _ := strings.Cut(img, "?"); !strings.HasSuffix(p, "/static/img/og-card.png") {
 			return fmt.Errorf("og:image %q is not the fallback card", img)
+		}
+		return nil
+	})
+	sc.Step(`^the page names an absolute https raster image$`, func() error {
+		img, _, _ := strings.Cut(socialValue(socialTags(page()), "og:image"), "?")
+		if !strings.HasPrefix(img, "https://") || !strings.HasSuffix(img, ".png") {
+			return fmt.Errorf("og:image %q is not an absolute https png", img)
 		}
 		return nil
 	})
@@ -178,4 +188,5 @@ func initSocialCardScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	initSocialRouteCardSteps(t, sc, func() *App { return app }, func() *httptest.ResponseRecorder { return rec }, func() string { return visitor })
 }

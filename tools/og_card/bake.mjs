@@ -1,12 +1,14 @@
-// Bakes static/img/og-card.png: the fallback social card, 1200x630 PNG.
-// Contract: spec-roadtrip-social-preview-cards-a-live-route-card-per-trip-the-photo-itself-on-a-photo-page-a-baked-odo-card-as-the-fallback-one-tag-block-and-a-check-that-reads-the-page-as-a-scraper-does (wave W1). See README.md.
+// Bakes static/img/og-card.png, the fallback social card (1200x630 PNG), and the
+// layers the binary draws a trip's card from: cardlayers/odo.png, cardlayers/horizon.png
+// and cardlayers/tokens.json (waves W1 and W2).
+// Contract: spec-roadtrip-social-preview-cards-a-live-route-card-per-trip-the-photo-itself-on-a-photo-page-a-baked-odo-card-as-the-fallback-one-tag-block-and-a-check-that-reads-the-page-as-a-scraper-does. See README.md.
 //
 //   FONT_DIR=<golang.org/x/image>/font/gofont/ttfs node tools/og_card/bake.mjs
 //
 // Fonts are passed by file and system fonts are never loaded, so the same
 // inputs give the same bytes on any machine. Colours are the masthead and
 // leg-1 values read from static/css/app.css at bake time.
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
@@ -68,3 +70,31 @@ const png = new Resvg(svg, {
 const out = join(root, "static", "img", "og-card.png");
 writeFileSync(out, png);
 console.log(`baked static/img/og-card.png (${png.length} bytes)`);
+
+// ---- the layers a trip's card is drawn on (cardlayers/, embedded by the binary) ----
+// Leg 1 is the ride's overall look, so its tokens and its horizon are the card's.
+const layerDir = join(root, "cardlayers");
+mkdirSync(layerDir, { recursive: true });
+const render = (svgText, width) =>
+  new Resvg(svgText, { fitTo: { mode: "width", value: width }, font: { loadSystemFonts: false } }).render().asPng();
+
+const T = ["t1", "t2", "t3", "t4"].map(token);
+const tokens = {
+  legBg: token("leg-bg"), legBg2: token("leg-bg-2"), legInk: token("leg-ink"),
+  legMuted: token("leg-muted"), legAccent: token("leg-accent"),
+};
+writeFileSync(join(layerDir, "tokens.json"), JSON.stringify(tokens, null, 2) + "\n");
+
+// Odo without his road and without his animation, cropped to the shapes (y 16 to 60 of his 64 box).
+const odoStill = odoInner.replace(/<path id="road"[^>]*\/>/, "");
+const odo = render(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="275" viewBox="0 16 64 44">${odoStill}</svg>`, 400);
+writeFileSync(join(layerDir, "odo.png"), odo);
+
+// The leg 1 horizon from templates/terrain.html: the final (default) <svg>, its var(--tN) fills resolved.
+const terrain = readFileSync(join(root, "templates", "terrain.html"), "utf8");
+const m = terrain.match(/<svg class="terrain" id="terrain-hudson-bend-to-cloudcroft"[^>]*>([\s\S]*?)<\/svg>/);
+if (!m) throw new Error("templates/terrain.html has no leg 1 terrain");
+const shapes = m[1].replace(/var\(--t([1-4])\)/g, (_, n) => T[Number(n) - 1]);
+const horizon = render(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="210" viewBox="0 0 1000 200" preserveAspectRatio="none">${shapes}</svg>`, 1200);
+writeFileSync(join(layerDir, "horizon.png"), horizon);
+console.log(`baked cardlayers/odo.png (${odo.length} bytes), cardlayers/horizon.png (${horizon.length} bytes), cardlayers/tokens.json`);

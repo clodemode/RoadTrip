@@ -119,6 +119,8 @@ type App struct {
 	// driveSeed draws the seed of one Drive Tracks tap; nil is random. A test
 	// fixes it so the angle a tap is given can be told in advance.
 	driveSeed func() uint64
+	// cards holds the trip cards drawn and their hashes (social_card_ride.go).
+	cards cardCache
 }
 
 // PIN_PRECISION values. See App.pinPrecision.

@@ -38,15 +38,26 @@ Two files on the volume are configuration too:
 With `SITE_URL` set, every page carries `<link rel="canonical">` and one
 link-preview tag block (the `social_meta` partial, in the ride pages and the
 player shell alike): `og:*` and `twitter:*` tags naming that origin, with
-`og:image` the baked card `/static/img/og-card.png`, a 1200 by 630 PNG at an
-absolute https address. With `SITE_VISIBILITY=private` the block names no
-trip: a generic title and description over the same card. A request on any
+`og:image` a 1200 by 630 PNG at an absolute https address: the ride's own
+route card, `/og/ride/<slug>.png?v=<hash>`, drawn by the binary (see below), or,
+when a page has no ride (sign-in), the ride cannot be drawn or the site is
+private, the baked fallback card `/static/img/og-card.png`. With
+`SITE_VISIBILITY=private` the block names no trip: a generic title and
+description over the fallback card, and `/og/ride/` is not served to anyone not
+signed in. A request on any
 other host (a `.fly.dev` host included) is answered with a 301 to the same path
 on `SITE_URL`; only `/healthz` answers on any host, because a platform health
 check needs it to.
 
-The card is committed, not drawn at run time; `tools/og_card/README.md` says
-how to bake it again. After a deploy that changes the card, Facebook keeps its
+The fallback card is committed, not drawn at run time; `tools/og_card/README.md`
+says how to bake it again. The trip card is drawn live: `GET /og/ride/<slug>.png`
+answers the ride's current card (1200 by 630, `Cache-Control: public,
+max-age=86400`) for the ride the site shows and for past rides, and 404 for any
+other ride or one with no line to draw. Its `?v=` is a short hash of everything
+the card shows (name, miles, days, dates, state and day, the route's points) and
+of `cardRendererVersion`, so a scraper that caches by address gets a new picture
+exactly when the picture changed. The sky, horizon and Odo are the baked layers
+in `cardlayers/`. After a deploy that changes the card, Facebook keeps its
 old copy until someone presses Scrape Again in its Sharing Debugger.
 
 ### Optional features that need an outside account
