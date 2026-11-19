@@ -77,6 +77,9 @@ func (a *App) dropTrailPoint(lat, lng float64, source string, now time.Time) boo
 	if leg == nil {
 		return false
 	}
+	// A position away from the start is the departure (departure.go). The raw
+	// point is read for the distance only and goes nowhere.
+	a.maybeDepart(lat, lng, now, source)
 	pub, _ := publishPosition(lat, lng, rideCheckpoints(rv.Legs))
 	return a.store.AddTrailPoint(TrailPoint{RideSlug: rv.Ride.Slug, LegID: leg.ID, OccurredAt: utcString(now),
 		TZ: defaultTZ(rv.Legs, leg), Lat: pub.Lat, Lng: pub.Lng, Source: source}) == nil

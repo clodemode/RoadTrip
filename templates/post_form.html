@@ -4,6 +4,9 @@
   <p class="muted small">{{.Day.Badge}}{{with .DefaultLeg}} &middot; leg {{.Ord}}: {{.Name}}{{end}}</p>
   {{with .Error}}<p class="error">{{.}}</p>{{end}}
   {{with .Notice}}<p class="post-done" role="status">{{.}}</p>{{end}}
+  {{with .AskFinish}}<form method="post" action="/driver/checkpoint/{{.ID}}/arrive" class="post-fuzz">
+    <button class="btn btn-sm btn-primary">Check in at the finish: {{.Name}}</button>
+    <span class="muted small">&mdash; only if the trip is over</span></form>{{end}}
   {{with .NoticePost}}<form method="post" action="/driver/post/{{.ID}}/fuzz" class="post-fuzz">
     <button class="btn btn-sm btn-outline-primary">Fuzz This</button>
     <span class="muted small">&mdash; make that post&rsquo;s location inexact</span></form>{{end}}

@@ -49,8 +49,11 @@ type hudView struct {
 	// DriveStarted is true once the trip's start has been left. StartName is
 	// the start's name, given only until then: the screen shows it as the
 	// start, with no navigation to it.
-	DriveStarted bool   `json:"drive_started"`
-	StartName    string `json:"start_name,omitempty"`
+	DriveStarted bool `json:"drive_started"`
+	// Opened is true once the trip was opened with a Start post and the car has
+	// not yet left: the screen reads "Packing, not driving yet" (departure.go).
+	Opened    bool   `json:"opened"`
+	StartName string `json:"start_name,omitempty"`
 
 	HasNext   bool   `json:"has_next"`
 	NextName  string `json:"next_name"`
@@ -290,7 +293,9 @@ func (a *App) hudData(now time.Time, lat, lng *float64, moving bool, addr map[in
 	if err != nil {
 		return hudView{}, nil, err
 	}
-	return buildHUDFor(rv.Ride, rv.Legs, now, lat, lng, moving, addr), rv.Legs, nil
+	h := buildHUDFor(rv.Ride, rv.Legs, now, lat, lng, moving, addr)
+	h.Opened = !h.DriveStarted && a.tripOpened(rv.Ride.Slug)
+	return h, rv.Legs, nil
 }
 
 func parseFix(r *http.Request) (lat, lng *float64) {
@@ -323,7 +328,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 		a.freeSvc().set(a.userOf(r), func(s *freeState) { s.enter(modeDestined) })
 	}
 	// The trip switcher is for the KATE only: elsewhere it costs no query.
-	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h, "DriveStarted": a.driveStarted(),
+	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h, "DriveStarted": a.driveStarted(), "DriveOpened": h.Opened,
 		"Finished": a.rideIsFinished(), "Notice": r.URL.Query().Get("notice"), "NoticePost": a.noticePost(r, a.activeSlug()), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 

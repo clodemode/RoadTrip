@@ -207,7 +207,7 @@
     var noAddr = $('hud-no-address');
     if (noAddr) noAddr.hidden = !(h.drive_started && h.has_next && h.nav_none);
     setText('hud-k', h.drive_started ? 'Next' : 'Drive');
-    setText('hud-next', !h.drive_started ? 'Start \u00b7 ' + (h.start_name || '') : (h.has_next ? h.next_name : 'No stop ahead'));
+    setText('hud-next', !h.drive_started ? (h.opened ? 'Packing, not driving yet' : 'Start \u00b7 ' + (h.start_name || '')) : (h.has_next ? h.next_name : 'No stop ahead'));
     setText('hud-nextmi', h.next_miles);
     var mi = $('hud-nextmi');
     if (mi && mi.parentNode) mi.parentNode.hidden = !h.drive_started;

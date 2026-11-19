@@ -232,6 +232,8 @@ func (a *App) routes() http.Handler {
 	// which ride the site shows, and the saved selection. Same gate as above.
 	mux.Handle("POST /driver/trip", a.requireKeeper(a.tripPush))
 	mux.Handle("POST /driver/ride/active", a.requireKeeper(a.rideActivate))
+	// Driving now: the departure stamped at the tap (departure.go).
+	mux.Handle("POST /driver/ride/depart", a.requireRide(a.rideDepart))
 	mux.Handle("POST /driver/ride/{slug}/delete", a.requireKeeper(a.rideDelete))
 	mux.Handle("GET /driver/rides.json", a.requireKeeper(a.ridesJSON))
 	mux.Handle("POST /driver/plan", a.requireRide(a.planSave))
@@ -1061,7 +1063,8 @@ func (a *App) ridePage(w http.ResponseWriter, r *http.Request, ask *listenAsk) {
 		"Title": "", "Ride": rv.Ride, "Legs": rv.Legs, "Posts": posts,
 		"Day": di, "PageLeg": pageLeg, "Multi": len(rv.Legs) > 1,
 		"NextID": nextOpenID(rv.Legs), "DriveStarted": driveStarted(rv.Legs),
-		"NavLegID": navLegID, "NavAddr": a.navAddresses(r),
+		"DriveOpened": !driveStarted(rv.Legs) && a.tripOpened(rv.Ride.Slug),
+		"NavLegID":    navLegID, "NavAddr": a.navAddresses(r),
 		"Map": withHours(buildMap(rv.Legs, posts, legTracks(rv.Legs, a.withTrail(rv.Ride.Slug, posts)), plannedStarts(rv.Legs, a.withTrail(rv.Ride.Slug, posts))), bars)}
 	a.lookingAt(r, data, viewed)
 	if m, ok := data["Map"].(mapJS); ok {
@@ -1537,6 +1540,9 @@ const checkinRadiusKm = 10
 const (
 	flagOutOfStep     = "out_of_step"
 	flagTimeFromPhone = "time_from_phone"
+	// flagFinishAsk marks a post whose check-in would have skipped every stop
+	// left: the page asks, and offers the hand check-in at the finish.
+	flagFinishAsk = "finish_ask"
 )
 
 // maxRoadKmh is the fastest a car is believed to have gone between two
@@ -1774,11 +1780,29 @@ func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, post *Post, photo *P
 	if v == nil {
 		return "", nil
 	}
+	// A stop that sits at the start is not a candidate until the car has been
+	// away (Kris, 2026-11-18): on a round trip the finish shares the start's
+	// point, so any position at home would reach it.
+	away := a.awayFromStart(a.activeSlug(), legs)
+	st := tripStart(legs)
 	best, bestKm := -1, 0.0
+	heldAtStart := false
 	for i, c := range open {
-		if km := haversineKm(v.lat, v.lng, c.Lat, c.Lng); km <= checkinRadiusKm && (best < 0 || km < bestKm) {
+		km := haversineKm(v.lat, v.lng, c.Lat, c.Lng)
+		if km > checkinRadiusKm {
+			continue
+		}
+		if !away && st != nil && haversineKm(c.Lat, c.Lng, st.Lat, st.Lng) <= checkinRadiusKm {
+			heldAtStart = true
+			continue
+		}
+		if best < 0 || km < bestKm {
 			best, bestKm = i, km
 		}
+	}
+	if best < 0 && heldAtStart {
+		a.melt.Event("checkin_refused", map[string]any{"reason": "car_not_away", "vouched_by": v.src})
+		return "Posted; still at the start", nil
 	}
 	if best < 0 {
 		return fmt.Sprintf("Posted as a photo; next stop %s, %d km", open[0].Name,
@@ -1820,6 +1844,20 @@ func (a *App) checkInFromPhoto(r *http.Request, legs []Leg, post *Post, photo *P
 					int(math.Round(km)), int(math.Round(gapMin)), suffix), nil
 			}
 		}
+	}
+	// A check-in that would skip every stop left before the finish asks first
+	// (Kris, 2026-11-18): nothing is stamped, the post is saved, and the page
+	// offers the hand check-in, a person's own tap being its own cause.
+	if best > 0 && best == len(open)-1 {
+		if err := a.store.AddPostFlag(post.ID, flagFinishAsk); err != nil {
+			return "", err
+		}
+		a.melt.Event("checkin_refused", map[string]any{"stop": x.Ord, "reason": "would_skip_all", "skipped": best, "vouched_by": v.src})
+		word := "stops"
+		if best == 1 {
+			word = "stop"
+		}
+		return fmt.Sprintf("Near the finish with %d %s not reached. Check in at the finish by hand if the trip is over", best, word) + suffix, nil
 	}
 	way := plannedWay(legs, last, &x)
 	var missed, rerouted []string
@@ -1971,6 +2009,7 @@ func (a *App) renderPostForm(w http.ResponseWriter, r *http.Request, status int,
 		"DefaultLegID": dlID, "DefaultLeg": dl, "DefaultTZ": tz, "Zones": zones(rv.Legs, tz),
 		"Day": di, "Error": errMsg, "Notice": r.URL.Query().Get("notice"),
 		"NoticePost": a.noticePost(r, rv.Ride.Slug),
+		"AskFinish":  a.askFinish(r, rv.Legs),
 		"Start":      start, "NextStop": nextStopName(rv.Legs),
 		"StartMode":  start != nil && r.URL.Query().Get("full") == "",
 		"SimAllowed": a.simAllowed,
@@ -2558,21 +2597,30 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 	a.melt.Event("post_created", map[string]any{"pin_source": post.PinSource, "has_photo": photo != nil,
 		"exif_gps": photo != nil && photo.Lat != nil, "fuzzed": pinFuzzed, "old_photo": old, "from_trail": pinFromTrail})
 	if starting {
-		// Start keeps the photo's clock: it is a departure, not a check-in.
+		// Kris, 2026-11-18: opening the trip is not the departure. A Start post
+		// opens the trip and stamps nothing: the departure is written by the
+		// first position away from the start, or by Driving now (departure.go).
+		// The simulated car on a KATE is the one exception: it begins to move
+		// the moment it is started, so its start is its departure.
 		at, _ := arrivalAt(photo, loc, start.TZ, "photo")
-		if err := a.arriveCheckpoint(start, at, nil); err != nil {
-			fail("The post is saved, but the drive could not be started: " + err.Error())
+		if err := a.openTrip(rv.Ride.Slug, time.Now()); err != nil {
+			fail("The post is saved, but the trip could not be opened: " + err.Error())
 			return
 		}
+		var msg string
 		if startSim {
+			if err := a.arriveCheckpoint(start, at, nil); err != nil {
+				fail("The post is saved, but the drive could not be started: " + err.Error())
+				return
+			}
 			a.startSteppingSim(a.userOf(r), start)
+			a.melt.Event("drive_started", map[string]any{"vouched_by": startSrc, "km": math.Round(startKm*10) / 10})
+			msg = "Drive started from " + start.Name + " at " + at.In(loadLoc(start.TZ)).Format("3:04 PM MST") + " by the simulated car"
+		} else {
+			a.melt.Event("trip_opened", map[string]any{"vouched_by": startSrc, "km": math.Round(startKm*10) / 10})
+			msg = "Trip opened at " + start.Name + ". The drive is stamped when the car leaves, or tap Driving now"
 		}
-		a.melt.Event("drive_started", map[string]any{"vouched_by": startSrc, "km": math.Round(startKm*10) / 10})
-		log.Printf("post %d: drive started from %s by %s", post.ID, start.Name, startSrc)
-		msg := "Drive started from " + start.Name + " at " + at.In(loadLoc(start.TZ)).Format("3:04 PM MST")
-		if startSim {
-			msg += " by the simulated car"
-		}
+		log.Printf("post %d: trip opened at %s by %s", post.ID, start.Name, startSrc)
 		// A start is finished business: back to the driver screen, which says so.
 		http.Redirect(w, r, "/driver?post="+strconv.FormatInt(post.ID, 10)+"&notice="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
@@ -2582,6 +2630,23 @@ func (a *App) postCreate(w http.ResponseWriter, r *http.Request) {
 		msg := oldPhotoNotice(time.Since(oldTaken), post.Lat != nil, pinFromTrail)
 		http.Redirect(w, r, "/driver/post?post="+strconv.FormatInt(post.ID, 10)+"&notice="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
+	}
+	// The first position away from the start is the departure (departure.go),
+	// stamped at that position's own time before the check-in reads the ride.
+	if start != nil && start.ArrivedAt == "" {
+		var exLat, exLng *float64
+		if photo != nil {
+			exLat, exLng = photo.Lat, photo.Lng
+		}
+		if v := a.vouchFor(r, exLat, exLng); v != nil {
+			at, _ := arrivalAt(photo, loc, start.TZ, v.src)
+			if a.maybeDepart(v.lat, v.lng, at, v.src) {
+				if nrv, err := a.loadRide(); err == nil {
+					rv = nrv
+					start = tripStart(rv.Legs)
+				}
+			}
+		}
 	}
 	if start != nil && start.ArrivedAt != "" && (photo != nil || stepped) {
 		msg, err := a.checkInFromPhoto(r, rv.Legs, post, photo, loc)
@@ -2963,6 +3028,29 @@ func (a *App) postRepin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, backTo(r, "/")+"#post-"+strconv.FormatInt(post.ID, 10), http.StatusSeeOther)
+}
+
+// askFinish is the finish the post page offers a hand check-in at, when the
+// post it is about was held because its check-in would have skipped every stop
+// left. Only a post of this ride carrying the flag, and only while the finish
+// is still open, so the query cannot make the page offer it for anything else.
+func (a *App) askFinish(r *http.Request, legs []Leg) *Checkpoint {
+	id, err := strconv.ParseInt(r.URL.Query().Get("post"), 10, 64)
+	if err != nil {
+		return nil
+	}
+	p, err := a.store.Post(id)
+	if err != nil || !hasFlag(p.Flag, flagFinishAsk) || !legInRide(legs, p.LegID) {
+		return nil
+	}
+	all := rideCheckpoints(legs)
+	if len(all) == 0 {
+		return nil
+	}
+	if fin := all[len(all)-1]; fin.ArrivedAt == "" && fin.SkippedAt == "" {
+		return &fin
+	}
+	return nil
 }
 
 // noticePost is the post the notice on the form page is about, for its Fuzz

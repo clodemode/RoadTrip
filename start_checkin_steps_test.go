@@ -110,9 +110,9 @@ func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) *scWorld
 		}
 		return nil
 	})
-	sc.Step(`^the driver screen confirms the drive started from ([ABCD])$`, func(which string) error {
+	sc.Step(`^the driver screen confirms the trip is open at ([ABCD])$`, func(which string) error {
 		w := doAs(p.t, p.sim.app, p.sim.cookies["kris"], "GET", p.last.Header().Get("Location"), nil)
-		want := "Drive started from " + p.cps[strings.Index("ABCD", which)].Name
+		want := "Trip opened at " + p.cps[strings.Index("ABCD", which)].Name
 		if w.Code != http.StatusOK || !regexp.MustCompile(`class="post-done"[^>]*>[^<]*`+regexp.QuoteMeta(want)).MatchString(w.Body.String()) {
 			return fmt.Errorf("no confirmation %q on the driver screen (%d)", want, w.Code)
 		}
@@ -197,6 +197,8 @@ func initStartCheckinScenarios(sc *godog.ScenarioContext, p *postWorld) *scWorld
 	})
 	sc.Step(`^the bus carries a drive_started record whose source is "([a-z]+)"(?: with no latitude and no longitude)?$`,
 		func(src string) error { return s.bus("drive_started", -1, "vouched_by", src) })
+	sc.Step(`^the bus carries a trip_opened record whose source is "([a-z]+)"(?: with no latitude and no longitude)?$`,
+		func(src string) error { return s.bus("trip_opened", -1, "vouched_by", src) })
 	sc.Step(`^the bus carries a checkin_verified record for B whose source is "([a-z]+)"(?: with no latitude and no longitude)?$`,
 		func(src string) error { return s.bus("checkin_verified", 1, "vouched_by", src) })
 	sc.Step(`^the bus carries a checkin_skipped record for B whose reason is "([a-z]+)"(?: with no latitude and no longitude)?$`,

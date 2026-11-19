@@ -77,4 +77,4 @@ Feature: One tap posts
     When kris opens the post form
     Then the form is in start mode for A
     When kris starts the drive with that photo
-    Then A is departed at 09:15 in A's zone
+    Then the trip is open and A is not departed

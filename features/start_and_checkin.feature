@@ -27,11 +27,14 @@ Feature: Start the drive, then every photo checks in wherever the car got to
     Then the request is refused
     And A is still not arrived at
 
-  Scenario: A photo taken at A starts the drive at the photo's time
+  # Rewritten 2026-11-18 on Kris's ruling: a Start post (the packing photo)
+  # opens the trip and no longer stamps the departure; the departure comes from
+  # the car leaving the start (departure_is_caused_by_leaving.feature).
+  Scenario: A photo taken at A opens the trip and does not stamp the departure
     Given a photo taken at 09:15 with its GPS at A
     When kris starts the drive with that photo
-    Then A is departed at 09:15 in A's zone
-    And the bus carries a drive_started record whose source is "photo" with no latitude and no longitude
+    Then the trip is open and A is not departed
+    And the bus carries a trip_opened record whose source is "photo" with no latitude and no longitude
 
   Scenario: A note with no photo checks in nothing, whatever the phone says
     Given the drive has started at A
@@ -124,6 +127,8 @@ Feature: Start the drive, then every photo checks in wherever the car got to
     Then B is arrived at
     And the bus carries a checkin_verified record for B whose source is "sim"
 
+  # The simulated car is the one start that still stamps the departure: it
+  # begins to move the moment it is started (Kris, 2026-11-18).
   Scenario: On a KATE starting the drive starts the simulated car from A
     Given simulation is allowed
     And a photo with no GPS of its own
@@ -150,13 +155,13 @@ Feature: Start the drive, then every photo checks in wherever the car got to
     When kris opens the post form
     Then the form does not offer "Real GPS"
 
-  Scenario: On a KATE Real GPS starts the drive at the photo's GPS and starts no simulated car
+  Scenario: On a KATE Real GPS opens the trip at the photo's GPS and starts no simulated car
     Given simulation is allowed
     And a photo taken at 09:15 with its GPS at A
     When kris starts the drive with that photo by real GPS
-    Then A is departed at 09:15 in A's zone
+    Then the trip is open and A is not departed
     And kris's simulated car is not running
-    And the bus carries a drive_started record whose source is "photo"
+    And the bus carries a trip_opened record whose source is "photo"
 
   Scenario: On a KATE Real GPS with no position is refused
     Given simulation is allowed
@@ -170,6 +175,6 @@ Feature: Start the drive, then every photo checks in wherever the car got to
     And kris's simulated car is at B
     And a photo taken at 09:15 with its GPS at A
     When kris starts the drive with that photo by real GPS
-    Then A is departed
+    Then the trip is open and A is not departed
     And kris's simulated car is not running
-    And the bus carries a drive_started record whose source is "photo"
+    And the bus carries a trip_opened record whose source is "photo"

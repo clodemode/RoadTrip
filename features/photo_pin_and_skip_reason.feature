@@ -51,12 +51,15 @@ Feature: A photo is pinned where the phone is, and a stop passed on the route is
     Then the form requests the phone's location as soon as it opens
     And the form sends the phone's position with the post when it has one
 
+  # Rewritten 2026-11-18 on Kris's ruling: a check-in that would skip every stop
+  # left (here, a photo at Toronto, the finish) asks first instead of stamping,
+  # so the car is checked in at Oshawa, the last stop before the finish.
   Scenario: Stops passed along the 401 are missed, not rerouted
     Given the drive has started on the Kingston to Toronto trip
-    And the phone reports a position near Toronto
+    And the phone reports a position near Oshawa
     When kris posts a photo
-    Then Toronto is arrived at
-    And Napanee, Belleville, Trenton, Cobourg and Oshawa are skipped as "missed"
+    Then Oshawa is arrived at
+    And Napanee, Belleville, Trenton and Cobourg are skipped as "missed"
 
   Scenario: A stop off the planned route is rerouted around
     Given the active trip has stops A, B, C and D where B lies 40 km off the line from A to C

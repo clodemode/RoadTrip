@@ -135,6 +135,11 @@ func (a *App) chrome(r *http.Request, name string, data map[string]any, authed, 
 		active = rideActive(rv.Legs)
 		finished = rideFinished(rv.Legs)
 		started = driveStarted(rv.Legs)
+		// An opened trip shows its driving links and reads Active, though the
+		// car has not left (departure.go); a finished one stays finished.
+		if !finished && a.tripOpened(rv.Ride.Slug) {
+			active, started = true, true
+		}
 	}
 	data["RideState"], data["RideStateLabel"] = "planning", "Planning"
 	if finished {
