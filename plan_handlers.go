@@ -291,9 +291,11 @@ func (a *App) planJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"plan":    st.Doc.summarize(choices, start),
-		"options": st.Doc.Options,
-		"saved":   map[string]any{"selection": st.savedChoices(), "start_date": st.savedStart()},
+		"plan":       st.Doc.summarize(choices, start),
+		"round_trip": st.Ride.RoundTrip,
+		"topology":   st.Ride.Topology(),
+		"options":    st.Doc.Options,
+		"saved":      map[string]any{"selection": st.savedChoices(), "start_date": st.savedStart()},
 	})
 }
 

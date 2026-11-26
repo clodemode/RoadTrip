@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{if .Title}}{{.Title}} — {{end}}{{.Ride.Name}}</title>
-<meta name="description" content="{{if .Description}}{{.Description}}{{else}}{{.Ride.Name}}: a one-way drive, live from the road.{{end}}">
+<meta name="description" content="{{if .Description}}{{.Description}}{{else}}{{.Ride.Name}}: {{.Ride.Kind}}, live from the road.{{end}}">
 {{if .SiteURL}}<link rel="canonical" href="{{.Canonical}}">
 {{end}}{{template "social_meta" .}}<link rel="icon" href="/static/img/creature.svg?v={{.V}}">
 <!-- Stylesheets BEFORE scripts: a deferred script executes while a

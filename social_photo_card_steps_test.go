@@ -251,7 +251,7 @@ func initSocialPhotoCardSteps(t *testing.T, sc *godog.ScenarioContext, getApp fu
 		if err != nil {
 			return err
 		}
-		def := rv.Ride.Name + ": a one-way drive, live from the road."
+		def := rv.Ride.Name + ": " + rv.Ride.Kind() + ", live from the road."
 		if title == "" || desc == "" || desc == def {
 			return fmt.Errorf("title %q, description %q", title, desc)
 		}

@@ -20,7 +20,7 @@ files it renders with.
 | `GET /photos` | the photo gallery, grouped by leg |
 | `GET /photo/{id}` | one photo, fitted to the screen |
 | `GET /plan` | the plan: days, miles, hours and any route options |
-| `GET /plan.json` | the same arithmetic as data; `?opt-<option>=<choice>` prices an alternative without saving it |
+| `GET /plan.json` | the same arithmetic as data, with `round_trip` and `topology` (a trip whose finish lies within 0.5 km of its start is a round trip, worked out once in `roundTripOf`); `?opt-<option>=<choice>` prices an alternative without saving it |
 | `GET /tracks.json` | the tracks played on the active ride |
 | `GET /tracks/{id}/audio` | a 302 to a short-lived address for one played track; 404 when `PUBLIC_LISTEN` is off or no library is configured |
 | `GET /media/…` | stored photos and thumbnails; immutable, cached |

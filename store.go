@@ -26,6 +26,82 @@ type Ride struct {
 	Mode          string // CAR
 	OriginLabel   string
 	TerminusLabel string
+	// RoundTrip and Via are worked out by Store.Ride from the stops, never
+	// stored: whether the trip finishes where it starts, and the places it
+	// goes by way of. Every surface that says One-way or Round trip reads them.
+	RoundTrip bool
+	Via       []string
+}
+
+// Kind is the trip's shape in a phrase: "a round trip" or "a one-way drive".
+func (r *Ride) Kind() string {
+	if r != nil && r.RoundTrip {
+		return "a round trip"
+	}
+	return "a one-way drive"
+}
+
+// ViaPhrase is the places a round trip goes by way of, as one phrase.
+func (r *Ride) ViaPhrase() string { return viaPhrase(r.Via) }
+
+// Topology is the one-word label the pills and the data carry.
+func (r *Ride) Topology() string {
+	if r != nil && r.RoundTrip {
+		return "Round trip"
+	}
+	return "One-way"
+}
+
+// roundTripKm is how close a finish must lie to the start, in kilometres,
+// for the trip to read as a round trip.
+const roundTripKm = 0.5
+
+// roundTripOf is the ONE place a trip is told to be a round trip: it
+// finishes where it starts, its last stop within roundTripKm of its first
+// (the stored points, so a fuzzed home is compared on its public cell). It
+// also returns the places between, by name: the day ends if the trip has any,
+// else every stop, at most three, none repeating the start.
+func roundTripOf(legs []Leg) (bool, []string) {
+	cps := rideCheckpoints(legs)
+	if len(cps) < 3 {
+		return false, nil
+	}
+	first, last := cps[0], cps[len(cps)-1]
+	if haversineKm(first.Lat, first.Lng, last.Lat, last.Lng) > roundTripKm {
+		return false, nil
+	}
+	pick := func(onlyTerminal bool) []string {
+		var out []string
+		seen := map[string]bool{strings.TrimSpace(first.Name): true}
+		for _, c := range cps[1 : len(cps)-1] {
+			n := strings.TrimSpace(c.Name)
+			if n == "" || seen[n] || (onlyTerminal && !c.IsTerminal) {
+				continue
+			}
+			seen[n] = true
+			out = append(out, n)
+		}
+		return out
+	}
+	via := pick(true)
+	if len(via) == 0 {
+		via = pick(false)
+	}
+	if len(via) > 3 {
+		via = via[:3]
+	}
+	return true, via
+}
+
+// viaPhrase reads names as "A", "A and B" or "A, B and C".
+func viaPhrase(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 // Leg is one day's drive. Line is the planned polyline as GeoJSON
@@ -960,6 +1036,10 @@ func (s *Store) Ride(slug string) (*Ride, error) {
 		Scan(&r.Slug, &r.Name, &r.StartDate, &r.EndDate, &r.Mode, &r.OriginLabel, &r.TerminusLabel)
 	if err != nil {
 		return nil, err
+	}
+	if legs, err := s.Legs(slug); err == nil {
+		followArrivals(legs)
+		r.RoundTrip, r.Via = roundTripOf(legs)
 	}
 	return &r, nil
 }

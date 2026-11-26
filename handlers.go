@@ -565,9 +565,9 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 		}
 	}
 	{
-		rn := "Roadtrip"
+		rn, kind := "Roadtrip", (*Ride)(nil).Kind()
 		if rd, ok := data["Ride"].(*Ride); ok && rd != nil {
-			rn = rd.Name
+			rn, kind = rd.Name, rd.Kind()
 		}
 		t, _ := data["Title"].(string)
 		d, _ := data["Description"].(string)
@@ -576,7 +576,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 			slug = rd.Slug
 		}
 		si, _ := data["SocialImage"].(socialImage)
-		data["Social"] = a.social(r, slug, rn, t, d, si)
+		data["Social"] = a.social(r, slug, rn, kind, t, d, si)
 	}
 	a.chrome(r, name, data, authed, data["Driver"] == true)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1447,7 +1447,7 @@ func (a *App) routeGeoJSON(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"type": "FeatureCollection",
 		"properties": map[string]any{
-			"ride": rv.Ride.Slug, "name": rv.Ride.Name, "mode": rv.Ride.Mode, "topology": "ONE-WAY",
+			"ride": rv.Ride.Slug, "name": rv.Ride.Name, "mode": rv.Ride.Mode, "topology": strings.ToUpper(rv.Ride.Topology()), "round_trip": rv.Ride.RoundTrip,
 			"start_date": rv.Ride.StartDate, "end_date": rv.Ride.EndDate,
 			"origin": rv.Ride.OriginLabel, "terminus": rv.Ride.TerminusLabel,
 			"note": "Planning-grade coordinates (town centroids, ~1 km). Times are UTC; " +
