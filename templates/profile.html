@@ -1,0 +1,29 @@
+{{template "head" .}}
+<section class="page-head">
+  <p class="muted">Only you see this page. Home is where a trip can start or finish: a trip that says
+    &ldquo;home&rdquo; goes to your Home. Its address is used to navigate there and is shown to nobody else;
+    the map only ever shows a point about a kilometre wide.</p>
+</section>
+
+{{with .Msg}}<p class="alert alert-success" role="status">{{.}}</p>{{end}}
+{{with .Err}}<p class="alert alert-danger" role="alert">{{.}}</p>{{end}}
+
+<form method="post" action="/driver/profile" id="profile-form">
+  <div class="mb-3">
+    <label class="form-label" for="display_name">Your name, as the ride page shows it</label>
+    <input class="form-control" id="display_name" name="display_name" maxlength="64" value="{{.DisplayName}}">
+  </div>
+  <h2>Home</h2>
+  <div class="mb-3">
+    <label class="form-label" for="home_address">Home address</label>
+    <input class="form-control" id="home_address" name="home_address" maxlength="200" autocomplete="street-address" value="{{.Home.Address}}">
+  </div>
+  <p id="home-point" class="muted">{{if .HomeSet}}Home's point is set.{{else}}Home has no point yet: stand at home and tap Set Home.{{end}}</p>
+  <input type="hidden" name="home_lat" id="home_lat">
+  <input type="hidden" name="home_lng" id="home_lng">
+  <input type="hidden" name="home_accuracy" id="home_accuracy">
+  <p><button type="button" class="btn btn-outline-dark" id="set-home" data-max="{{.MaxAccuracy}}">Set Home's point to where I am now</button></p>
+  <button type="submit" class="btn btn-primary">Save</button>
+</form>
+<script defer src="/static/js/profile.js?v={{.V}}"></script>
+{{template "foot" .}}

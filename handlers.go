@@ -201,6 +201,12 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/roadtracks/mark/{id}/delete", a.requireAuth(a.trackMarkDelete))
 	mux.Handle("POST /driver/roadtracks/event", a.requireAuth(a.roadtracksEvent))
 	mux.Handle("GET /driver/melt.json", a.requireAdmin(a.meltRead))
+	// The traveller's own profile: Home and My places (profile.go). No username
+	// in the path, so nobody can ask for another's. The machine path that names
+	// a user is the trip-keeper's (admin or push token).
+	mux.Handle("GET /driver/profile", a.requireAuth(a.profilePage))
+	mux.Handle("POST /driver/profile", a.requireAuth(a.profileSave))
+	mux.Handle("PUT /driver/profiles/{username}", a.requireKeeper(a.profilePut))
 	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
 	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))

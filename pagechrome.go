@@ -119,6 +119,8 @@ func pageHead(name string, data map[string]any, rideName string) (string, []crum
 		return page("Lodging")
 	case "users.html":
 		return page("Users")
+	case "profile.html":
+		return "My places", []crumb{ride, {"Driver", "/driver"}, {"My places", ""}}
 	case "login.html":
 		return page("Sign in")
 	}

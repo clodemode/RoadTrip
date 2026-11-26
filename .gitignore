@@ -19,3 +19,6 @@ coWork_input/
 /LORE/
 # The og-card bake's dependencies (tools/og_card/README.md).
 node_modules/
+# A traveller's profile (Home, saved places) lives on the volume beside
+# private.json, never in the repo or an image. The guard test requires it.
+profiles.json

@@ -24,3 +24,6 @@ scripts/
 .github/
 # The og-card bake is not part of the binary.
 tools/
+# A traveller's profile (Home, saved places) lives on the volume beside
+# private.json, never in the repo or an image. The guard test requires it.
+profiles.json
