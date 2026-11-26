@@ -292,6 +292,13 @@ func main() {
 	if !app.auth.enabled() {
 		log.Printf("WARN no users and ADMIN_PASSWORD_HASH unset — posting is disabled, site is read-only")
 	}
+	// Every ride has an owner (profile.go). A ride from before owners existed
+	// takes the first admin, once: a ride with an owner is never touched.
+	if n, err := app.stampRideOwners(); err != nil {
+		log.Printf("ride owners: %v", err)
+	} else if n > 0 {
+		log.Printf("ride owners: %d ride(s) stamped with the first admin", n)
+	}
 	// Whether the header path exists at all, never the token itself — this log
 	// ships to flyctl logs, and a credential that reaches a log is spent.
 	if len(app.auth.pushToken) > 0 {

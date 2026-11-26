@@ -201,6 +201,12 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /driver/roadtracks/mark/{id}/delete", a.requireAuth(a.trackMarkDelete))
 	mux.Handle("POST /driver/roadtracks/event", a.requireAuth(a.roadtracksEvent))
 	mux.Handle("GET /driver/melt.json", a.requireAdmin(a.meltRead))
+	// The traveller's own profile: Home and My places (profile.go). No username
+	// in the path, so nobody can ask for another's. The machine path that names
+	// a user is the trip-keeper's (admin or push token).
+	mux.Handle("GET /driver/profile", a.requireAuth(a.profilePage))
+	mux.Handle("POST /driver/profile", a.requireAuth(a.profileSave))
+	mux.Handle("PUT /driver/profiles/{username}", a.requireKeeper(a.profilePut))
 	mux.Handle("GET /driver/users", a.requireAdmin(a.usersPage))
 	mux.Handle("POST /driver/users", a.requireAdmin(a.usersCreate))
 	mux.Handle("POST /driver/users/{name}/reset", a.requireAdmin(a.usersReset))
@@ -544,6 +550,12 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	data["ChesterOn"] = authed && a.chester != nil && !a.rideIsFinished()
 	// Whether the plan and ride pages link to Chester's route change.
 	data["RerouteOn"] = data["ChesterOn"] == true && a.hasRouteChoices()
+	// The cast line's trip-keeper: the shown ride's owner, by display name.
+	if rd, ok := data["Ride"].(*Ride); ok && rd != nil && rd.Slug != "" {
+		if o := a.rideOwner(rd.Slug); o != "" {
+			data["OwnerName"] = a.displayNameOf(o)
+		}
+	}
 	data["CreatureName"] = CreatureName
 	data["CreatureTag"] = CreatureTag
 	data["CreatureAlt"] = CreatureAlt

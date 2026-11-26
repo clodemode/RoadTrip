@@ -416,6 +416,27 @@ func (a *App) tripPush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read the body (limit "+strconv.Itoa(maxTripBytes>>20)+" MB)", http.StatusBadRequest)
 		return
 	}
+	// Who owns the ride, and every "place" stop resolved through that
+	// owner's profile, BEFORE the document is checked or written: the exact
+	// point of a saved place never reaches the trip file (profile.go).
+	var head struct {
+		Ride struct {
+			Slug string `json:"slug"`
+		} `json:"ride"`
+	}
+	_ = json.Unmarshal(raw, &head)
+	owner, err := a.pushOwner(r, raw, head.Ride.Slug)
+	if err != nil {
+		http.Error(w, "not a trip document: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	raw, err = resolvePlaces(raw, owner, func(key string) (savedPlace, bool) { return a.profiles().place(owner, key) })
+	if err != nil {
+		// The key and the owner's name, never a place.
+		log.Printf("trip push: refused, a stop names a saved place its owner has not saved")
+		http.Error(w, "not a trip document: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	slug, err := checkTrip(raw)
 	if err != nil {
 		http.Error(w, "not a trip document: "+err.Error(), http.StatusBadRequest)
@@ -456,6 +477,16 @@ func (a *App) tripPush(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError)
 		return
 	}
+	if owner != "" {
+		if err := a.store.SetMeta(rideOwnerKey(slug), owner); err != nil {
+			log.Printf("trip push: could not record the ride's owner: %v", err)
+		}
+	}
+	if pl, jerr := json.Marshal(navPlaceNames(raw)); jerr == nil {
+		if err := a.store.SetMeta(navPlaceKey(slug), string(pl)); err != nil {
+			log.Printf("trip push: could not record the place stops: %v", err)
+		}
+	}
 	// The stops with no address, by name. The plan is stored either way (the
 	// overlay may arrive second); going live is what is refused.
 	needs, nerr := a.rideNavMissing(slug)
@@ -490,6 +521,8 @@ func (a *App) tripPush(w http.ResponseWriter, r *http.Request) {
 		"status": "ok", "ride": slug, "created": created,
 		"legs": len(sd.Legs), "checkpoints": len(sd.Checkpoints), "options": len(sd.Options),
 		"selection": sd.Selection, "active": a.activeSlug() == slug, "activated": activated,
+		// Who owns the ride: a username, never a place.
+		"owner": owner,
 		// Every stop the driver cannot yet navigate to, by name (navstop.go).
 		"needs_address": needs,
 		// The start date the ride is on now, whichever source it came from.

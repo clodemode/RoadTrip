@@ -112,8 +112,6 @@
     <p class="hud-dist"{{if not .H.DriveStarted}} hidden{{end}}><b id="hud-nextmi">{{.H.NextMiles}}</b> ahead</p>
     <p class="hud-s" id="hud-via"{{if not (and $nav .H.Via)}} hidden{{end}}>Drive through <b id="hud-via-name">{{.H.Via}}</b> first</p>
     <p class="hud-s muted no-address" id="hud-no-address"{{if not (and .H.HasNext .H.DriveStarted .H.NavNone)}} hidden{{end}}>No address on file</p>
-    <a class="btn btn-primary hud-waze" id="hud-waze" href="{{if $nav}}{{.H.Waze}}{{else}}#{{end}}" rel="noopener"{{if not $nav}} hidden{{end}}>Navigate in Waze <span class="nav-to" id="hud-nav-to">to {{.H.NavTo}}</span></a>
-    <p class="nav-alt" id="hud-nav-alt"{{if not $nav}} hidden{{end}}><a class="btn btn-sm btn-outline-dark" id="hud-google" href="{{if $nav}}{{.H.Google}}{{else}}#{{end}}" rel="noopener">Google Maps</a> <a class="btn btn-sm btn-outline-dark" id="hud-apple" href="{{if $nav}}{{.H.Apple}}{{else}}#{{end}}" rel="noopener">Apple Maps</a></p>
     <ul class="hud-chips" id="hud-chips" aria-label="Hazards on this leg" aria-live="polite">
       <li class="hud-chip unknown">Weather: checking&hellip;</li>
       <li class="hud-chip unknown">Traffic: checking&hellip;</li>
@@ -135,6 +133,7 @@
     <a class="hud-tool" href="/plan"><span class="hud-ico" aria-hidden="true">&#128506;</span>Plan</a>
     {{if .Driver}}<a class="hud-tool" href="/driver/ready"><span class="hud-ico" aria-hidden="true">&#9989;</span>Ready to go</a>{{end}}
     {{if .Driver}}<a class="hud-tool" href="/driver/lodging"><span class="hud-ico" aria-hidden="true">&#127976;</span>Lodging</a>{{end}}
+    <a class="hud-tool" href="/driver/profile"><span class="hud-ico" aria-hidden="true">&#127968;</span>My places</a>
   </nav>
 
   <footer class="hud-bottom" aria-label="Telemetry">

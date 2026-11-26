@@ -113,22 +113,22 @@ Feature: The signed-in trip-keeper navigates to a stop's own address
   # destination is." The button says where the link goes, in the words of what
   # it carries: an address, a search for a name, or a map point. A guess then
   # reads as one before the driver taps it.
-  Scenario: The driver screen's Waze button names the address it goes to
+  Scenario: The driver screen's Navigate names the address it goes to
     Given B has the private address "7 Quill Hollow Lane, Pemberwick"
-    When kris opens the driver screen for its Waze button
-    Then the driver screen's Waze button reads "Navigate in Waze to 7 Quill Hollow Lane, Pemberwick"
+    When kris opens the driver screen for its Navigate
+    Then the driver screen's Navigate reads "Navigate to 7 Quill Hollow Lane, Pemberwick"
     And the driver screen's navigation says it goes to "7 Quill Hollow Lane, Pemberwick"
 
-  Scenario: A private stop with no address says its Waze button searches its name
+  Scenario: A private stop with no address says its Navigate searches its name
     Given B is a private place
     And B is marked navigate by point
-    When kris opens the driver screen for its Waze button
-    Then the driver screen's Waze button reads "Navigate in Waze to a search for the name Birch Gate"
+    When kris opens the driver screen for its Navigate
+    Then the driver screen's Navigate reads "Navigate to a search for the name Birch Gate"
 
-  Scenario: A stop marked navigate by point says its Waze button goes to a map point
+  Scenario: A stop marked navigate by point says its Navigate goes to a map point
     Given B is marked navigate by point
-    When kris opens the driver screen for its Waze button
-    Then the driver screen's Waze button reads "Navigate in Waze to the map point for Birch Gate"
+    When kris opens the driver screen for its Navigate
+    Then the driver screen's Navigate reads "Navigate to the map point for Birch Gate"
     And the driver screen's navigation says it goes to "the map point for Birch Gate"
 
   Scenario: The Ride page's Waze button names the address it goes to

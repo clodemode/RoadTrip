@@ -18,9 +18,12 @@ const (
 	// trailhead or a border crossing with no street address, whose point is
 	// exact. The links go to the point (a fuzzed place, to its name).
 	navPoint navKind = "point"
-	// navNone: neither. There is no link, and a trip does not go live with it.
-	// (A third kind, a profile place such as Home, waits on the traveller
-	// profile spec and is not built here.)
+	// navPlace: the stop is one of the ride owner's saved places ("place":
+	// "home" in the trip document, profile.go). The links go to the place's
+	// address, which only the signed-in driver is handed.
+	navPlace navKind = "place"
+	// navNone: none of these. There is no link, and a trip does not go live
+	// with it.
 	navNone navKind = "none"
 )
 
@@ -30,6 +33,12 @@ const (
 // for anyone who is not the trip-keeper.
 func navTarget(c Checkpoint, addr map[int]string) navKind {
 	switch {
+	case c.Place != "" && addr[c.Ord] != "":
+		return navPlace
+	case c.Place != "":
+		// A place stop goes to its place or nowhere: never a guess, never an
+		// overlay entry filed under its number.
+		return navNone
 	case addr[c.Ord] != "":
 		return navAddress
 	case c.NavPoint:
@@ -49,7 +58,7 @@ func navTarget(c Checkpoint, addr map[int]string) navKind {
 // address.
 func stopNav(c Checkpoint, addr map[int]string) navLinks {
 	switch navTarget(c, addr) {
-	case navAddress:
+	case navAddress, navPlace:
 		return mapLinks(0, 0, addr[c.Ord])
 	case navPoint:
 		if c.Precision == precisionFuzzed {
@@ -65,7 +74,7 @@ func stopNav(c Checkpoint, addr map[int]string) navLinks {
 // destination). Empty for a stop with no target: there is no button.
 func stopNavLabel(c Checkpoint, addr map[int]string) string {
 	switch navTarget(c, addr) {
-	case navAddress:
+	case navAddress, navPlace:
 		return addr[c.Ord]
 	case navPoint:
 		if c.Precision == precisionFuzzed {
@@ -104,7 +113,8 @@ func (a *App) navAddresses(r *http.Request) map[int]string {
 	if err != nil {
 		return nil
 	}
-	return pd.forRide(a.activeSlug(), a.rideSlug).onPlan(rv.Legs).addressByOrd()
+	slug := a.activeSlug()
+	return a.placeAddresses(slug, rv.Legs, pd.forRide(slug, a.rideSlug).onPlan(rv.Legs).addressByOrd())
 }
 
 // navNavigable reports whether every stop still to be driven to has a
@@ -143,5 +153,5 @@ func (a *App) rideNavMissing(slug string) ([]string, error) {
 		// navigable; say so rather than guess.
 		pd = privateData{}
 	}
-	return navMissing(legs, pd.forRide(slug, a.rideSlug).onPlan(legs).addressByOrd()), nil
+	return navMissing(legs, a.placeAddresses(slug, legs, pd.forRide(slug, a.rideSlug).onPlan(legs).addressByOrd())), nil
 }

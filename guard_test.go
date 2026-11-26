@@ -37,8 +37,8 @@ var seedAllowlist = map[string]bool{
 
 // guardLines is what each ignore file must contain, as whole lines.
 var guardLines = map[string][]string{
-	".gitignore":    {"data/", "coWork_input/", ".env"},
-	".dockerignore": {"data/", "coWork_input/", "/.env"},
+	".gitignore":    {"data/", "coWork_input/", ".env", "profiles.json"},
+	".dockerignore": {"data/", "coWork_input/", "/.env", "profiles.json"},
 }
 
 // privateDirs may hold nothing git knows about.
@@ -226,8 +226,8 @@ func TestRepoGuardFires(t *testing.T) {
 	if bytes.Equal(unmarked, trip) {
 		t.Fatal("the fixture has no synthetic marker to remove")
 	}
-	ignore := "data/\ncoWork_input/\n.env\n"
-	dockerIgnore := "data/\ncoWork_input/\n/.env\n"
+	ignore := "data/\ncoWork_input/\n.env\nprofiles.json\n"
+	dockerIgnore := "data/\ncoWork_input/\n/.env\nprofiles.json\n"
 	clean := map[string]string{".gitignore": ignore, ".dockerignore": dockerIgnore, "main.go": "package main\n",
 		"seed/atx-sjc-2026-09.geojson": string(trip), "testdata/trip-fixture.geojson": string(trip),
 		"testdata/route-fixture.json": string(route), "notes.json": `{"features": []}`,
@@ -250,12 +250,14 @@ func TestRepoGuardFires(t *testing.T) {
 		{"a fixture that does not say it is synthetic", func(m map[string]string) { m["testdata/real.geojson"] = string(unmarked) }, "testdata/real.geojson is a trip document under testdata/"},
 		{"anything under data/", func(m map[string]string) { m["data/private.json"] = "{}" }, "data/private.json is under data/"},
 		{"anything under the handoff folder", func(m map[string]string) { m["coWork_input/readme.md"] = "x" }, "coWork_input/readme.md is under coWork_input/"},
-		{"no handoff line in .gitignore", func(m map[string]string) { m[".gitignore"] = "data/\n.env\n" }, `.gitignore has no "coWork_input/" line`},
-		{"no data line in .gitignore", func(m map[string]string) { m[".gitignore"] = "coWork_input/\n.env\n" }, `.gitignore has no "data/" line`},
-		{"a commented-out guard line", func(m map[string]string) { m[".gitignore"] = "data/\n# coWork_input/\n.env\n" }, `.gitignore has no "coWork_input/" line`},
-		{"no handoff line in .dockerignore", func(m map[string]string) { m[".dockerignore"] = "data/\n/.env\n" }, `.dockerignore has no "coWork_input/" line`},
-		{"no secrets-file line in .gitignore", func(m map[string]string) { m[".gitignore"] = "data/\ncoWork_input/\n" }, `.gitignore has no ".env" line`},
-		{"no secrets-file line in .dockerignore", func(m map[string]string) { m[".dockerignore"] = "data/\ncoWork_input/\n" }, `.dockerignore has no "/.env" line`},
+		{"no handoff line in .gitignore", func(m map[string]string) { m[".gitignore"] = "data/\n.env\nprofiles.json\n" }, `.gitignore has no "coWork_input/" line`},
+		{"no data line in .gitignore", func(m map[string]string) { m[".gitignore"] = "coWork_input/\n.env\nprofiles.json\n" }, `.gitignore has no "data/" line`},
+		{"a commented-out guard line", func(m map[string]string) { m[".gitignore"] = "data/\n# coWork_input/\n.env\nprofiles.json\n" }, `.gitignore has no "coWork_input/" line`},
+		{"no handoff line in .dockerignore", func(m map[string]string) { m[".dockerignore"] = "data/\n/.env\nprofiles.json\n" }, `.dockerignore has no "coWork_input/" line`},
+		{"no secrets-file line in .gitignore", func(m map[string]string) { m[".gitignore"] = "data/\ncoWork_input/\nprofiles.json\n" }, `.gitignore has no ".env" line`},
+		{"no secrets-file line in .dockerignore", func(m map[string]string) { m[".dockerignore"] = "data/\ncoWork_input/\nprofiles.json\n" }, `.dockerignore has no "/.env" line`},
+		{"no profiles line in .gitignore", func(m map[string]string) { m[".gitignore"] = "data/\ncoWork_input/\n.env\n" }, `.gitignore has no "profiles.json" line`},
+		{"no profiles line in .dockerignore", func(m map[string]string) { m[".dockerignore"] = "data/\ncoWork_input/\n/.env\n" }, `.dockerignore has no "profiles.json" line`},
 		{"no .gitignore at all", func(m map[string]string) { delete(m, ".gitignore") }, ".gitignore is missing"},
 		{"an API key in an env file", func(m map[string]string) { m["local.env"] = "ANTHROPIC_API_KEY=" + fakeKey + "\n" }, "local.env holds what looks like an API key"},
 		{"an API key in a source file", func(m map[string]string) { m["main.go"] = "package main\n\nconst k = \"" + fakeKey + "\"\n" }, "main.go holds what looks like an API key"},

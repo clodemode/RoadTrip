@@ -261,3 +261,19 @@ request (the session cookie or the push token) is sent with
 are rendered, so no cache keeps a page that carries private text or hands it to
 the next visitor. The anonymous response carries neither header.
 
+
+## Home and saved places
+
+A traveller's Home (`profile.go`, `$DATA_DIR/profiles.json`, mode 0600) is the
+most private thing the site holds. Its exact point is kept in that file and
+nowhere else: a trip stop that says `"place": "home"` is put on the point's
+0.01° cell before the trip file is written, so neither the trip file nor the
+store ever has the real one. Its address is shown on its owner's own My places
+page and is the Navigate target for the signed-in driver; it is never on a
+public page or JSON, never logged (the profile log lines name the user and a
+count, the push refusal names the key), and never told to Chester. The page
+has no username in its path, so no traveller can ask for another's; the one
+path that names a user, `PUT /driver/profiles/<user>`, is the trip-keeper's
+(admin session or push token). Home's point comes from the phone when its
+owner taps Set Home, refused over 100 m accuracy, and no address is sent to a
+geocoder.

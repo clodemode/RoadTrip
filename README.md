@@ -274,6 +274,12 @@ most people. The long version, with every edge, is in
   your stops live in `private.json` in the data directory, edited at
   `/driver/lodging`, and are shown only to signed-in users. They are never
   in the trip file.
+- **Home is yours alone.** Each traveller sets their Home on My places
+  (`/driver/profile`, from the driver screen): the address they type and the
+  point where the phone stands when they tap Set Home. It lives in
+  `profiles.json` in the data directory. A trip stop that says
+  `"place": "home"` goes there: the map shows only its fuzzed cell, and
+  Navigate goes to the address, for the signed-in driver only.
 - **`SITE_VISIBILITY=private`** closes the whole site to anyone not signed
   in. **`PUBLIC_LISTEN=0`** stops visitors hearing the music.
 - **No sign-up.** Only an admin can create a user.

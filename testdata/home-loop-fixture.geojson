@@ -1,0 +1,92 @@
+{
+ "type": "FeatureCollection",
+ "synthetic": true,
+ "name": "Home Loop, a fixture trip with invented places that starts and finishes at the owner's saved Home",
+ "ride": {
+  "slug": "home-loop-fixture",
+  "name": "Home Loop",
+  "start_date": "2030-06-01",
+  "mode": "CAR"
+ },
+ "avg_mph": 60,
+ "long_day_hours": 9.5,
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "leg": 1,
+    "day": 1,
+    "slug": "day-1-loop",
+    "name": "Mill Start \u2192 Mill Start",
+    "est_miles": 150
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -100.0,
+      40.0
+     ],
+     [
+      -100.0,
+      40.5
+     ],
+     [
+      -99.5,
+      40.5
+     ],
+     [
+      -99.5,
+      40.0
+     ],
+     [
+      -100.0,
+      40.0
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "place": "home",
+    "order": 1,
+    "leg": 1,
+    "label": "Start",
+    "tz": "America/Chicago",
+    "is_terminal": true
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "checkpoint",
+    "place": "home",
+    "order": 2,
+    "leg": 1,
+    "label": "Finish",
+    "tz": "America/Chicago",
+    "is_terminal": true
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "routing",
+    "leg": 1,
+    "after": 1,
+    "name": "Mill Corner"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -99.5,
+     40.5
+    ]
+   }
+  }
+ ]
+}

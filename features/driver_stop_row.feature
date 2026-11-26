@@ -29,6 +29,16 @@ Feature: The driver screen opens on one row of the jobs done at a stop
     When kris reads the driver screen's stop row
     Then Navigate opens the Waze link for "12 Alder Lane"
 
+  # Kris ruled 2026-11-26 (rt-spring-burn-2026-11-26, r2-retire-old-navigate):
+  # the road section's own Navigate in Waze and its Google and Apple buttons
+  # are retired, so every Navigate on the page is the stop row's, the one the
+  # contrast guard covers.
+  Scenario: The stop row holds the only Navigate on the driver screen
+    Given B has the private address "12 Alder Lane"
+    When kris reads the driver screen's stop row
+    Then the driver screen has exactly one Navigate and it is the stop row's
+    And the road section carries no Waze, Google Maps or Apple Maps button
+
   Scenario: Navigate goes to the maps app the traveller chose
     Given B has the private address "12 Alder Lane"
     When kris chooses Google Maps for Navigate

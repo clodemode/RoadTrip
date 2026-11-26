@@ -128,7 +128,7 @@ func initFinishedTripScenarios(t *testing.T, sc *godog.ScenarioContext) {
 		if w.code != 200 {
 			return fmt.Errorf("the driver screen answered %d", w.code)
 		}
-		for _, id := range []string{`id="hud-eta"`, `id="hud-waze"`} {
+		for _, id := range []string{`id="hud-eta"`, `id="stop-navigate"`} {
 			i := strings.Index(w.body, id)
 			if i < 0 {
 				continue // not drawn at all is hidden too
@@ -137,8 +137,8 @@ func initFinishedTripScenarios(t *testing.T, sc *godog.ScenarioContext) {
 			closeAt := strings.Index(w.body[i:], ">")
 			tag := w.body[open : i+closeAt]
 			// the ETA is a gauge whose own wrapper must be hidden; the Waze link itself.
-			if id == `id="hud-waze"` && !strings.Contains(tag, "hidden") {
-				return fmt.Errorf("the Waze link is shown: %s", tag)
+			if id == `id="stop-navigate"` && !strings.Contains(tag, `aria-disabled="true"`) {
+				return fmt.Errorf("Navigate is live: %s", tag)
 			}
 			if id == `id="hud-eta"` {
 				g := strings.LastIndex(w.body[:i], `<div class="hud-gauge"`)

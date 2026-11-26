@@ -237,18 +237,11 @@
     setText('hud-nextmi', h.next_miles);
     var mi = $('hud-nextmi');
     if (mi && mi.parentNode) mi.parentNode.hidden = !h.drive_started;
-    var w = $('hud-waze');
-    w.hidden = !nav;
-    if (nav && h.waze) w.setAttribute('href', h.waze);
-    setText('hud-nav-to', h.nav_to ? 'to ' + h.nav_to : '');
     var via = $('hud-via');
     if (via) {
       setText('hud-via-name', h.via || '');
       via.hidden = !(nav && h.via);
     }
-    var alt = $('hud-nav-alt');
-    alt.hidden = !nav;
-    if (nav && h.google) { $('hud-google').setAttribute('href', h.google); $('hud-apple').setAttribute('href', h.apple); }
     paintStopRow(h);
     paintChips(h);
   }
@@ -428,11 +421,17 @@
   // came out follows: nav_result hidden:true if the page went hidden within
   // 1.5 s (the phone opened the app), hidden:false if it did not.
   var tapped = null;
-  ['hud-waze', 'hud-google', 'hud-apple', 'free-waze', 'free-google', 'free-apple'].forEach(function (id) {
+  ['stop-navigate', 'free-waze', 'free-google', 'free-apple'].forEach(function (id) {
     var el = $(id);
     if (!el) return;
     var app = id.split('-')[1];
     el.addEventListener('click', function () {
+      if (id === 'stop-navigate') {
+        // the stop row's one Navigate opens the app the user chose (maps.go): name it by its link
+        var href = el.getAttribute('href') || '';
+        if (!href) return;
+        app = href.indexOf('waze.com') >= 0 ? 'waze' : href.indexOf('apple.com') >= 0 ? 'apple' : 'google';
+      }
       if (tapped) return;
       var t = { app: app, mode: $('hud-free') ? 'destined' : 'trip', done: false };
       tapped = t;

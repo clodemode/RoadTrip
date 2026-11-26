@@ -61,14 +61,14 @@
   {{with .TripSwitch}}<form class="trip-switch" method="post" action="/driver/ride/active" target="_top" aria-label="Switch trip">
     <label for="trip-switch-slug">Trip the site shows</label>
     <select id="trip-switch-slug" name="slug" class="form-select form-select-sm">
-      {{range .}}<optgroup label="{{.Label}}">{{range .Choices}}<option value="{{.Slug}}"{{if .Selected}} selected{{end}}>{{.Name}}{{if .StartDate}} &middot; {{.StartDate}}{{end}}</option>{{end}}</optgroup>
+      {{range .}}<optgroup label="{{.Label}}">{{range .Choices}}<option value="{{.Slug}}"{{if .Selected}} selected{{end}}>{{.Name}}{{with .Topology}} &middot; {{.}}{{end}}{{if .StartDate}} &middot; {{.StartDate}}{{end}}</option>{{end}}</optgroup>
       {{end}}</select>
     <button type="submit" class="btn btn-sm btn-primary">Show this trip</button>
   </form>{{end}}
   {{with .RidePick}}<form class="ride-pick" method="get" aria-label="Choose a trip to look at">
     <label for="ride-pick-slug">Trip</label>
     <select id="ride-pick-slug" name="ride" class="form-select form-select-sm">
-      {{range .}}<optgroup label="{{.Label}}">{{range .Choices}}<option value="{{.Slug}}"{{if .Selected}} selected{{end}}>{{.Name}}{{if .StartDate}} &middot; {{.StartDate}}{{end}}</option>{{end}}</optgroup>
+      {{range .}}<optgroup label="{{.Label}}">{{range .Choices}}<option value="{{.Slug}}"{{if .Selected}} selected{{end}}>{{.Name}}{{with .Topology}} &middot; {{.}}{{end}}{{if .StartDate}} &middot; {{.StartDate}}{{end}}</option>{{end}}</optgroup>
       {{end}}</select>
     <button type="submit" class="btn btn-sm btn-outline-secondary">Look</button>
   </form>{{end}}

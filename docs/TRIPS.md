@@ -81,6 +81,32 @@ and carries none of the ride's tools. The trip-keeper's switch that *does*
 move the active ride is on the Plan and Driver pages. Both lists are the trips
 on the volume plus the active ride (`ridepick.go`).
 
+## Owner and Home
+
+Every ride has an owner, a username, kept in `meta` as `ride_owner:<slug>`.
+A trip document may name it in `ride.owner` (any user of the site); with none
+the ride keeps the owner it has, else the signed-in pusher owns it, else the
+first admin. Boot gives every ride with no owner the first admin, once. The
+Ride page's cast line reads the owner's display name.
+
+A checkpoint may say `"place": "home"` (or another key the owner saved) in
+place of coordinates and a name:
+
+```json
+{"type": "Feature", "geometry": null,
+ "properties": {"kind": "checkpoint", "place": "home", "order": 1, "leg": 1, "tz": "America/Chicago"}}
+```
+
+At push it is resolved through the OWNER's profile (`profile.go`): the name is
+the place's label unless the feature gives one, the point is the place's
+point snapped to the fuzz grid before the trip file is written (precision is
+forced to `fuzzed`), and Navigate goes to the place's address. No private
+overlay entry is needed for it, and one filed under its number is not used. A
+push naming a place the owner has not saved (or saved with no point) is
+refused, 400, naming the key. The point is taken at push: when the owner
+moves Home, push the trip again to move its open stops (arrived stops never
+move). The synthetic `testdata/home-loop-fixture.geojson` is the shape.
+
 ## Options
 
 A trip document is the seed shape plus three optional top-level keys:

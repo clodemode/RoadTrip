@@ -599,9 +599,14 @@ func TestEveryStopPageOffersWazeGoogleAndApple(t *testing.T) {
 	if err := app.store.SetArrived(tripStart(rv.Legs).ID, time.Now().Add(-time.Hour), nil); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/", "/driver"} {
+	// The Ride page offers all three; the driver screen carries one Navigate,
+	// the stop row's, opening the maps app the user chose (Waze by default).
+	for path, wants := range map[string][]string{
+		"/":       {"waze.com/ul?", "google.com/maps/dir/?api=1&amp;destination=", "maps.apple.com/?daddr="},
+		"/driver": {`id="stop-navigate" href="https://waze.com/ul?`},
+	} {
 		body := doAs(t, app, c, "GET", path, nil).Body.String()
-		for _, want := range []string{"waze.com/ul?", "google.com/maps/dir/?api=1&amp;destination=", "maps.apple.com/?daddr="} {
+		for _, want := range wants {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s lacks %s", path, want)
 			}

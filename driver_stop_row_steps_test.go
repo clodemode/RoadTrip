@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/cucumber/godog"
 )
@@ -90,7 +91,7 @@ func initDriverStopRowScenarios(sc *godog.ScenarioContext, p *postWorld) {
 	sc.Step(`^the stop row carries only Post and Drop Pin$`, func() error { return w.order("Post", "Drop Pin") })
 	sc.Step(`^the stop row comes before the music card and the road section$`, func() error {
 		row := strings.Index(w.page, `class="stop-row"`)
-		for _, later := range []string{`id="rt-card"`, `class="hud-road`, `id="hud-waze"`} {
+		for _, later := range []string{`id="rt-card"`, `class="hud-road`} {
 			if i := strings.Index(w.page, later); i >= 0 && i < row {
 				return fmt.Errorf("%s comes before the stop row", later)
 			}
@@ -136,6 +137,30 @@ func initDriverStopRowScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		}
 		if n, _ := strconv.Atoi(string(m[1])); n < min {
 			return fmt.Errorf("the stop row buttons are %d px tall, want at least %d", n, min)
+		}
+		return nil
+	})
+	sc.Step(`^the driver screen has exactly one Navigate and it is the stop row's$`, func() error {
+		var n []string
+		for _, m := range regexp.MustCompile(`(?s)<a\b[^>]*>(.*?)</a>`).FindAllStringSubmatch(w.page, -1) {
+			txt := strings.Join(strings.Fields(html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(m[1], " "))), " ")
+			if strings.HasPrefix(strings.TrimLeftFunc(txt, func(r rune) bool { return !unicode.IsLetter(r) }), "Navigate") {
+				n = append(n, txt)
+			}
+		}
+		if len(n) != 1 {
+			return fmt.Errorf("the driver screen has %d Navigate links, want 1: %q", len(n), n)
+		}
+		if _, err := w.button("stop-navigate"); err != nil {
+			return err
+		}
+		return nil
+	})
+	sc.Step(`^the road section carries no Waze, Google Maps or Apple Maps button$`, func() error {
+		for _, bad := range []string{`id="hud-waze"`, `id="hud-google"`, `id="hud-apple"`, `id="hud-nav-alt"`} {
+			if strings.Contains(w.page, bad) {
+				return fmt.Errorf("the driver screen still has %s", bad)
+			}
 		}
 		return nil
 	})

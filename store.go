@@ -169,6 +169,10 @@ type Checkpoint struct {
 	// stop: it is navigated to by its exact point, no street address needed
 	// (navstop.go). Read from meta by Store.Legs, never stored on the row.
 	NavPoint bool `json:"-"`
+	// Place is the owner's saved-place key ("home") when the trip document
+	// put this stop at a saved place (profile.go): it is navigated to the
+	// place's address. Read from meta by Store.Legs, never stored on the row.
+	Place string `json:"-"`
 }
 
 // Checkpoint precision. "fuzzed" is the privacy seam: the store snaps such a
@@ -1113,6 +1117,16 @@ func (s *Store) Legs(rideSlug string) ([]Leg, error) {
 	fuzzed := fuzzedOf(rideCheckpoints(out))
 	for i := range out {
 		out[i].Line = maskLine(out[i].Line, fuzzed)
+	}
+	if v, ok := s.Meta(navPlaceKey(rideSlug)); ok && v != "" {
+		var places map[string]string
+		if json.Unmarshal([]byte(v), &places) == nil {
+			for i := range out {
+				for j := range out[i].Checkpoints {
+					out[i].Checkpoints[j].Place = places[out[i].Checkpoints[j].Name]
+				}
+			}
+		}
 	}
 	if pts := s.navPointNames(rideSlug); len(pts) > 0 {
 		for i := range out {
