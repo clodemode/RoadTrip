@@ -550,6 +550,12 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data m
 	data["ChesterOn"] = authed && a.chester != nil && !a.rideIsFinished()
 	// Whether the plan and ride pages link to Chester's route change.
 	data["RerouteOn"] = data["ChesterOn"] == true && a.hasRouteChoices()
+	// The cast line's trip-keeper: the shown ride's owner, by display name.
+	if rd, ok := data["Ride"].(*Ride); ok && rd != nil && rd.Slug != "" {
+		if o := a.rideOwner(rd.Slug); o != "" {
+			data["OwnerName"] = a.displayNameOf(o)
+		}
+	}
 	data["CreatureName"] = CreatureName
 	data["CreatureTag"] = CreatureTag
 	data["CreatureAlt"] = CreatureAlt

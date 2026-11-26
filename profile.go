@@ -337,3 +337,74 @@ func checkProfile(p profile) error {
 	}
 	return nil
 }
+
+// ---- Ride owner (section C) ------------------------------------------------
+
+// rideOwnerKey is where a ride's owner username is kept in meta.
+func rideOwnerKey(slug string) string { return "ride_owner:" + slug }
+
+// rideOwner is the username that owns a ride; empty when none is recorded.
+func (a *App) rideOwner(slug string) string {
+	v, _ := a.store.Meta(rideOwnerKey(slug))
+	return v
+}
+
+// firstAdmin is the first active admin by name, the owner of last resort.
+func (a *App) firstAdmin() string {
+	for _, u := range a.auth.users.list() {
+		if u.Role == roleAdmin && !u.Disabled {
+			return u.Name
+		}
+	}
+	return ""
+}
+
+// stampRideOwners gives every ride that has no owner the first admin. It runs
+// at boot; a ride that has an owner is never touched, so it does its work once.
+func (a *App) stampRideOwners() (int, error) {
+	admin := a.firstAdmin()
+	if admin == "" {
+		return 0, nil
+	}
+	rides, err := a.store.Rides()
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, r := range rides {
+		if a.rideOwner(r.Slug) != "" {
+			continue
+		}
+		if err := a.store.SetMeta(rideOwnerKey(r.Slug), admin); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+// pushOwner decides who owns a pushed trip: the document's ride.owner when it
+// names one (any signed-in traveller may own a ride, ruled 2026-11-26), else
+// the owner the ride already has, else the signed-in pusher, else the first
+// admin. A named owner who is not a user is refused.
+func (a *App) pushOwner(r *http.Request, raw []byte, slug string) (string, error) {
+	var doc struct {
+		Ride struct {
+			Owner string `json:"owner"`
+		} `json:"ride"`
+	}
+	_ = json.Unmarshal(raw, &doc)
+	if o := strings.TrimSpace(doc.Ride.Owner); o != "" {
+		if u, ok := a.auth.users.get(o); !ok || u.Disabled {
+			return "", fmt.Errorf("ride.owner %q is not a user of this site", o)
+		}
+		return o, nil
+	}
+	if o := a.rideOwner(slug); o != "" {
+		return o, nil
+	}
+	if u, ok := a.auth.sessionUser(r); ok {
+		return u.Name, nil
+	}
+	return a.firstAdmin(), nil
+}
