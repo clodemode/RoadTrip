@@ -3,8 +3,12 @@
  * the map. Never a post, never a check-in. The button says what happened. */
 (function () {
   'use strict';
-  var btn = document.getElementById('drop-pin');
-  if (!btn) return;
+  // The header's button and the driver screen's stop row button do the same one thing.
+  ['drop-pin', 'stop-droppin'].forEach(function (id) {
+    var b = document.getElementById(id);
+    if (b) wire(b);
+  });
+  function wire(btn) {
   var label = btn.innerHTML;
   function say(text, ok) {
     btn.textContent = text;
@@ -28,4 +32,5 @@
     }, function () { say('Not pinned: location refused'); },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   });
+  }
 })();

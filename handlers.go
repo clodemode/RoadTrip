@@ -248,6 +248,7 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /chester/ask", a.requireRide(a.chesterAsk))
 	// Drop Pin: anyone signed in, driver or rider (drop_pin.go).
 	mux.Handle("POST /driver/pin", a.requireAuth(a.dropPin))
+	mux.Handle("POST /driver/maps", a.requireAuth(a.setMapsApp))
 	mux.Handle("GET /chester/preferences", a.requireAuth(a.chesterPreferencesJSON))
 	mux.Handle("POST /chester/preferences", a.requireAuth(a.chesterPreferences))
 	mux.Handle("GET /driver/chester/memory", a.requireAuth(a.chesterMemoryPage))

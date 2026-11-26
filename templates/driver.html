@@ -16,6 +16,17 @@
     <p class="hud-cross" id="hud-offroute" role="status"{{if not .H.OffRoute}} hidden{{end}}>{{if .H.OffRoute}}Off route, {{.H.OffRouteMiles}} mi from the plan{{end}}</p>
   </header>{{end}}
 
+  {{if or (not (or .Destined .Aimless)) (not .Driver)}}{{$snav := and .H.HasNext .H.DriveStarted (not .H.NavNone)}}<nav class="stop-row" id="stop-row" aria-label="At a stop">
+    {{if .Driver}}{{if $snav}}<a class="stop-btn" id="stop-navigate" href="{{.H.NavHref}}" rel="noopener"><span class="stop-ico" aria-hidden="true">&#129517;</span>Navigate<span class="stop-sub" id="stop-navigate-sub">to {{.H.NavTo}}</span></a>
+    {{else}}<a class="stop-btn" id="stop-navigate" role="link" aria-disabled="true"><span class="stop-ico" aria-hidden="true">&#129517;</span>Navigate<span class="stop-sub" id="stop-navigate-sub">{{if and .H.HasNext .H.DriveStarted}}No address on file{{else}}No stop ahead{{end}}</span></a>{{end}}
+    <a class="stop-btn" id="stop-checkin" role="link" aria-disabled="true"><span class="stop-ico" aria-hidden="true">&#9989;</span>Check in<span class="stop-sub" id="stop-checkin-sub">Not at a stop</span></a>{{end}}
+    <a class="stop-btn" id="stop-post" href="/driver/post"><span class="stop-ico" aria-hidden="true">&#128247;</span>Post a photo</a>
+    <button type="button" class="stop-btn" id="stop-droppin" aria-label="Drop a pin on the map where the phone is"><span class="stop-ico" aria-hidden="true">&#128205;</span>Drop Pin</button>
+    {{if and .Driver .ChesterOn}}<a class="stop-btn" id="stop-chester" href="/chester"><span class="stop-ico" aria-hidden="true"><img class="ch-icon" src="/static/img/chester.svg?v={{.V}}" alt="" width="24" height="24"></span>Ask Chester</a>{{end}}
+  </nav>
+  {{if .Driver}}<form class="stop-maps" method="post" action="/driver/maps" aria-label="Maps app for Navigate"><span>Navigate opens</span>
+    {{range .MapsApps}}<button class="btn btn-sm btn-outline-dark" name="app" value="{{.Key}}" aria-pressed="{{.On}}">{{.Name}}</button>{{end}}</form>{{end}}{{end}}
+
   {{if .TracksOn}}<section class="hud-tracks" id="rt-card" aria-label="RoadTracks">
     <h2 class="hud-k">RoadTracks</h2>
     <form class="hud-dest" id="rt-form" role="search" aria-label="RoadTracks">

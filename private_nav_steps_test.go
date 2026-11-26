@@ -145,7 +145,9 @@ func initPrivateNavScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		return w.n.get("/driver", true)
 	})
 	sc.Step(`^the driver screen's Waze button reads "([^"]*)"$`, func(want string) error {
-		return wazeButtonReads("the driver screen", w.n.page, want)
+		// The stop row's Navigate is a second Waze link, first on the page and
+		// pinned by driver_stop_row.feature; this step is the road section's.
+		return wazeButtonReads("the driver screen", stopRowRe.ReplaceAllString(w.n.page, ""), want)
 	})
 	sc.Step(`^the driver screen's navigation says it goes to "([^"]*)"$`, func(want string) error {
 		if got, _ := w.hud["nav_to"].(string); got != want {

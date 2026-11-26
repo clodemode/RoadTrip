@@ -78,6 +78,15 @@ type hudView struct {
 	// on file, no navigate-by-point mark): the links above are empty and the
 	// screen says so in words (navstop.go).
 	NavNone bool `json:"nav_none,omitempty"`
+	// NavHref is the one link the stop row's Navigate opens: the Waze, Google
+	// or Apple link above, by the maps app the signed-in user chose (maps.go).
+	NavHref string `json:"nav_href,omitempty"`
+	// CheckInID and CheckInName are the open stop the phone is within
+	// checkinRadiusKm of, once the drive has started and the phone has sent a
+	// position: the stop row's Check in goes to that stop's post form. Absent
+	// when the phone is not at a stop, or has said nothing.
+	CheckInID   int64  `json:"check_in_id,omitempty"`
+	CheckInName string `json:"check_in_name,omitempty"`
 
 	Hazards []hazardChip `json:"hazards,omitempty"`
 
@@ -238,6 +247,19 @@ func buildHUDFor(ride *Ride, legs []Leg, now time.Time, lat, lng *float64, movin
 	if st := tripStart(legs); st != nil {
 		startID = st.ID
 	}
+	// Check in: the nearest open stop within the check-in radius of the phone's
+	// own position. Never from the plan alone, and not before the drive starts.
+	if lat != nil && lng != nil && h.DriveStarted {
+		best := math.Inf(1)
+		for _, c := range cps {
+			if c.ID == startID || c.ArrivedAt != "" || c.SkippedAt != "" {
+				continue
+			}
+			if km := haversineKm(*lat, *lng, c.Lat, c.Lng); km <= checkinRadiusKm && km < best {
+				best, h.CheckInID, h.CheckInName = km, c.ID, c.Name
+			}
+		}
+	}
 	nextIdx := -1
 	for i, c := range cps {
 		if c.ID == startID || c.ArrivedAt != "" || c.SkippedAt != "" || (haveLine && alongs[i] <= posAlong+0.5) {
@@ -321,6 +343,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
 			return
 		}
+		a.pickMaps(&h, a.userOf(r))
 	}
 	// A driver on no ride has only FreeLance Destined, which has no ride; the
 	// screen is drawn that way, so the mode it polls for is set to match.
@@ -329,7 +352,7 @@ func (a *App) driverHome(w http.ResponseWriter, r *http.Request) {
 	}
 	// The trip switcher is for the KATE only: elsewhere it costs no query.
 	a.render(w, r, "driver.html", map[string]any{"Title": "Driver", "HUD": true, "H": h, "DriveStarted": a.driveStarted(), "DriveOpened": h.Opened,
-		"Finished": a.rideIsFinished(), "Notice": r.URL.Query().Get("notice"), "NoticePost": a.noticePost(r, a.activeSlug()), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
+		"Finished": a.rideIsFinished(), "MapsApps": a.mapsApps(a.userOf(r)), "Notice": r.URL.Query().Get("notice"), "NoticePost": a.noticePost(r, a.activeSlug()), "Destined": st.Mode == modeDestined || (!onRide && !aimless), "Aimless": aimless, "FreeLabel": st.Label, "FreeErr": st.Err, "FreeHave": st.Have})
 }
 
 // hudJSON is the live HUD: position-aware, with the hazard chips of the leg.
@@ -367,6 +390,7 @@ func (a *App) hudJSON(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "the ride could not be read", http.StatusInternalServerError)
 			return
 		}
+		a.pickMaps(&h, a.userOf(r))
 		// Every ETA shown is kept, to be scored when the stop is reached.
 		if mode == modeTrip && h.etaCP != 0 {
 			if _, err := a.store.RecordETA(a.activeSlug(), h.etaCP, a.userOf(r), now, h.etaAt, "plan"); err != nil {

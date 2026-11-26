@@ -136,3 +136,18 @@ test('the card\'s Ask Chester tap unlocks first, then posts source=drivetracks w
   assert.equal(order[1], 'post:source=drivetracks&lat=30.2672&lng=-97.7431');
   assert.equal(order[2], 'start:42');
 });
+
+test('the stop row: Navigate follows the chosen maps link, Check in only inside the radius', () => {
+  const mod = { exports: {} };
+  const ctx = { module: mod, document: { getElementById: () => null, addEventListener() {} }, window: { addEventListener() {} }, navigator: {} };
+  vm.runInNewContext(readFileSync(new URL('./hud.js', import.meta.url), 'utf8'), ctx);
+  const stopRowState = (h) => JSON.parse(JSON.stringify(mod.exports.stopRowState(h)));  // out of the vm realm, so deepEqual compares plain objects
+  const base = { drive_started: true, has_next: true, nav_to: 'the map point for Birch Gate', waze: 'https://waze.example/w', nav_href: 'https://maps.example/g' };
+  const at = stopRowState({ ...base, check_in_id: 7, check_in_name: 'Birch Gate' });
+  assert.deepEqual(at.navigate, { href: 'https://maps.example/g', disabled: false, sub: 'to the map point for Birch Gate' });
+  assert.deepEqual(at.checkin, { href: '/driver/post?checkpoint=7', disabled: false, sub: 'at Birch Gate' });
+  assert.deepEqual(stopRowState(base).checkin, { href: '', disabled: true, sub: 'Not at a stop' });
+  assert.deepEqual(stopRowState({ ...base, nav_none: true }).navigate, { href: '', disabled: true, sub: 'No address on file' });
+  assert.deepEqual(stopRowState({ ...base, has_next: false }).navigate, { href: '', disabled: true, sub: 'No stop ahead' });
+  assert.equal(stopRowState({ ...base, nav_href: '' }).navigate.href, 'https://waze.example/w');
+});
