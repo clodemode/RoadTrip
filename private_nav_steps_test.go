@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/cucumber/godog"
 )
@@ -138,16 +139,25 @@ func initPrivateNavScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		return nil
 	})
 	sc.Step(`^kris reads the Ride page's navigation$`, func() error { return w.n.get("/", true) })
-	sc.Step(`^kris opens the driver screen for its Waze button$`, func() error {
+	sc.Step(`^kris opens the driver screen for its Navigate$`, func() error {
 		if err := w.readHUD(); err != nil {
 			return err
 		}
 		return w.n.get("/driver", true)
 	})
-	sc.Step(`^the driver screen's Waze button reads "([^"]*)"$`, func(want string) error {
-		// The stop row's Navigate is a second Waze link, first on the page and
-		// pinned by driver_stop_row.feature; this step is the road section's.
-		return wazeButtonReads("the driver screen", stopRowRe.ReplaceAllString(w.n.page, ""), want)
+	sc.Step(`^the driver screen's Navigate reads "([^"]*)"$`, func(want string) error {
+		// The stop row's Navigate is the only one on the driver screen
+		// (driver_stop_row.feature); its words are the icon, Navigate and
+		// where it goes.
+		m := regexp.MustCompile(`(?s)<a[^>]*id="stop-navigate"[^>]*>(.*?)</a>`).FindStringSubmatch(w.n.page)
+		if m == nil {
+			return fmt.Errorf("the driver screen has no Navigate")
+		}
+		got := strings.TrimSpace(strings.TrimLeftFunc(strings.Join(strings.Fields(html.UnescapeString(navTagRe.ReplaceAllString(m[1], " "))), " "), func(r rune) bool { return !unicode.IsLetter(r) }))
+		if got != want {
+			return fmt.Errorf("the driver screen's Navigate reads %q, want %q", got, want)
+		}
+		return nil
 	})
 	sc.Step(`^the driver screen's navigation says it goes to "([^"]*)"$`, func(want string) error {
 		if got, _ := w.hud["nav_to"].(string); got != want {
