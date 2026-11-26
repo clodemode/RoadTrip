@@ -80,6 +80,18 @@ func initRoundTripReadsScenarios(sc *godog.ScenarioContext, p *postWorld) {
 		}
 		return nil
 	}
+	sc.Step(`^kris's trip picker labels the active trip "([^"]*)"$`, func(want string) error {
+		rec := doAs(p.t, p.sim.app, p.sim.cookies["kris"], "GET", "/plan", nil)
+		m := regexp.MustCompile(`(?s)<form class="trip-switch".*?</form>`).FindString(rec.Body.String())
+		if m == "" {
+			return fmt.Errorf("the plan page (%d) has no trip switch", rec.Code)
+		}
+		opt := regexp.MustCompile(`<option value="[^"]*" selected>([^<]*)</option>`).FindStringSubmatch(m)
+		if opt == nil || !strings.Contains(html.UnescapeString(opt[1]), "· "+want) {
+			return fmt.Errorf("the trip switch's selected trip reads %v, not %q", opt, want)
+		}
+		return nil
+	})
 	sc.Step(`^the plan data says it is a round trip$`, func() error { return planData(true) })
 	sc.Step(`^the plan data says it is not a round trip$`, func() error { return planData(false) })
 }

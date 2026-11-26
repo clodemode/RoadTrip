@@ -28,6 +28,11 @@ Feature: A trip that ends where it starts reads Round trip, and a one-way trip s
     And the plan page says "Round trip"
     And the plan data says it is a round trip
 
+  Scenario: The trip picker says Round trip beside the trip's name
+    Given the active trip is a round trip: A, B and C in order, then the finish D back at A
+    When a visitor reads the ride page
+    Then kris's trip picker labels the active trip "Round trip"
+
   Scenario: The plan page and the plan data of a one-way trip say One-way
     Given the active trip has stops A, B, C and D in order along a line, none arrived at
     When a visitor reads the ride page

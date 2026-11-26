@@ -39,7 +39,10 @@ const (
 
 type rideChoice struct {
 	Slug, Name, StartDate string
-	When                  string // past | current | next
+	// Topology is "Round trip" or "One-way", the same one fact the hero reads
+	// (Ride.Topology, derived in Store.Ride).
+	Topology string
+	When     string // past | current | next
 	Current               bool   // the trip the site shows
 	Selected              bool   // the trip this page is drawn from
 }
@@ -88,7 +91,11 @@ func (a *App) allRideChoices() []rideChoice {
 		case cur != nil && c.StartDate != "" && c.StartDate < cur.StartDate:
 			when = whenPast
 		}
-		out = append(out, rideChoice{Slug: c.Slug, Name: c.Name, StartDate: c.StartDate, When: when, Current: isCur})
+		topo := ""
+		if rd, err := a.store.Ride(c.Slug); err == nil {
+			topo = rd.Topology()
+		}
+		out = append(out, rideChoice{Slug: c.Slug, Name: c.Name, StartDate: c.StartDate, Topology: topo, When: when, Current: isCur})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].StartDate != out[j].StartDate {
