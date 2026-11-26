@@ -4,7 +4,7 @@
    colours, cards, buttons, forms, focus, disclosure) comes from Bootstrap and
    foundation.css, which load first. One light theme: no colour-scheme rule. */
 :root {
-  --rt-mast-from: #3b2f1e; --rt-mast-mid: #6b4b23; --rt-mast-to: #b8742a;
+  --rt-mast-from: #3b2f1e; --rt-mast-mid: #4a3720; --rt-mast-to: #5a3d1c;   /* every stop reads 7 to 1 under the masthead's lightest ink (masthead_contrast.feature) */
   --rt-mast-edge: #2a2114; --rt-mast-ink: #f8f4ee; --rt-mast-tag: #ecd9b8; --rt-mast-link: #f3e6d0;
   --rt-pin: #1f2937; --rt-post-pin: #f59e0b;
   --rt-amber: #b45309;   /* a caution edge, never a figure */
@@ -65,7 +65,7 @@ h2 { margin: 1.5rem 0 .5rem; }
   min-height: 44px; padding: .2rem .6rem; border: 1.5px solid rgba(255, 255, 255, .45); border-radius: var(--ds-radius);
   text-decoration: none; color: #fff; line-height: 1.1; background: rgba(255, 255, 255, .07);
   transition: background .15s, border-color .15s; white-space: nowrap; }
-.clode-badge:hover { color: #fff; background: rgba(255, 255, 255, .18); border-color: #fff; }
+.clode-badge:hover { color: #fff; background: rgba(0, 0, 0, .3); border-color: #fff; }   /* darker, never lighter: white words stay at 7 to 1 */
 .cb-kicker { display: none; font-size: .62rem; text-transform: uppercase; letter-spacing: .13em; color: var(--rt-mast-tag); }
 .cb-name { font-size: .85rem; font-weight: 800; letter-spacing: .06em; }
 
@@ -722,3 +722,21 @@ body.rt-shell { margin: 0; display: flex; flex-direction: column; height: 100dvh
 
 /* The Navigate button says where it goes, on its own line (Kris, 2026-11-18). */
 .nav-to { display: block; font-size: .85em; font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
+
+/* The stop row (driver_stop_row.feature): the jobs done at a stop, one tap each, first thing on the
+   driver screen. Solid dark buttons, white words, at least 56 px tall; a disabled one is pale with
+   dark words, never faded. Five across; three across and two under 400 px. */
+.stop-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; box-sizing: border-box;
+  min-width: 0; max-width: 100%; margin: .6rem 0 0; padding: 0; }
+.stop-row .stop-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1rem;
+  min-height: 56px; min-width: 0; box-sizing: border-box; padding: .4rem .3rem; border: 2px solid #111827; border-radius: .8rem;
+  background: #1f2937; color: #ffffff; font: inherit; font-size: .95rem; font-weight: 700; line-height: 1.15; text-align: center;
+  text-decoration: none; cursor: pointer; overflow-wrap: anywhere; }
+.stop-row .stop-btn:hover, .stop-row .stop-btn:focus { background: #111827; color: #ffffff; }
+.stop-row .stop-btn[aria-disabled="true"] { background: #e5e7eb; color: #111827; border-color: #6b7280; cursor: default; }
+.stop-row .stop-ico { font-size: 1.4rem; line-height: 1.1; }
+.stop-row .stop-sub { display: block; font-size: .72rem; font-weight: 600; }
+.stop-maps { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .4rem 0 0; font-size: .85rem; color: #374151; }
+.stop-maps .btn { min-height: 44px; }
+.stop-maps .btn[aria-pressed="true"] { background: #1f2937; border-color: #1f2937; color: #ffffff; }
+@media (max-width: 399px) { .stop-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

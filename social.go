@@ -42,7 +42,7 @@ type socialImage struct{ URL, Alt, Type string }
 // slug names the ride whose trip card the page shows; empty (the sign-in page,
 // any page with no ride) names the fallback card, as does a private site and a
 // ride that cannot be drawn.
-func (a *App) social(r *http.Request, slug, rideName, title, desc string, own ...socialImage) socialMeta {
+func (a *App) social(r *http.Request, slug, rideName, kind, title, desc string, own ...socialImage) socialMeta {
 	if a.siteURL == "" {
 		return socialMeta{}
 	}
@@ -70,7 +70,7 @@ func (a *App) social(r *http.Request, slug, rideName, title, desc string, own ..
 	}
 	m.Description = desc
 	if desc == "" {
-		m.Description = fmt.Sprintf("%s: a one-way drive, live from the road.", rideName)
+		m.Description = fmt.Sprintf("%s: %s, live from the road.", rideName, kind)
 	}
 	return m
 }

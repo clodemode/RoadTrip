@@ -109,7 +109,7 @@
       .then(function () { if (hasTimer) clearTimeout(timer); });
     return Promise.race([work, limit]);
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody, isMoving: isMoving, navTapBody: navTapBody, navResultBody: navResultBody, driveTracks: driveTracks, driveBody: driveBody };
+  if (typeof module !== 'undefined' && module.exports) module.exports = { telemetryBody: telemetryBody, isMoving: isMoving, navTapBody: navTapBody, navResultBody: navResultBody, driveTracks: driveTracks, driveBody: driveBody, stopRowState: stopRowState };
   // The shell's card (player.js) reuses this one function for its Ask Chester button.
   if (typeof window !== 'undefined') { driveTracks.body = driveBody; window.RTDriveTracks = driveTracks; }
   // The page inside the player shell's frame starts the shell's player, not one of its own.
@@ -179,6 +179,32 @@
     setText('aim-tz', z);
   }
 
+  // The stop row's two live buttons, from one hud answer. Pure; exported for node.
+  // Navigate opens the link the server picked for the user's maps app; Check in
+  // opens the post form of the open stop the phone is within the radius of.
+  function stopRowState(h) {
+    var NAV_NONE = 'No address on file', NAV_AHEAD = 'No stop ahead', NOT_AT = 'Not at a stop';
+    var nav = !!(h.drive_started && h.has_next && !h.nav_none);
+    return {
+      navigate: nav
+        ? { href: h.nav_href || h.waze || '', disabled: false, sub: h.nav_to ? 'to ' + h.nav_to : '' }
+        : { href: '', disabled: true, sub: (h.drive_started && h.has_next) ? NAV_NONE : NAV_AHEAD },
+      checkin: h.check_in_id
+        ? { href: '/driver/post?checkpoint=' + encodeURIComponent(h.check_in_id), disabled: false, sub: 'at ' + (h.check_in_name || '') }
+        : { href: '', disabled: true, sub: NOT_AT }
+    };
+  }
+  function paintStopRow(h) {
+    var st = stopRowState(h);
+    [['stop-navigate', st.navigate], ['stop-checkin', st.checkin]].forEach(function (p) {
+      var el = $(p[0]);
+      if (!el) return;
+      if (p[1].disabled) { el.removeAttribute('href'); el.setAttribute('aria-disabled', 'true'); }
+      else { el.setAttribute('href', p[1].href); el.removeAttribute('aria-disabled'); }
+      setText(p[0] + '-sub', p[1].sub);
+    });
+  }
+
   function paint(h) {
     if (h.free) {
       paintChips(h);
@@ -223,6 +249,7 @@
     var alt = $('hud-nav-alt');
     alt.hidden = !nav;
     if (nav && h.google) { $('hud-google').setAttribute('href', h.google); $('hud-apple').setAttribute('href', h.apple); }
+    paintStopRow(h);
     paintChips(h);
   }
 

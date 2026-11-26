@@ -34,8 +34,8 @@
   </div>
   {{if and .Driver (not .DriveStarted) (not .DriveOpened)}}<a class="btn btn-primary btn-lg start-drive" href="/driver/post">Start the drive</a>{{end}}
   <p class="hero-line">
-    <b>{{.Ride.OriginLabel}}</b> &rarr; <b>{{.Ride.TerminusLabel}}</b>
-    <span class="pill">One-way</span>
+    {{if .Ride.RoundTrip}}<b>{{.Ride.OriginLabel}}</b>, round trip{{with .Ride.ViaPhrase}} by way of {{.}}{{end}}{{else}}<b>{{.Ride.OriginLabel}}</b> &rarr; <b>{{.Ride.TerminusLabel}}</b>{{end}}
+    <span class="pill">{{.Ride.Topology}}</span>
     <span class="muted figure">{{day .Ride.StartDate}} &ndash; {{day .Ride.EndDate}} &middot; {{.Ride.Mode}}</span>
   </p>
   <p class="cast">Trip-keeper: Kris &middot; Guide: {{.GuideName}} &middot; {{.CreatureName}}</p>
