@@ -408,3 +408,122 @@ func (a *App) pushOwner(r *http.Request, raw []byte, slug string) (string, error
 	}
 	return a.firstAdmin(), nil
 }
+
+// ---- "place": "home" in a trip (section D) --------------------------------
+
+// missingPlaceError is a trip that names a saved place its owner has not saved.
+type missingPlaceError struct{ Owner, Key string }
+
+func (e *missingPlaceError) Error() string {
+	if e.Owner == "" {
+		return fmt.Sprintf("the trip says \"place\": %q but the ride has no owner to look it up for", e.Key)
+	}
+	return fmt.Sprintf("the trip says \"place\": %q but %s has no saved place %q with a point: set it on My places first", e.Key, e.Owner, e.Key)
+}
+
+// resolvePlaces turns every checkpoint that says "place": "<key>" into a stop
+// at that saved place of the owner: the place's point, snapped to the fuzz
+// grid HERE, so the exact point never reaches the trip file or the store;
+// precision forced to fuzzed; the place's label as its name unless the
+// feature gives one. The "place" property stays, so the stop's navigate
+// target is the place's address (navTarget). A document with no place is
+// returned byte for byte.
+func resolvePlaces(raw []byte, owner string, lookup func(key string) (savedPlace, bool)) ([]byte, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return raw, nil // checkTrip says what is wrong with it
+	}
+	feats, _ := doc["features"].([]any)
+	changed := false
+	for _, f := range feats {
+		fm, _ := f.(map[string]any)
+		props, _ := fm["properties"].(map[string]any)
+		if props == nil || pstr(props, "kind") != "checkpoint" {
+			continue
+		}
+		key := strings.TrimSpace(pstr(props, "place"))
+		if key == "" {
+			continue
+		}
+		pl, ok := savedPlace{}, false
+		if owner != "" {
+			pl, ok = lookup(key)
+		}
+		if !ok || !pl.hasPoint() {
+			return nil, &missingPlaceError{Owner: owner, Key: key}
+		}
+		fm["geometry"] = map[string]any{"type": "Point", "coordinates": []any{snap(pl.Lng), snap(pl.Lat)}}
+		props["precision"] = precisionFuzzed
+		delete(props, "nav")
+		if strings.TrimSpace(pstr(props, "name")) == "" {
+			label := pl.Label
+			if label == "" {
+				label = strings.ToUpper(key[:1]) + key[1:]
+			}
+			props["name"] = label
+		}
+		changed = true
+	}
+	if !changed {
+		return raw, nil
+	}
+	out, err := json.MarshalIndent(doc, "", " ")
+	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
+}
+
+// navPlaceKey is where a trip's place stops are kept: stop name -> place key.
+func navPlaceKey(slug string) string { return "navplace:" + slug }
+
+// navPlaceNames maps the name of every checkpoint that says "place" to its key.
+func navPlaceNames(raw []byte) map[string]string {
+	var doc struct {
+		Features []struct {
+			Properties map[string]any `json:"properties"`
+		} `json:"features"`
+	}
+	out := map[string]string{}
+	if json.Unmarshal(raw, &doc) != nil {
+		return out
+	}
+	for _, f := range doc.Features {
+		if pstr(f.Properties, "kind") == "checkpoint" {
+			if k, n := pstr(f.Properties, "place"), pstr(f.Properties, "name"); k != "" && n != "" {
+				out[n] = k
+			}
+		}
+	}
+	return out
+}
+
+// placeAddresses lays the owner's saved-place addresses over addr for every
+// stop of a ride that is a place stop. A place stop goes to its place and to
+// nothing an overlay entry says. It returns addr (a new map when addr is nil).
+func (a *App) placeAddresses(slug string, legs []Leg, addr map[int]string) map[int]string {
+	owner := a.rideOwner(slug)
+	if owner == "" {
+		return addr
+	}
+	p, err := a.profiles().get(owner)
+	if err != nil {
+		return addr
+	}
+	for _, l := range legs {
+		for _, c := range l.Checkpoints {
+			if c.Place == "" {
+				continue
+			}
+			if addr == nil {
+				addr = map[int]string{}
+			}
+			if ad := p.Places[c.Place].Address; ad != "" {
+				addr[c.Ord] = ad
+			} else {
+				delete(addr, c.Ord)
+			}
+		}
+	}
+	return addr
+}

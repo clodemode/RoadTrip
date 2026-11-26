@@ -74,6 +74,7 @@ func TestFeatures(t *testing.T) {
 				initTimeFlowScenarios(t, sc)
 				initNavigableScenarios(t, sc)
 				initSocialCardScenarios(t, sc)
+				initTravellerProfileScenarios(t, sc)
 			}()
 		},
 		Options: &godog.Options{

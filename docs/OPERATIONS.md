@@ -16,7 +16,7 @@ and by the image build); on Fly the secrets are Fly secrets and the rest is
 | variable | purpose |
 |---|---|
 | `PORT` | the port the server listens on; default `8080` |
-| `DATA_DIR` | default `/data`; holds `roadtrip.sqlite3`, `users.json`, `media/`, `tmp/` (upload spill, swept at start), the optional `private.json` and the trip files in `trips/`. This directory is the whole of an instance's state: back it up |
+| `DATA_DIR` | default `/data`; holds `roadtrip.sqlite3`, `users.json`, `media/`, `tmp/` (upload spill, swept at start), the optional `private.json`, the optional `profiles.json` and the trip files in `trips/`. This directory is the whole of an instance's state: back it up |
 | `ADMIN_USERNAME` | the first user's name, `admin` when unset; read only when `ADMIN_PASSWORD_HASH` creates that user |
 | `ADMIN_PASSWORD_HASH` | a bcrypt hash (print one with the `-hash` flag); used once, to create the first user, an admin named by `ADMIN_USERNAME`, when `$DATA_DIR/users.json` does not exist. After that the users file is the source of truth. No users ⇒ the site is read-only |
 | `SESSION_KEY` | HMAC key for session cookies; unset ⇒ random per start (everyone signs in again after a restart) |
@@ -33,6 +33,7 @@ Two files on the volume are configuration too:
 | file | purpose |
 |---|---|
 | `$DATA_DIR/trips/<slug>.geojson` | a trip that is not in the image: pushed with `POST /driver/trip`, read at boot after the embedded seeds; never in the repo. Absent = only the embedded rides |
+| `$DATA_DIR/profiles.json` | each traveller's profile, keyed by username: `{"<user>":{"display_name":"…","places":{"home":{"label":"Home","address":"…","lat":…,"lng":…}}}}`; mode 0600, written atomically; edited by its owner at `/driver/profile` or replaced whole by the trip-keeper with `PUT /driver/profiles/<user>`; never in the repo, an image, a log, a public page or Chester's context; absent = no profiles |
 | `$DATA_DIR/private.json` | private overlay, keyed by ride and then by checkpoint ord: the top-level `{"checkpoints":{"<ord>":{"address":"…","notes":"…"}}}` is the first ride's (`RIDE_SLUG`), every other ride has its own block under `"rides":{"<slug>":{"checkpoints":{…}}}`; rendered on admin pages only, never in the repo or the seed; absent = no private data |
 
 With `SITE_URL` set, every page carries `<link rel="canonical">` and one
@@ -175,6 +176,10 @@ H="Authorization: Bearer $PUSH_TOKEN"; S=https://your-site.example   # your own 
 
 # the private overlay, whole document, replaces what is on the volume
 curl -s -H "$H" -H 'Content-Type: application/json' --data-binary @private.json $S/driver/private
+
+# one traveller's profile block (display name, saved places), replacing theirs;
+# the answer names the place keys, never an address or a point
+curl -s -X PUT -H "$H" -H 'Content-Type: application/json' --data-binary @profile-kris.json $S/driver/profiles/kris
 
 # delete a ride nothing has happened on: its rows, its trip file and its private block.
 # 409 (with the reason) for the active ride, a ride that ships with the site, or one with an

@@ -416,7 +416,9 @@ func (a *App) tripPush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read the body (limit "+strconv.Itoa(maxTripBytes>>20)+" MB)", http.StatusBadRequest)
 		return
 	}
-	// Who owns the ride (profile.go).
+	// Who owns the ride, and every "place" stop resolved through that
+	// owner's profile, BEFORE the document is checked or written: the exact
+	// point of a saved place never reaches the trip file (profile.go).
 	var head struct {
 		Ride struct {
 			Slug string `json:"slug"`
@@ -425,6 +427,13 @@ func (a *App) tripPush(w http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(raw, &head)
 	owner, err := a.pushOwner(r, raw, head.Ride.Slug)
 	if err != nil {
+		http.Error(w, "not a trip document: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	raw, err = resolvePlaces(raw, owner, func(key string) (savedPlace, bool) { return a.profiles().place(owner, key) })
+	if err != nil {
+		// The key and the owner's name, never a place.
+		log.Printf("trip push: refused, a stop names a saved place its owner has not saved")
 		http.Error(w, "not a trip document: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -471,6 +480,11 @@ func (a *App) tripPush(w http.ResponseWriter, r *http.Request) {
 	if owner != "" {
 		if err := a.store.SetMeta(rideOwnerKey(slug), owner); err != nil {
 			log.Printf("trip push: could not record the ride's owner: %v", err)
+		}
+	}
+	if pl, jerr := json.Marshal(navPlaceNames(raw)); jerr == nil {
+		if err := a.store.SetMeta(navPlaceKey(slug), string(pl)); err != nil {
+			log.Printf("trip push: could not record the place stops: %v", err)
 		}
 	}
 	// The stops with no address, by name. The plan is stored either way (the
