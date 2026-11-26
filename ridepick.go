@@ -43,8 +43,8 @@ type rideChoice struct {
 	// (Ride.Topology, derived in Store.Ride).
 	Topology string
 	When     string // past | current | next
-	Current               bool   // the trip the site shows
-	Selected              bool   // the trip this page is drawn from
+	Current  bool   // the trip the site shows
+	Selected bool   // the trip this page is drawn from
 }
 
 // rideGroup is one <optgroup>: Past, Current or Next, in that order.
